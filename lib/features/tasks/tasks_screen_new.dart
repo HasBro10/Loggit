@@ -25,85 +25,207 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
   final ValueNotifier<Key?> openSwipeCardKey = ValueNotifier<Key?>(null);
 
   List<Task> tasks = [
+    // Day 14 tasks
     Task(
-      title: 'Call accountant',
-      description: 'Discuss tax return',
-      dueDate: DateTime.now().add(Duration(days: 1)),
+      title: 'Morning Meeting',
+      description: 'Team sync at 9am',
+      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 14),
       isCompleted: false,
       timestamp: DateTime.now(),
       category: 'Work',
-      recurrenceType: RecurrenceType.none,
-      timeOfDay: TimeOfDay(hour: 15, minute: 0),
+      priority: TaskPriority.high,
     ),
     Task(
       title: 'Buy groceries',
       description: 'Milk, eggs, bread',
-      dueDate: DateTime.now().add(Duration(days: 2)),
-      isCompleted: false,
-      timestamp: DateTime.now(),
-      category: 'Personal',
-      recurrenceType: RecurrenceType.none,
-      timeOfDay: TimeOfDay(hour: 18, minute: 30),
-    ),
-    Task(
-      title: 'Submit expense report',
-      description: 'For June',
-      dueDate: DateTime.now().add(Duration(days: 3)),
+      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 14),
       isCompleted: true,
       timestamp: DateTime.now(),
-      category: 'Business',
-      recurrenceType: RecurrenceType.none,
-      timeOfDay: TimeOfDay(hour: 10, minute: 0),
-    ),
-    Task(
-      title: 'Team meeting',
-      description: 'Weekly sync',
-      dueDate: DateTime.now().add(Duration(days: 4)),
-      isCompleted: false,
-      timestamp: DateTime.now(),
-      category: 'Work',
-      recurrenceType: RecurrenceType.weekly,
-      timeOfDay: TimeOfDay(hour: 9, minute: 0),
-    ),
-    Task(
-      title: 'Doctor appointment',
-      description: 'Annual checkup',
-      dueDate: DateTime.now().add(Duration(days: 5)),
-      isCompleted: false,
-      timestamp: DateTime.now(),
       category: 'Personal',
-      recurrenceType: RecurrenceType.none,
-      timeOfDay: TimeOfDay(hour: 11, minute: 0),
+      priority: TaskPriority.medium,
     ),
     Task(
-      title: 'Pay VAT',
-      description: 'Quarterly VAT payment',
-      dueDate: DateTime.now().add(Duration(days: 7)),
+      title: 'Call client',
+      description: 'Discuss project updates',
+      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 14),
       isCompleted: false,
       timestamp: DateTime.now(),
       category: 'Business',
-      recurrenceType: RecurrenceType.monthly,
-      timeOfDay: TimeOfDay(hour: 14, minute: 0),
+      priority: TaskPriority.high,
     ),
+
+    // Day 15 tasks
     Task(
       title: 'Gym workout',
       description: 'Cardio and weights',
-      dueDate: DateTime.now().add(Duration(days: 1)),
+      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 15),
       isCompleted: false,
       timestamp: DateTime.now(),
       category: 'Personal',
-      recurrenceType: RecurrenceType.daily,
-      timeOfDay: TimeOfDay(hour: 7, minute: 0),
+      priority: TaskPriority.low,
     ),
     Task(
-      title: 'Client presentation',
-      description: 'Q3 results presentation',
-      dueDate: DateTime.now().subtract(Duration(days: 1)), // Overdue
+      title: 'Submit report',
+      description: 'Monthly progress report',
+      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 15),
       isCompleted: false,
       timestamp: DateTime.now(),
       category: 'Work',
-      recurrenceType: RecurrenceType.none,
-      timeOfDay: TimeOfDay(hour: 13, minute: 0),
+      priority: TaskPriority.medium,
+    ),
+    Task(
+      title: 'Dentist appointment',
+      description: 'Routine cleaning',
+      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 15),
+      isCompleted: true,
+      timestamp: DateTime.now(),
+      category: 'Personal',
+      priority: TaskPriority.medium,
+    ),
+
+    // Day 16 tasks
+    Task(
+      title: 'Team presentation',
+      description: 'Q3 results presentation',
+      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 16),
+      isCompleted: false,
+      timestamp: DateTime.now(),
+      category: 'Work',
+      priority: TaskPriority.high,
+    ),
+    Task(
+      title: 'Pay bills',
+      description: 'Electricity and internet',
+      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 16),
+      isCompleted: false,
+      timestamp: DateTime.now(),
+      category: 'Personal',
+      priority: TaskPriority.high,
+    ),
+    Task(
+      title: 'Client dinner',
+      description: 'Business networking',
+      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 16),
+      isCompleted: false,
+      timestamp: DateTime.now(),
+      category: 'Business',
+      priority: TaskPriority.medium,
+    ),
+
+    // Day 17 tasks
+    Task(
+      title: 'Code review',
+      description: 'Review pull requests',
+      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 17),
+      isCompleted: true,
+      timestamp: DateTime.now(),
+      category: 'Work',
+      priority: TaskPriority.medium,
+    ),
+    Task(
+      title: 'Library return',
+      description: 'Return overdue books',
+      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 17),
+      isCompleted: false,
+      timestamp: DateTime.now(),
+      category: 'Personal',
+      priority: TaskPriority.low,
+    ),
+    Task(
+      title: 'Update website',
+      description: 'Add new content',
+      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 17),
+      isCompleted: false,
+      timestamp: DateTime.now(),
+      category: 'Business',
+      priority: TaskPriority.high,
+    ),
+
+    // Day 18 tasks
+    Task(
+      title: 'Weekly planning',
+      description: 'Plan next week tasks',
+      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 18),
+      isCompleted: false,
+      timestamp: DateTime.now(),
+      category: 'Work',
+      priority: TaskPriority.medium,
+    ),
+    Task(
+      title: 'Movie night',
+      description: 'Watch new release',
+      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 18),
+      isCompleted: false,
+      timestamp: DateTime.now(),
+      category: 'Personal',
+      priority: TaskPriority.low,
+    ),
+    Task(
+      title: 'Tax preparation',
+      description: 'Organize documents',
+      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 18),
+      isCompleted: true,
+      timestamp: DateTime.now(),
+      category: 'Business',
+      priority: TaskPriority.high,
+    ),
+
+    // Day 19 tasks
+    Task(
+      title: 'Product demo',
+      description: 'Demo to stakeholders',
+      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 19),
+      isCompleted: false,
+      timestamp: DateTime.now(),
+      category: 'Work',
+      priority: TaskPriority.high,
+    ),
+    Task(
+      title: 'Family dinner',
+      description: 'Sunday family meal',
+      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 19),
+      isCompleted: false,
+      timestamp: DateTime.now(),
+      category: 'Personal',
+      priority: TaskPriority.medium,
+    ),
+    Task(
+      title: 'Contract review',
+      description: 'Review vendor contract',
+      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 19),
+      isCompleted: false,
+      timestamp: DateTime.now(),
+      category: 'Business',
+      priority: TaskPriority.high,
+    ),
+
+    // Day 20 tasks
+    Task(
+      title: 'Team building',
+      description: 'Office team activity',
+      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 20),
+      isCompleted: false,
+      timestamp: DateTime.now(),
+      category: 'Work',
+      priority: TaskPriority.low,
+    ),
+    Task(
+      title: 'Doctor checkup',
+      description: 'Annual health check',
+      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 20),
+      isCompleted: false,
+      timestamp: DateTime.now(),
+      category: 'Personal',
+      priority: TaskPriority.medium,
+    ),
+    Task(
+      title: 'Budget review',
+      description: 'Monthly budget analysis',
+      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 20),
+      isCompleted: true,
+      timestamp: DateTime.now(),
+      category: 'Business',
+      priority: TaskPriority.high,
     ),
   ];
 
@@ -116,10 +238,21 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
   DateTime? dateToFilter;
   bool showOverdueOnly = false;
   TaskSortOption sortOption = TaskSortOption.dueDate;
+  int selectedFilter = 0; // 0 = All, 1 = Pending, 2 = Completed
+  late int selectedDayIndex;
+  final List<String> days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  final List<int> dates = [14, 15, 16, 17, 18, 19, 20];
 
   @override
   void initState() {
     super.initState();
+    // Set selectedDayIndex to today's day
+    final today = DateTime.now();
+    final weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    final todayAbbr = weekDays[today.weekday % 7];
+    final idx = days.indexOf(todayAbbr);
+    selectedDayIndex = idx >= 0 ? idx : 0;
+
     _scrollController.addListener(() {
       if (_scrollController.position.isScrollingNotifier.value) {
         closeSwipeOptionsNotifier.value++;
@@ -150,9 +283,9 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
 
       // Status filter
       final matchesStatus =
-          statusFilter == 'All' ||
-          (statusFilter == 'Pending' && !task.isCompleted) ||
-          (statusFilter == 'Completed' && task.isCompleted);
+          selectedFilter == 0 || // All
+          (selectedFilter == 1 && !task.isCompleted) || // Pending
+          (selectedFilter == 2 && task.isCompleted); // Completed
 
       // Category filter
       final matchesCategory =
@@ -181,6 +314,14 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                     dateToFilter!.add(Duration(days: 1)),
                   )));
 
+      // Date filter based on selected day
+      final matchesSelectedDate =
+          selectedDayIndex < 0 ||
+          (task.dueDate != null &&
+              task.dueDate!.day == dates[selectedDayIndex] &&
+              task.dueDate!.month == DateTime.now().month &&
+              task.dueDate!.year == DateTime.now().year);
+
       // Overdue filter
       final matchesOverdue =
           !showOverdueOnly ||
@@ -203,6 +344,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
           matchesPriority &&
           matchesRecurrence &&
           matchesDateRange &&
+          matchesSelectedDate &&
           matchesOverdue &&
           matchesDueSoon;
     }).toList();
@@ -223,30 +365,8 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
       }
     });
 
-    final todayTasks = filteredTasks
-        .where(
-          (t) =>
-              t.dueDate != null &&
-              t.dueDate!.day == now.day &&
-              t.dueDate!.month == now.month &&
-              t.dueDate!.year == now.year,
-        )
-        .toList();
-    final upcomingTasks = filteredTasks
-        .where(
-          (t) =>
-              t.dueDate != null &&
-              t.dueDate!.isAfter(now) &&
-              (t.dueDate!.day != now.day ||
-                  t.dueDate!.month != now.month ||
-                  t.dueDate!.year != now.year),
-        )
-        .toList();
-    final completedCount = tasks.where((t) => t.isCompleted).length;
-    final pendingCount = tasks.where((t) => !t.isCompleted).length;
-
     return Scaffold(
-      backgroundColor: isDark ? LoggitColors.darkBg : const Color(0xFFF5F6FA),
+      backgroundColor: isDark ? LoggitColors.darkBg : LoggitColors.pureWhite,
       body: SafeArea(
         child: Column(
           children: [
@@ -284,35 +404,127 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SizedBox(height: LoggitSpacing.xl),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: FeatureCardButton(
-                              label: 'Completed ($completedCount)',
-                              icon: Icons.check_circle,
-                              iconBgColor: LoggitColors.completedTasksBg,
-                              iconColor: LoggitColors.completedTasksText,
-                              cardColor: LoggitColors.completedTasksBg,
-                              textColor: LoggitColors.completedTasksText,
-                              onTap: () {},
+                      // Date selector bar with background
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Color(0xFFF1F5F9), // Light background
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.02),
+                              blurRadius: 2,
+                              offset: Offset(0, 1),
                             ),
+                          ],
+                        ),
+                        child: SizedBox(
+                          height: 64,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: days.length,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            physics: BouncingScrollPhysics(),
+                            shrinkWrap: true,
+                            itemBuilder: (context, i) {
+                              final selected = i == selectedDayIndex;
+                              return GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    selectedDayIndex = i;
+                                  });
+                                },
+                                child: AnimatedContainer(
+                                  duration: Duration(milliseconds: 180),
+                                  margin: EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 6,
+                                  ),
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: selected
+                                        ? LoggitColors.teal
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        days[i],
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: selected
+                                              ? Colors.white
+                                              : Colors.grey[600],
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      SizedBox(height: 2),
+                                      Text(
+                                        dates[i].toString(),
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          color: selected
+                                              ? Colors.white
+                                              : Colors.grey[800],
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
                           ),
-                          SizedBox(width: LoggitSpacing.lg),
-                          Expanded(
-                            child: FeatureCardButton(
-                              label: 'Pending ($pendingCount)',
-                              icon: Icons.radio_button_unchecked,
-                              iconBgColor: LoggitColors.pendingTasksBg,
-                              iconColor: LoggitColors.pendingTasksText,
-                              cardColor: LoggitColors.pendingTasksBg,
-                              textColor: LoggitColors.pendingTasksText,
-                              onTap: () {},
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                      SizedBox(height: LoggitSpacing.xl),
+                      SizedBox(height: LoggitSpacing.lg),
+                      // Filter chips
+                      Row(
+                        children: List.generate(3, (i) {
+                          final labels = ['All', 'Pending', 'Completed'];
+                          final selected = i == selectedFilter;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: ChoiceChip(
+                              label: Text(
+                                labels[i],
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: selected ? Colors.white : Colors.black,
+                                ),
+                              ),
+                              selected: selected,
+                              onSelected: (_) {
+                                setState(() {
+                                  selectedFilter = i;
+                                  // If "All" is selected, deselect any date
+                                  if (i == 0) {
+                                    selectedDayIndex = -1;
+                                  }
+                                });
+                              },
+                              selectedColor: LoggitColors.teal,
+                              backgroundColor: Color(0xFFF1F5F9),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 11.2,
+                                vertical: 3.5,
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                      SizedBox(height: LoggitSpacing.lg),
                       // Search bar with filter icon inside
                       Container(
                         decoration: BoxDecoration(
@@ -355,9 +567,9 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                         ),
                       ),
                       SizedBox(height: LoggitSpacing.lg),
-                      // Today section
+                      // Tasks section with count
                       Text(
-                        'Today',
+                        'Tasks (${filteredTasks.length})',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 20,
@@ -367,54 +579,8 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                         ),
                       ),
                       SizedBox(height: LoggitSpacing.md),
-                      if (todayTasks.isNotEmpty)
-                        ...todayTasks.map(
-                          (task) => _SwipeToDeleteTaskCard(
-                            key: ValueKey(
-                              task.title +
-                                  (task.dueDate?.toIso8601String() ?? ''),
-                            ),
-                            task: task,
-                            onDelete: () {
-                              setState(() {
-                                tasks.remove(task);
-                              });
-                            },
-                            onTap: () => _showTaskModal(context, task: task),
-                            onComplete: () {
-                              setState(() {
-                                final idx = tasks.indexOf(task);
-                                if (idx != -1) {
-                                  tasks[idx] = task.copyWith(
-                                    isCompleted: true,
-                                    status: TaskStatus.completed,
-                                  );
-                                }
-                              });
-                            },
-                            isDark: isDark,
-                            closeOptionsNotifier: closeSwipeOptionsNotifier,
-                            openCardKeyNotifier: openSwipeCardKey,
-                            cardKey: ValueKey(
-                              task.title +
-                                  (task.dueDate?.toIso8601String() ?? ''),
-                            ),
-                          ),
-                        ),
-                      // Upcoming Tasks section
-                      Text(
-                        'Upcoming Tasks',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 20,
-                          color: isDark
-                              ? Colors.white
-                              : LoggitColors.darkGrayText,
-                        ),
-                      ),
-                      SizedBox(height: LoggitSpacing.md),
-                      if (upcomingTasks.isNotEmpty)
-                        ...upcomingTasks.map(
+                      if (filteredTasks.isNotEmpty)
+                        ...filteredTasks.map(
                           (task) => _SwipeToDeleteTaskCard(
                             key: ValueKey(
                               task.title +
