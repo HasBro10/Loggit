@@ -1,6 +1,16 @@
-# loggit
+# Loggit
 
-A new Flutter project.
+A personal productivity app built with Flutter for logging expenses, tasks, reminders, notes, and gym workouts through natural language chat.
+
+## Features
+
+- **Chat Interface**: Log entries using natural language
+- **Expense Tracking**: Log expenses with categories and amounts
+- **Task Management**: Create and manage tasks
+- **Reminders**: Set time-based reminders
+- **Notes**: Save quick notes and thoughts
+- **Gym Logging**: Track workouts and exercises
+- **Dark Mode**: Toggle between light and dark themes
 
 ## Getting Started
 
