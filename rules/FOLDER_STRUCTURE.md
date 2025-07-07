@@ -198,6 +198,43 @@ This way, Cursor will know exactly where to place each type of file, keeping you
 - **Optimize widget rebuilds** with proper state management
 - **Use efficient data structures** for large datasets
 - **Implement lazy loading** for lists and grids
+
+# Documentation and Troubleshooting Rule
+
+## Notes Folder Documentation
+
+**CRITICAL:** When encountering and solving difficult technical issues, you MUST:
+
+### ✅ **What to Document**
+- **Complex UI problems** (shadows, animations, layout issues)
+- **Performance bottlenecks** and their solutions
+- **Integration challenges** between features
+- **Platform-specific issues** (iOS/Android/Web differences)
+- **Third-party library conflicts** and resolutions
+- **State management problems** and fixes
+- **Design system inconsistencies** and solutions
+
+### 📝 **Documentation Process**
+1. **Identify the problem** - describe what wasn't working
+2. **Explain the solution** - detail how it was fixed
+3. **Provide code examples** - show the working implementation
+4. **List key points** - important details to remember
+5. **Note when to use** - scenarios where this fix applies
+6. **Reference affected files** - which files were changed
+
+### 🎯 **File Organization**
+- **Create notes in `/notes/` folder**
+- **Use descriptive filenames** (e.g., `SHADOW_FIXES.md`, `ANIMATION_ISSUES.md`)
+- **Group related fixes** in the same file
+- **Update existing notes** when solutions improve
+
+### 🔄 **Maintenance**
+- **Reference notes first** when similar issues arise
+- **Update notes** when better solutions are found
+- **Remove outdated solutions** to avoid confusion
+- **Cross-reference** between related notes
+
+**Example:** Shadow clipping issues → Document in `/notes/SHADOW_FIXES.md` with exact solution pattern
 - **Minimize memory usage** with proper disposal of resources
 - **Profile performance** on target devices
 

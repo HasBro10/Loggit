@@ -13,7 +13,7 @@ Future<Reminder?> showReminderEditModal(
   final descController = TextEditingController(
     text: initial?.description ?? '',
   );
-  DateTime? date = isEditing ? initial?.reminderTime : null;
+  DateTime? date = isEditing ? initial.reminderTime : null;
 
   return showModalBottomSheet<Reminder>(
     context: context,
@@ -390,7 +390,7 @@ Future<void> _showDateTimePicker(
                           return hour;
                         }).whereType<int>().toList();
                         final initialHourIndex =
-                            availableHours.indexOf(now.hour) >= 0
+                            availableHours.contains(now.hour)
                             ? availableHours.indexOf(now.hour)
                             : 0;
                         final isToday =
@@ -405,7 +405,7 @@ Future<void> _showDateTimePicker(
                           return min;
                         }).whereType<int>().toList();
                         final initialMinuteIndex =
-                            availableMinutes.indexOf(now.minute) >= 0
+                            availableMinutes.contains(now.minute)
                             ? availableMinutes.indexOf(now.minute)
                             : 0;
                         return Row(
@@ -555,7 +555,6 @@ Future<void> _showDateTimePicker(
                     onDateTimeChanged(tempDate);
                     Navigator.of(context).pop();
                   },
-                  child: Text('Set Date & Time'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: LoggitColors.teal,
                     foregroundColor: Colors.white,
@@ -567,6 +566,7 @@ Future<void> _showDateTimePicker(
                       fontSize: 16,
                     ),
                   ),
+                  child: Text('Set Date & Time'),
                 ),
               ],
             ),

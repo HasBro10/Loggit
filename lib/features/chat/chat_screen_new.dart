@@ -232,7 +232,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
       setState(() {
         _messages.add(
           _ChatMessage(
-            text: "✅ " + _getSuccessMessage(logEntry),
+            text: "✅ ${_getSuccessMessage(logEntry)}",
             isUser: false,
             timestamp: DateTime.now(),
           ),
@@ -242,7 +242,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
       setState(() {
         _messages.add(
           _ChatMessage(
-            text: "❌ " + _getCancelledMessage(_pendingLog),
+            text: "❌ ${_getCancelledMessage(_pendingLog)}",
             isUser: false,
             timestamp: DateTime.now(),
           ),
@@ -777,8 +777,9 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                           value: isDark,
                           onChanged: (_) {
                             Navigator.of(context).pop();
-                            if (widget.onThemeToggle != null)
+                            if (widget.onThemeToggle != null) {
                               widget.onThemeToggle!();
+                            }
                           },
                           activeColor: LoggitColors.teal,
                         ),
@@ -826,7 +827,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
     final maxWidth =
         (TextPainter(
           text: TextSpan(
-            text: "Ask me to… " + maxText,
+            text: "Ask me to… $maxText",
             style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
           ),
           maxLines: 2,

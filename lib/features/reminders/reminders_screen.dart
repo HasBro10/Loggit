@@ -8,7 +8,7 @@ import 'reminder_edit_modal.dart';
 
 class RemindersScreen extends StatefulWidget {
   final VoidCallback onBack;
-  const RemindersScreen({Key? key, required this.onBack}) : super(key: key);
+  const RemindersScreen({super.key, required this.onBack});
 
   @override
   State<RemindersScreen> createState() => _RemindersScreenState();
@@ -924,23 +924,24 @@ class _RemindersScreenState extends State<RemindersScreen> {
   String _recurrenceText(Reminder r) {
     switch (r.recurrenceType) {
       case RecurrenceType.daily:
-        return 'Repeats daily' + _untilText(r);
+        return 'Repeats daily${_untilText(r)}';
       case RecurrenceType.weekly:
-        return 'Repeats weekly' + _untilText(r);
+        return 'Repeats weekly${_untilText(r)}';
       case RecurrenceType.monthly:
-        return 'Repeats monthly' + _untilText(r);
+        return 'Repeats monthly${_untilText(r)}';
       case RecurrenceType.custom:
-        if (r.customDays == null || r.customDays!.isEmpty)
-          return 'Custom recurrence' + _untilText(r);
+        if (r.customDays == null || r.customDays!.isEmpty) {
+          return 'Custom recurrence${_untilText(r)}';
+        }
         const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
         final days = r.customDays!.map((d) => weekDays[(d - 1) % 7]).join(', ');
-        return 'Custom: $days' + _untilText(r);
+        return 'Custom: $days${_untilText(r)}';
       case RecurrenceType.everyNDays:
-        return 'Every ${r.interval ?? 1} day(s)' + _untilText(r);
+        return 'Every ${r.interval ?? 1} day(s)${_untilText(r)}';
       case RecurrenceType.everyNWeeks:
-        return 'Every ${r.interval ?? 1} week(s)' + _untilText(r);
+        return 'Every ${r.interval ?? 1} week(s)${_untilText(r)}';
       case RecurrenceType.everyNMonths:
-        return 'Every ${r.interval ?? 1} month(s)' + _untilText(r);
+        return 'Every ${r.interval ?? 1} month(s)${_untilText(r)}';
       case RecurrenceType.none:
         return '';
     }

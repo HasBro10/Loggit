@@ -76,8 +76,9 @@ class LogParserService {
       dueDate = now.add(const Duration(days: 7));
     } else if (RegExp(r'\bin (\d+) days?\b').hasMatch(lower)) {
       final match = RegExp(r'\bin (\d+) days?\b').firstMatch(lower);
-      if (match != null)
+      if (match != null) {
         dueDate = now.add(Duration(days: int.parse(match.group(1)!)));
+      }
     } else if (RegExp(r'\bon the (\d+)(st|nd|rd|th)').hasMatch(lower)) {
       final match = RegExp(r'\bon the (\d+)(st|nd|rd|th)').firstMatch(lower);
       if (match != null) {
@@ -217,8 +218,9 @@ class LogParserService {
       reminderTime = now.add(const Duration(days: 7));
     } else if (RegExp(r'\bin (\d+) days?\b').hasMatch(lower)) {
       final match = RegExp(r'\bin (\d+) days?\b').firstMatch(lower);
-      if (match != null)
+      if (match != null) {
         reminderTime = now.add(Duration(days: int.parse(match.group(1)!)));
+      }
     } else if (RegExp(r'\bon the (\d+)(st|nd|rd|th)').hasMatch(lower)) {
       final match = RegExp(r'\bon the (\d+)(st|nd|rd|th)').firstMatch(lower);
       if (match != null) {

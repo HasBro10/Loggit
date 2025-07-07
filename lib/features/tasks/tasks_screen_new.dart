@@ -13,7 +13,7 @@ enum TaskSortOption { dueDate, priority, category }
 
 class TasksScreenNew extends StatefulWidget {
   final VoidCallback onBack;
-  TasksScreenNew({super.key, required this.onBack});
+  const TasksScreenNew({super.key, required this.onBack});
 
   @override
   State<TasksScreenNew> createState() => _TasksScreenNewState();
@@ -384,11 +384,12 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                             onComplete: () {
                               setState(() {
                                 final idx = tasks.indexOf(task);
-                                if (idx != -1)
+                                if (idx != -1) {
                                   tasks[idx] = task.copyWith(
                                     isCompleted: true,
                                     status: TaskStatus.completed,
                                   );
+                                }
                               });
                             },
                             isDark: isDark,
@@ -429,11 +430,12 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                             onComplete: () {
                               setState(() {
                                 final idx = tasks.indexOf(task);
-                                if (idx != -1)
+                                if (idx != -1) {
                                   tasks[idx] = task.copyWith(
                                     isCompleted: true,
                                     status: TaskStatus.completed,
                                   );
+                                }
                               });
                             },
                             isDark: isDark,
@@ -1250,7 +1252,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                                 );
                                 setState(() {
                                   if (isEditing) {
-                                    final idx = tasks.indexOf(task!);
+                                    final idx = tasks.indexOf(task);
                                     if (idx != -1) tasks[idx] = newTask;
                                   } else {
                                     tasks.add(newTask);
@@ -2422,7 +2424,7 @@ class _SwipeToDeleteTaskCard extends StatefulWidget {
   final ValueNotifier<Key?> openCardKeyNotifier;
   final Key cardKey;
   const _SwipeToDeleteTaskCard({
-    Key? key,
+    super.key,
     required this.task,
     required this.onDelete,
     required this.onTap,
@@ -2431,7 +2433,7 @@ class _SwipeToDeleteTaskCard extends StatefulWidget {
     required this.closeOptionsNotifier,
     required this.openCardKeyNotifier,
     required this.cardKey,
-  }) : super(key: key);
+  });
   @override
   State<_SwipeToDeleteTaskCard> createState() => _SwipeToDeleteTaskCardState();
 }
@@ -2543,16 +2545,30 @@ class _SwipeToDeleteTaskCardState extends State<_SwipeToDeleteTaskCard>
           onHorizontalDragUpdate: _onHorizontalDragUpdate,
           onHorizontalDragEnd: _onHorizontalDragEnd,
           onTap: () {
+            // Close swipe options first if THIS card has them open
             if (_showDelete) {
               setState(() {
                 _showDelete = false;
               });
-            } else {
-              widget.onTap();
+              return;
             }
+            // Then handle the tap normally
+            widget.onTap();
           },
           child: Container(
-            margin: const EdgeInsets.only(bottom: 16),
+            margin: const EdgeInsets.only(bottom: 4),
+            padding: const EdgeInsets.all(8), // Increased padding for shadow
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                  spreadRadius: 0,
+                ),
+              ],
+            ),
             child: Stack(
               children: [
                 // Task card (underneath)
@@ -2735,10 +2751,10 @@ Widget buildTaskCard(
       ? Icons.person
       : Icons.business;
   Color categoryIconColor = category == 'Work'
-      ? Colors.blue
+      ? Colors.brown[300]!
       : category == 'Personal'
       ? Colors.green
-      : Colors.orange;
+      : Colors.blue;
   Color priorityIconColor = priority.contains('High')
       ? Colors.red
       : priority.contains('Medium')
@@ -2752,13 +2768,6 @@ Widget buildTaskCard(
     decoration: BoxDecoration(
       color: isDark ? LoggitColors.darkCard : Colors.white,
       borderRadius: BorderRadius.circular(16),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.28), // even stronger shadow
-          blurRadius: 32, // more blur
-          offset: Offset(0, 12), // more vertical offset
-        ),
-      ],
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2815,13 +2824,13 @@ Widget buildTaskCard(
 }
 
 String priorityString(Task task) {
-  if (task.title.toLowerCase().contains('vat') ||
-      (task.description?.toLowerCase().contains('vat') ?? false)) {
-    return 'Medium Priority';
-  } else if (task.title.toLowerCase().contains('accountant')) {
-    return 'High Priority';
-  } else {
-    return 'Low Priority';
+  switch (task.priority) {
+    case TaskPriority.high:
+      return 'High Priority';
+    case TaskPriority.medium:
+      return 'Medium Priority';
+    case TaskPriority.low:
+      return 'Low Priority';
   }
 }
 

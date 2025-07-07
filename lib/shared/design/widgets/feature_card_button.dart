@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../color_guide.dart';
-import '../spacing.dart';
 
 class FeatureCardButton extends StatelessWidget {
   final String label;

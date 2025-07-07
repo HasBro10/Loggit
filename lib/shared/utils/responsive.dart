@@ -19,10 +19,12 @@ class Responsive {
 
   static EdgeInsets sheetPadding(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    if (isDesktop(context))
+    if (isDesktop(context)) {
       return const EdgeInsets.symmetric(horizontal: 48, vertical: 32);
-    if (isTablet(context))
+    }
+    if (isTablet(context)) {
       return const EdgeInsets.symmetric(horizontal: 32, vertical: 24);
+    }
     return const EdgeInsets.symmetric(horizontal: 16, vertical: 16);
   }
 

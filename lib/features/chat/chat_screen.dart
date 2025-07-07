@@ -231,7 +231,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       setState(() {
         _messages.add(
           ChatMessage(
-            text: "✅ " + _getSuccessMessage(logEntry),
+            text: "✅ ${_getSuccessMessage(logEntry)}",
             isUser: false,
             timestamp: DateTime.now(),
           ),
@@ -241,7 +241,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       setState(() {
         _messages.add(
           ChatMessage(
-            text: "❌ " + _getCancelledMessage(_pendingLog),
+            text: "❌ ${_getCancelledMessage(_pendingLog)}",
             isUser: false,
             timestamp: DateTime.now(),
           ),
