@@ -24,210 +24,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
   final ValueNotifier<int> closeSwipeOptionsNotifier = ValueNotifier<int>(0);
   final ValueNotifier<Key?> openSwipeCardKey = ValueNotifier<Key?>(null);
 
-  List<Task> tasks = [
-    // Day 14 tasks
-    Task(
-      title: 'Morning Meeting',
-      description: 'Team sync at 9am',
-      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 14),
-      isCompleted: false,
-      timestamp: DateTime.now(),
-      category: 'Work',
-      priority: TaskPriority.high,
-    ),
-    Task(
-      title: 'Buy groceries',
-      description: 'Milk, eggs, bread',
-      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 14),
-      isCompleted: true,
-      timestamp: DateTime.now(),
-      category: 'Personal',
-      priority: TaskPriority.medium,
-    ),
-    Task(
-      title: 'Call client',
-      description: 'Discuss project updates',
-      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 14),
-      isCompleted: false,
-      timestamp: DateTime.now(),
-      category: 'Business',
-      priority: TaskPriority.high,
-    ),
-
-    // Day 15 tasks
-    Task(
-      title: 'Gym workout',
-      description: 'Cardio and weights',
-      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 15),
-      isCompleted: false,
-      timestamp: DateTime.now(),
-      category: 'Personal',
-      priority: TaskPriority.low,
-    ),
-    Task(
-      title: 'Submit report',
-      description: 'Monthly progress report',
-      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 15),
-      isCompleted: false,
-      timestamp: DateTime.now(),
-      category: 'Work',
-      priority: TaskPriority.medium,
-    ),
-    Task(
-      title: 'Dentist appointment',
-      description: 'Routine cleaning',
-      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 15),
-      isCompleted: true,
-      timestamp: DateTime.now(),
-      category: 'Personal',
-      priority: TaskPriority.medium,
-    ),
-
-    // Day 16 tasks
-    Task(
-      title: 'Team presentation',
-      description: 'Q3 results presentation',
-      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 16),
-      isCompleted: false,
-      timestamp: DateTime.now(),
-      category: 'Work',
-      priority: TaskPriority.high,
-    ),
-    Task(
-      title: 'Pay bills',
-      description: 'Electricity and internet',
-      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 16),
-      isCompleted: false,
-      timestamp: DateTime.now(),
-      category: 'Personal',
-      priority: TaskPriority.high,
-    ),
-    Task(
-      title: 'Client dinner',
-      description: 'Business networking',
-      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 16),
-      isCompleted: false,
-      timestamp: DateTime.now(),
-      category: 'Business',
-      priority: TaskPriority.medium,
-    ),
-
-    // Day 17 tasks
-    Task(
-      title: 'Code review',
-      description: 'Review pull requests',
-      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 17),
-      isCompleted: true,
-      timestamp: DateTime.now(),
-      category: 'Work',
-      priority: TaskPriority.medium,
-    ),
-    Task(
-      title: 'Library return',
-      description: 'Return overdue books',
-      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 17),
-      isCompleted: false,
-      timestamp: DateTime.now(),
-      category: 'Personal',
-      priority: TaskPriority.low,
-    ),
-    Task(
-      title: 'Update website',
-      description: 'Add new content',
-      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 17),
-      isCompleted: false,
-      timestamp: DateTime.now(),
-      category: 'Business',
-      priority: TaskPriority.high,
-    ),
-
-    // Day 18 tasks
-    Task(
-      title: 'Weekly planning',
-      description: 'Plan next week tasks',
-      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 18),
-      isCompleted: false,
-      timestamp: DateTime.now(),
-      category: 'Work',
-      priority: TaskPriority.medium,
-    ),
-    Task(
-      title: 'Movie night',
-      description: 'Watch new release',
-      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 18),
-      isCompleted: false,
-      timestamp: DateTime.now(),
-      category: 'Personal',
-      priority: TaskPriority.low,
-    ),
-    Task(
-      title: 'Tax preparation',
-      description: 'Organize documents',
-      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 18),
-      isCompleted: true,
-      timestamp: DateTime.now(),
-      category: 'Business',
-      priority: TaskPriority.high,
-    ),
-
-    // Day 19 tasks
-    Task(
-      title: 'Product demo',
-      description: 'Demo to stakeholders',
-      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 19),
-      isCompleted: false,
-      timestamp: DateTime.now(),
-      category: 'Work',
-      priority: TaskPriority.high,
-    ),
-    Task(
-      title: 'Family dinner',
-      description: 'Sunday family meal',
-      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 19),
-      isCompleted: false,
-      timestamp: DateTime.now(),
-      category: 'Personal',
-      priority: TaskPriority.medium,
-    ),
-    Task(
-      title: 'Contract review',
-      description: 'Review vendor contract',
-      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 19),
-      isCompleted: false,
-      timestamp: DateTime.now(),
-      category: 'Business',
-      priority: TaskPriority.high,
-    ),
-
-    // Day 20 tasks
-    Task(
-      title: 'Team building',
-      description: 'Office team activity',
-      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 20),
-      isCompleted: false,
-      timestamp: DateTime.now(),
-      category: 'Work',
-      priority: TaskPriority.low,
-    ),
-    Task(
-      title: 'Doctor checkup',
-      description: 'Annual health check',
-      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 20),
-      isCompleted: false,
-      timestamp: DateTime.now(),
-      category: 'Personal',
-      priority: TaskPriority.medium,
-    ),
-    Task(
-      title: 'Budget review',
-      description: 'Monthly budget analysis',
-      dueDate: DateTime(DateTime.now().year, DateTime.now().month, 20),
-      isCompleted: true,
-      timestamp: DateTime.now(),
-      category: 'Business',
-      priority: TaskPriority.high,
-    ),
-  ];
+  List<Task> tasks = [];
 
   String searchQuery = '';
   String statusFilter = 'All';
@@ -240,24 +37,194 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
   TaskSortOption sortOption = TaskSortOption.dueDate;
   int selectedFilter = 0; // 0 = All, 1 = Pending, 2 = Completed
   late int selectedDayIndex;
-  final List<String> days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  final List<int> dates = [14, 15, 16, 17, 18, 19, 20];
+  late List<String> days;
+  late List<int> dates;
 
   @override
   void initState() {
     super.initState();
-    // Set selectedDayIndex to today's day
-    final today = DateTime.now();
-    final weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    final todayAbbr = weekDays[today.weekday % 7];
-    final idx = days.indexOf(todayAbbr);
-    selectedDayIndex = idx >= 0 ? idx : 0;
+    _generateDynamicDates();
 
     _scrollController.addListener(() {
       if (_scrollController.position.isScrollingNotifier.value) {
         closeSwipeOptionsNotifier.value++;
       }
     });
+  }
+
+  void _generateDynamicDates() {
+    final today = DateTime.now();
+    final weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    days = [];
+    dates = [];
+
+    // Generate 7 days starting from today
+    for (int i = 0; i < 7; i++) {
+      final date = today.add(Duration(days: i));
+      days.add(weekDays[date.weekday % 7]);
+      dates.add(date.day);
+    }
+
+    // Set selectedDayIndex to -1 to show all tasks by default
+    selectedDayIndex = -1;
+
+    // Generate dummy tasks for testing
+    _generateDummyTasks();
+  }
+
+  void _generateDummyTasks() {
+    final today = DateTime.now();
+
+    tasks = [
+      // Today's tasks
+      Task(
+        title: 'Morning Meeting',
+        description: 'Team sync at 9am',
+        dueDate: DateTime(today.year, today.month, today.day),
+        isCompleted: false,
+        timestamp: DateTime.now(),
+        category: 'Work',
+        priority: TaskPriority.high,
+      ),
+      Task(
+        title: 'Buy groceries',
+        description: 'Milk, eggs, bread',
+        dueDate: DateTime(today.year, today.month, today.day),
+        isCompleted: true,
+        timestamp: DateTime.now(),
+        category: 'Personal',
+        priority: TaskPriority.medium,
+      ),
+
+      // Tomorrow's tasks
+      Task(
+        title: 'Gym workout',
+        description: 'Cardio and weights',
+        dueDate: DateTime(today.year, today.month, today.day + 1),
+        isCompleted: false,
+        timestamp: DateTime.now(),
+        category: 'Personal',
+        priority: TaskPriority.low,
+      ),
+      Task(
+        title: 'Submit report',
+        description: 'Monthly progress report',
+        dueDate: DateTime(today.year, today.month, today.day + 1),
+        isCompleted: false,
+        timestamp: DateTime.now(),
+        category: 'Work',
+        priority: TaskPriority.medium,
+      ),
+
+      // Day after tomorrow
+      Task(
+        title: 'Team presentation',
+        description: 'Q3 results presentation',
+        dueDate: DateTime(today.year, today.month, today.day + 2),
+        isCompleted: false,
+        timestamp: DateTime.now(),
+        category: 'Work',
+        priority: TaskPriority.high,
+      ),
+
+      // Tasks for months ahead
+      Task(
+        title: 'Annual vacation',
+        description: 'Book flights and hotels',
+        dueDate: DateTime(today.year, today.month + 3, 15),
+        isCompleted: false,
+        timestamp: DateTime.now(),
+        category: 'Personal',
+        priority: TaskPriority.medium,
+      ),
+      Task(
+        title: 'Tax filing deadline',
+        description: 'Submit annual tax returns',
+        dueDate: DateTime(today.year + 1, 4, 15),
+        isCompleted: false,
+        timestamp: DateTime.now(),
+        category: 'Business',
+        priority: TaskPriority.high,
+      ),
+      Task(
+        title: 'Project milestone',
+        description: 'Major project delivery',
+        dueDate: DateTime(today.year, today.month + 2, 28),
+        isCompleted: false,
+        timestamp: DateTime.now(),
+        category: 'Work',
+        priority: TaskPriority.high,
+      ),
+    ];
+  }
+
+  bool _isTaskForSelectedDate(Task task, int selectedIndex) {
+    if (selectedIndex < 0 || selectedIndex >= dates.length) return false;
+
+    final today = DateTime.now();
+    final selectedDate = today.add(Duration(days: selectedIndex));
+
+    return task.dueDate != null &&
+        task.dueDate!.year == selectedDate.year &&
+        task.dueDate!.month == selectedDate.month &&
+        task.dueDate!.day == selectedDate.day;
+  }
+
+  bool _isTaskOverdue(Task task) {
+    if (task.dueDate == null || task.isCompleted) return false;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final dueDate = DateTime(
+      task.dueDate!.year,
+      task.dueDate!.month,
+      task.dueDate!.day,
+    );
+    return dueDate.isBefore(today);
+  }
+
+  bool _isTaskDueSoon(Task task) {
+    if (task.dueDate == null || task.isCompleted) return false;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final dueDate = DateTime(
+      task.dueDate!.year,
+      task.dueDate!.month,
+      task.dueDate!.day,
+    );
+    final daysUntilDue = dueDate.difference(today).inDays;
+    return daysUntilDue >= 0 && daysUntilDue <= 3;
+  }
+
+  String _getUserFriendlyDateLabel(int index) {
+    if (index == 0) return 'Today';
+    if (index == 1) return 'Tomorrow';
+
+    final today = DateTime.now();
+    final targetDate = today.add(Duration(days: index));
+    final now = DateTime.now();
+
+    // Check if it's this week
+    final weekStart = now.subtract(Duration(days: now.weekday - 1));
+    final weekEnd = weekStart.add(Duration(days: 6));
+
+    if (targetDate.isAfter(weekStart.subtract(Duration(days: 1))) &&
+        targetDate.isBefore(weekEnd.add(Duration(days: 1)))) {
+      return days[index]; // Just show day name for this week
+    }
+
+    // For next week, show day name and date
+    return '${days[index]} ${dates[index]}';
+  }
+
+  String _getSelectedDateContext() {
+    if (selectedDayIndex == 0) {
+      return 'Today';
+    } else if (selectedDayIndex == 1) {
+      return 'Tomorrow';
+    } else {
+      return '${days[selectedDayIndex]} ${dates[selectedDayIndex]}';
+    }
   }
 
   @override
@@ -318,25 +285,16 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
       final matchesSelectedDate =
           selectedDayIndex < 0 ||
           (task.dueDate != null &&
-              task.dueDate!.day == dates[selectedDayIndex] &&
-              task.dueDate!.month == DateTime.now().month &&
-              task.dueDate!.year == DateTime.now().year);
+              _isTaskForSelectedDate(task, selectedDayIndex));
 
       // Overdue filter
       final matchesOverdue =
-          !showOverdueOnly ||
-          (task.dueDate != null &&
-              task.dueDate!.isBefore(now) &&
-              !task.isCompleted);
+          !showOverdueOnly || (task.dueDate != null && _isTaskOverdue(task));
 
       // Due soon filter (due within 3 days)
       final matchesDueSoon =
           statusFilter != 'Due Soon' ||
-          (statusFilter == 'Due Soon' &&
-              task.dueDate != null &&
-              task.dueDate!.isAfter(now) &&
-              task.dueDate!.difference(now).inDays <= 3 &&
-              !task.isCompleted);
+          (statusFilter == 'Due Soon' && _isTaskDueSoon(task));
 
       return matchesSearch &&
           matchesStatus &&
@@ -418,7 +376,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                           ],
                         ),
                         child: SizedBox(
-                          height: 64,
+                          height: 76, // Increased height to accommodate border
                           child: ListView.builder(
                             scrollDirection: Axis.horizontal,
                             itemCount: days.length,
@@ -431,13 +389,15 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                                 onTap: () {
                                   setState(() {
                                     selectedDayIndex = i;
+                                    // When a specific date is selected, we're no longer in "All" mode
+                                    // Keep the filter as "All" (0) but the visual state will be correct
                                   });
                                 },
                                 child: AnimatedContainer(
                                   duration: Duration(milliseconds: 180),
                                   margin: EdgeInsets.symmetric(
                                     horizontal: 4,
-                                    vertical: 6,
+                                    vertical: 8, // Increased vertical margin
                                   ),
                                   padding: EdgeInsets.symmetric(
                                     horizontal: 12,
@@ -448,16 +408,24 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                                         ? LoggitColors.teal
                                         : Colors.transparent,
                                     borderRadius: BorderRadius.circular(16),
+                                    border: i == 0
+                                        ? Border.all(
+                                            color: LoggitColors.teal,
+                                            width: 2,
+                                          )
+                                        : null,
                                   ),
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Text(
-                                        days[i],
+                                        _getUserFriendlyDateLabel(i),
                                         style: TextStyle(
                                           fontSize: 12,
                                           color: selected
                                               ? Colors.white
+                                              : i == 0
+                                              ? LoggitColors.teal
                                               : Colors.grey[600],
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -469,6 +437,8 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                                           fontSize: 16,
                                           color: selected
                                               ? Colors.white
+                                              : i == 0
+                                              ? LoggitColors.teal
                                               : Colors.grey[800],
                                           fontWeight: FontWeight.bold,
                                         ),
@@ -486,7 +456,9 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                       Row(
                         children: List.generate(3, (i) {
                           final labels = ['All', 'Pending', 'Completed'];
-                          final selected = i == selectedFilter;
+                          // Show as selected only if it's the current filter AND no specific date is selected
+                          final selected =
+                              i == selectedFilter && selectedDayIndex < 0;
                           return Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: ChoiceChip(
@@ -502,10 +474,12 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                               onSelected: (_) {
                                 setState(() {
                                   selectedFilter = i;
-                                  // If "All" is selected, deselect any date
+                                  // If "All" is selected, deselect any date to show all tasks
                                   if (i == 0) {
                                     selectedDayIndex = -1;
                                   }
+                                  // If "Pending" or "Completed" is selected, keep current date selection
+                                  // but the filter will still apply to the selected date's tasks
                                 });
                               },
                               selectedColor: LoggitColors.teal,
@@ -567,6 +541,72 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                         ),
                       ),
                       SizedBox(height: LoggitSpacing.lg),
+                      // Date context header
+                      if (selectedDayIndex >= 0)
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: LoggitColors.teal.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: LoggitColors.teal.withOpacity(0.2),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.calendar_today,
+                                color: LoggitColors.teal,
+                                size: 20,
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                _getSelectedDateContext(),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: LoggitColors.teal,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.grey.withOpacity(0.2),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.list_alt,
+                                color: Colors.grey[600],
+                                size: 20,
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'All Tasks',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      SizedBox(height: LoggitSpacing.md),
                       // Tasks section with count
                       Text(
                         'Tasks (${filteredTasks.length})',
@@ -612,7 +652,9 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                                   (task.dueDate?.toIso8601String() ?? ''),
                             ),
                           ),
-                        ),
+                        )
+                      else
+                        _buildEmptyState(isDark),
                     ],
                   ),
                 ),
@@ -2360,6 +2402,93 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
           },
         );
       },
+    );
+  }
+
+  Widget _buildEmptyState(bool isDark) {
+    String title, subtitle, icon;
+
+    if (tasks.isEmpty) {
+      // No tasks at all
+      title = 'No tasks yet';
+      subtitle = 'Tap the + button to create your first task';
+      icon = '📝';
+    } else if (selectedDayIndex >= 0) {
+      // No tasks for selected date
+      title = 'No tasks for ${_getSelectedDateContext()}';
+      subtitle = 'Tap the + button to add a task for this day';
+      icon = '📅';
+    } else if (searchQuery.isNotEmpty) {
+      // No search results
+      title = 'No matching tasks';
+      subtitle = 'Try adjusting your search terms';
+      icon = '🔍';
+    } else if (selectedFilter == 1) {
+      // No pending tasks
+      title = 'No pending tasks';
+      subtitle = 'All tasks are completed! 🎉';
+      icon = '✅';
+    } else if (selectedFilter == 2) {
+      // No completed tasks
+      title = 'No completed tasks';
+      subtitle = 'Complete some tasks to see them here';
+      icon = '📋';
+    } else if (selectedDayIndex < 0) {
+      // No tasks in "All Tasks" mode
+      title = 'No tasks found';
+      subtitle = 'Try selecting a specific date or add new tasks';
+      icon = '📝';
+    } else {
+      // No tasks (fallback)
+      title = 'No tasks found';
+      subtitle = 'Try adjusting your filters or add new tasks';
+      icon = '📝';
+    }
+
+    return Container(
+      margin: EdgeInsets.symmetric(vertical: 40),
+      padding: EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(icon, style: TextStyle(fontSize: 64)),
+          SizedBox(height: 16),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.white : LoggitColors.darkGrayText,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          SizedBox(height: 8),
+          Text(
+            subtitle,
+            style: TextStyle(
+              fontSize: 14,
+              color: isDark ? Colors.grey[400] : Colors.grey[600],
+            ),
+            textAlign: TextAlign.center,
+          ),
+          if (tasks.isEmpty || selectedDayIndex >= 0) ...[
+            SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () => _showTaskModal(context),
+              icon: Icon(Icons.add, size: 18),
+              label: Text('Add Task'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: LoggitColors.teal,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
