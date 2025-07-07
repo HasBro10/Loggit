@@ -39,6 +39,9 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
   late int selectedDayIndex;
   late List<String> days;
   late List<int> dates;
+  int selectedTabIndex = 0; // 0 = Week, 1 = Month, 2 = All
+  int selectedTimeFilter =
+      0; // 0 = All Time, 1 = This Week, 2 = This Month, 3 = Next 3 Months, 4 = Overdue
 
   @override
   void initState() {
@@ -362,144 +365,123 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Date selector bar with background
+                      // Tab navigation
                       Container(
                         decoration: BoxDecoration(
-                          color: Color(0xFFF1F5F9), // Light background
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.02),
-                              blurRadius: 2,
-                              offset: Offset(0, 1),
+                          color: Colors.grey.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(child: _buildTabButton('Week', 0, isDark)),
+                            Expanded(
+                              child: _buildTabButton('Month', 1, isDark),
                             ),
+                            Expanded(child: _buildTabButton('All', 2, isDark)),
                           ],
                         ),
-                        child: SizedBox(
-                          height: 76, // Increased height to accommodate border
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: days.length,
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            physics: BouncingScrollPhysics(),
-                            shrinkWrap: true,
-                            itemBuilder: (context, i) {
-                              final selected = i == selectedDayIndex;
-                              return GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    selectedDayIndex = i;
-                                    // When a specific date is selected, we're no longer in "All" mode
-                                    // Keep the filter as "All" (0) but the visual state will be correct
-                                  });
-                                },
-                                child: AnimatedContainer(
-                                  duration: Duration(milliseconds: 180),
-                                  margin: EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                    vertical: 8, // Increased vertical margin
-                                  ),
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: selected
-                                        ? LoggitColors.teal
-                                        : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: i == 0
-                                        ? Border.all(
-                                            color: LoggitColors.teal,
-                                            width: 2,
-                                          )
-                                        : null,
-                                  ),
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        _getUserFriendlyDateLabel(i),
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: selected
-                                              ? Colors.white
-                                              : i == 0
-                                              ? LoggitColors.teal
-                                              : Colors.grey[600],
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      SizedBox(height: 2),
-                                      Text(
-                                        dates[i].toString(),
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          color: selected
-                                              ? Colors.white
-                                              : i == 0
-                                              ? LoggitColors.teal
-                                              : Colors.grey[800],
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
+                      ),
+                      SizedBox(height: LoggitSpacing.lg),
+                      // Date selector bar with background
+                      if (selectedTabIndex == 0) // Week View
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Color(0xFFF1F5F9), // Light background
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.02),
+                                blurRadius: 2,
+                                offset: Offset(0, 1),
+                              ),
+                            ],
                           ),
-                        ),
-                      ),
-                      SizedBox(height: LoggitSpacing.lg),
-                      // Filter chips
-                      Row(
-                        children: List.generate(3, (i) {
-                          final labels = ['All', 'Pending', 'Completed'];
-                          // Show as selected only if it's the current filter AND no specific date is selected
-                          final selected =
-                              i == selectedFilter && selectedDayIndex < 0;
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ChoiceChip(
-                              label: Text(
-                                labels[i],
-                                style: TextStyle(
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: selected ? Colors.white : Colors.black,
-                                ),
+                          child: SizedBox(
+                            height:
+                                76, // Increased height to accommodate border
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: days.length,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
                               ),
-                              selected: selected,
-                              onSelected: (_) {
-                                setState(() {
-                                  selectedFilter = i;
-                                  // If "All" is selected, deselect any date to show all tasks
-                                  if (i == 0) {
-                                    selectedDayIndex = -1;
-                                  }
-                                  // If "Pending" or "Completed" is selected, keep current date selection
-                                  // but the filter will still apply to the selected date's tasks
-                                });
+                              physics: BouncingScrollPhysics(),
+                              shrinkWrap: true,
+                              itemBuilder: (context, i) {
+                                final selected = i == selectedDayIndex;
+                                return GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      selectedDayIndex = i;
+                                      // When a specific date is selected, we're no longer in "All" mode
+                                      // Keep the filter as "All" (0) but the visual state will be correct
+                                    });
+                                  },
+                                  child: AnimatedContainer(
+                                    duration: Duration(milliseconds: 180),
+                                    margin: EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                      vertical: 8, // Increased vertical margin
+                                    ),
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: selected
+                                          ? LoggitColors.teal.withOpacity(0.1)
+                                          : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: (i == 0 || selected)
+                                          ? Border.all(
+                                              color: LoggitColors.teal,
+                                              width: 2,
+                                            )
+                                          : null,
+                                    ),
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          _getUserFriendlyDateLabel(i),
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: selected
+                                                ? Colors.black
+                                                : i == 0
+                                                ? LoggitColors.teal
+                                                : Colors.grey[600],
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        SizedBox(height: 2),
+                                        Text(
+                                          dates[i].toString(),
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            color: selected
+                                                ? Colors.black
+                                                : i == 0
+                                                ? LoggitColors.teal
+                                                : Colors.grey[800],
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
                               },
-                              selectedColor: LoggitColors.teal,
-                              backgroundColor: Color(0xFFF1F5F9),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              materialTapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
-                              visualDensity: VisualDensity.compact,
-                              padding: EdgeInsets.symmetric(
-                                horizontal: 11.2,
-                                vertical: 3.5,
-                              ),
                             ),
-                          );
-                        }),
-                      ),
+                          ),
+                        )
+                      else if (selectedTabIndex == 1) // Month View
+                        _buildMonthView(isDark)
+                      else // All View
+                        _buildAllTasksView(isDark),
                       SizedBox(height: LoggitSpacing.lg),
-                      // Search bar with filter icon inside
+                      // Search bar (show for all views)
                       Container(
                         decoration: BoxDecoration(
                           color: isDark ? LoggitColors.darkCard : Colors.white,
@@ -541,40 +523,8 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                         ),
                       ),
                       SizedBox(height: LoggitSpacing.lg),
-                      // Date context header
-                      if (selectedDayIndex >= 0)
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: LoggitColors.teal.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: LoggitColors.teal.withOpacity(0.2),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.calendar_today,
-                                color: LoggitColors.teal,
-                                size: 20,
-                              ),
-                              SizedBox(width: 8),
-                              Text(
-                                _getSelectedDateContext(),
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: LoggitColors.teal,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      else
+                      // Date context header (only for Week and Month views)
+                      if (selectedTabIndex != 2)
                         Container(
                           padding: EdgeInsets.symmetric(
                             horizontal: 16,
@@ -588,73 +538,98 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                             ),
                           ),
                           child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Icon(
-                                Icons.list_alt,
-                                color: Colors.grey[600],
-                                size: 20,
+                              Row(
+                                children: [
+                                  Icon(
+                                    selectedDayIndex >= 0
+                                        ? Icons.calendar_today
+                                        : Icons.list_alt,
+                                    color: Colors.grey[600],
+                                    size: 20,
+                                  ),
+                                  SizedBox(width: 8),
+                                  RichText(
+                                    text: TextSpan(
+                                      text: selectedDayIndex >= 0
+                                          ? _getSelectedDateContext()
+                                          : 'All Tasks',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                              SizedBox(width: 8),
-                              Text(
-                                'All Tasks',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.grey[600],
+                              RichText(
+                                text: TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: 'Showing: ',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: '${filteredTasks.length}',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
                         ),
-                      SizedBox(height: LoggitSpacing.md),
-                      // Tasks section with count
-                      Text(
-                        'Tasks (${filteredTasks.length})',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 20,
-                          color: isDark
-                              ? Colors.white
-                              : LoggitColors.darkGrayText,
-                        ),
-                      ),
-                      SizedBox(height: LoggitSpacing.md),
-                      if (filteredTasks.isNotEmpty)
-                        ...filteredTasks.map(
-                          (task) => _SwipeToDeleteTaskCard(
-                            key: ValueKey(
-                              task.title +
-                                  (task.dueDate?.toIso8601String() ?? ''),
+                      if (selectedTabIndex != 2)
+                        SizedBox(height: LoggitSpacing.md),
+                      // Tasks section (for Week and Month views)
+                      if (selectedTabIndex != 2) ...[
+                        if (filteredTasks.isNotEmpty)
+                          ...filteredTasks.map(
+                            (task) => _SwipeToDeleteTaskCard(
+                              key: ValueKey(
+                                task.title +
+                                    (task.dueDate?.toIso8601String() ?? ''),
+                              ),
+                              task: task,
+                              onDelete: () {
+                                setState(() {
+                                  tasks.remove(task);
+                                });
+                              },
+                              onTap: () => _showTaskModal(context, task: task),
+                              onComplete: () {
+                                setState(() {
+                                  final idx = tasks.indexOf(task);
+                                  if (idx != -1) {
+                                    tasks[idx] = task.copyWith(
+                                      isCompleted: true,
+                                      status: TaskStatus.completed,
+                                    );
+                                  }
+                                });
+                              },
+                              isDark: isDark,
+                              closeOptionsNotifier: closeSwipeOptionsNotifier,
+                              openCardKeyNotifier: openSwipeCardKey,
+                              cardKey: ValueKey(
+                                task.title +
+                                    (task.dueDate?.toIso8601String() ?? ''),
+                              ),
                             ),
-                            task: task,
-                            onDelete: () {
-                              setState(() {
-                                tasks.remove(task);
-                              });
-                            },
-                            onTap: () => _showTaskModal(context, task: task),
-                            onComplete: () {
-                              setState(() {
-                                final idx = tasks.indexOf(task);
-                                if (idx != -1) {
-                                  tasks[idx] = task.copyWith(
-                                    isCompleted: true,
-                                    status: TaskStatus.completed,
-                                  );
-                                }
-                              });
-                            },
-                            isDark: isDark,
-                            closeOptionsNotifier: closeSwipeOptionsNotifier,
-                            openCardKeyNotifier: openSwipeCardKey,
-                            cardKey: ValueKey(
-                              task.title +
-                                  (task.dueDate?.toIso8601String() ?? ''),
-                            ),
-                          ),
-                        )
-                      else
-                        _buildEmptyState(isDark),
+                          )
+                        else
+                          _buildEmptyState(isDark),
+                      ],
                     ],
                   ),
                 ),
@@ -2490,6 +2465,507 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
         ],
       ),
     );
+  }
+
+  Widget _buildTabButton(String label, int index, bool isDark) {
+    final isSelected = selectedTabIndex == index;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          selectedTabIndex = index;
+          // Reset date selection when switching to "All" tab
+          if (index == 2) {
+            selectedDayIndex = -1;
+          }
+        });
+      },
+      child: Container(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? LoggitColors.teal : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: isSelected
+                ? Colors.white
+                : (isDark ? Colors.white : Colors.black),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMonthView(bool isDark) {
+    final now = DateTime.now();
+    final currentMonth = DateTime(now.year, now.month);
+    final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+    final firstDayOfMonth = DateTime(now.year, now.month, 1);
+    final firstWeekday = firstDayOfMonth.weekday % 7; // Sunday = 0
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 2,
+            offset: Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Month header
+          Container(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton(
+                  icon: Icon(Icons.chevron_left, color: Colors.grey[600]),
+                  onPressed: () {
+                    // TODO: Navigate to previous month
+                  },
+                ),
+                Text(
+                  '${_getMonthName(now.month)} ${now.year}',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.chevron_right, color: Colors.grey[600]),
+                  onPressed: () {
+                    // TODO: Navigate to next month
+                  },
+                ),
+              ],
+            ),
+          ),
+          // Weekday headers
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+                  .map(
+                    (day) => Expanded(
+                      child: Text(
+                        day,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+          SizedBox(height: 8),
+          // Calendar grid
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              children: List.generate(6, (weekIndex) {
+                return Row(
+                  children: List.generate(7, (dayIndex) {
+                    final dayNumber =
+                        weekIndex * 7 + dayIndex - firstWeekday + 1;
+                    final isValidDay =
+                        dayNumber > 0 && dayNumber <= daysInMonth;
+                    final isToday = dayNumber == now.day;
+                    final hasTasks = _hasTasksOnDate(
+                      DateTime(now.year, now.month, dayNumber),
+                    );
+
+                    // Check if this date is selected (for month view, we'll use a different approach)
+                    final selectedDate = _getSelectedDateForMonthView();
+                    final isSelected =
+                        selectedDate != null &&
+                        selectedDate.year == now.year &&
+                        selectedDate.month == now.month &&
+                        selectedDate.day == dayNumber;
+
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: isValidDay
+                            ? () {
+                                setState(() {
+                                  // Set the selected date for month view
+                                  _setSelectedDateForMonthView(
+                                    DateTime(now.year, now.month, dayNumber),
+                                  );
+                                });
+                              }
+                            : null,
+                        child: Container(
+                          height: 40,
+                          margin: EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? LoggitColors.teal
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            border: isToday
+                                ? Border.all(color: LoggitColors.teal, width: 2)
+                                : isSelected
+                                ? Border.all(color: LoggitColors.teal, width: 2)
+                                : null,
+                          ),
+                          child: Stack(
+                            children: [
+                              Center(
+                                child: Text(
+                                  isValidDay ? dayNumber.toString() : '',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : isValidDay
+                                        ? (isDark ? Colors.white : Colors.black)
+                                        : Colors.transparent,
+                                  ),
+                                ),
+                              ),
+                              if (hasTasks && isValidDay)
+                                Positioned(
+                                  bottom: 4,
+                                  right: 4,
+                                  child: Container(
+                                    width: 6,
+                                    height: 6,
+                                    decoration: BoxDecoration(
+                                      color: LoggitColors.teal,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                );
+              }),
+            ),
+          ),
+          SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  // Add these helper methods for month view date selection
+  DateTime? _selectedDateForMonthView;
+
+  DateTime? _getSelectedDateForMonthView() {
+    return _selectedDateForMonthView;
+  }
+
+  void _setSelectedDateForMonthView(DateTime date) {
+    _selectedDateForMonthView = date;
+    // Also update the selectedDayIndex for compatibility with existing logic
+    final today = DateTime.now();
+    final daysDifference = date.difference(today).inDays;
+    // Only set selectedDayIndex if it's within the 7-day range
+    if (daysDifference >= 0 && daysDifference < 7) {
+      selectedDayIndex = daysDifference;
+    } else {
+      selectedDayIndex = -1; // Use -1 to indicate "all tasks" mode
+    }
+  }
+
+  String _getMonthName(int month) {
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return months[month - 1];
+  }
+
+  bool _hasTasksOnDate(DateTime date) {
+    return tasks.any(
+      (task) =>
+          task.dueDate != null &&
+          task.dueDate!.year == date.year &&
+          task.dueDate!.month == date.month &&
+          task.dueDate!.day == date.day,
+    );
+  }
+
+  Widget _buildAllTasksView(bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Time-based filters
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.grey.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Expanded(child: _buildTimeFilterChip('All Time', 0, isDark)),
+              Expanded(child: _buildTimeFilterChip('This Week', 1, isDark)),
+              Expanded(child: _buildTimeFilterChip('This Month', 2, isDark)),
+              Expanded(child: _buildTimeFilterChip('Next 3 Months', 3, isDark)),
+              Expanded(child: _buildTimeFilterChip('Overdue', 4, isDark)),
+            ],
+          ),
+        ),
+        SizedBox(height: 16),
+        // Tasks list
+        Container(
+          decoration: BoxDecoration(
+            color: isDark ? LoggitColors.darkCard : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 4,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            children: _getFilteredTasksForAllView()
+                .map((task) => _buildTaskCard(task, isDark))
+                .toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTimeFilterChip(String label, int index, bool isDark) {
+    final isSelected = selectedTimeFilter == index;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          selectedTimeFilter = index;
+        });
+      },
+      child: Container(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? LoggitColors.teal : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: isSelected
+                ? Colors.white
+                : (isDark ? Colors.white : Colors.black),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTaskCard(Task task, bool isDark) {
+    return Container(
+      margin: EdgeInsets.all(8),
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? LoggitColors.darkBg : Colors.grey.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: _getPriorityColor(task.priority).withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          // Priority indicator
+          Container(
+            width: 4,
+            height: 40,
+            decoration: BoxDecoration(
+              color: _getPriorityColor(task.priority),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          SizedBox(width: 12),
+          // Task details
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  task.title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : Colors.black,
+                    decoration: task.isCompleted
+                        ? TextDecoration.lineThrough
+                        : null,
+                  ),
+                ),
+                if (task.description != null) ...[
+                  SizedBox(height: 4),
+                  Text(
+                    task.description!,
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                  ),
+                ],
+                SizedBox(height: 8),
+                Row(
+                  children: [
+                    if (task.category != null) ...[
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _getCategoryColor(
+                            task.category!,
+                          ).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          task.category!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: _getCategoryColor(task.category!),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                    ],
+                    if (task.dueDate != null) ...[
+                      Icon(
+                        Icons.calendar_today,
+                        size: 14,
+                        color: Colors.grey[600],
+                      ),
+                      SizedBox(width: 4),
+                      Text(
+                        _formatDate(task.dueDate!),
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+          // Status indicator
+          Container(
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(
+              color: task.isCompleted
+                  ? Colors.green
+                  : Colors.grey.withOpacity(0.3),
+              shape: BoxShape.circle,
+            ),
+            child: task.isCompleted
+                ? Icon(Icons.check, size: 14, color: Colors.white)
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Task> _getFilteredTasksForAllView() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    return tasks.where((task) {
+      if (task.dueDate == null) return selectedTimeFilter == 0; // All Time
+
+      final dueDate = DateTime(
+        task.dueDate!.year,
+        task.dueDate!.month,
+        task.dueDate!.day,
+      );
+
+      switch (selectedTimeFilter) {
+        case 0: // All Time
+          return true;
+        case 1: // This Week
+          final weekStart = today.subtract(Duration(days: today.weekday - 1));
+          final weekEnd = weekStart.add(Duration(days: 6));
+          return dueDate.isAfter(weekStart.subtract(Duration(days: 1))) &&
+              dueDate.isBefore(weekEnd.add(Duration(days: 1)));
+        case 2: // This Month
+          return dueDate.year == now.year && dueDate.month == now.month;
+        case 3: // Next 3 Months
+          final threeMonthsFromNow = DateTime(now.year, now.month + 3);
+          return dueDate.isAfter(today.subtract(Duration(days: 1))) &&
+              dueDate.isBefore(threeMonthsFromNow);
+        case 4: // Overdue
+          return dueDate.isBefore(today) && !task.isCompleted;
+        default:
+          return true;
+      }
+    }).toList();
+  }
+
+  Color _getPriorityColor(TaskPriority priority) {
+    switch (priority) {
+      case TaskPriority.high:
+        return Colors.red;
+      case TaskPriority.medium:
+        return Colors.orange;
+      case TaskPriority.low:
+        return Colors.green;
+    }
+  }
+
+  Color _getCategoryColor(String category) {
+    switch (category.toLowerCase()) {
+      case 'work':
+        return Colors.blue;
+      case 'personal':
+        return Colors.green;
+      case 'business':
+        return Colors.purple;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(Duration(days: 1));
+    final dueDate = DateTime(date.year, date.month, date.day);
+
+    if (dueDate == today) return 'Today';
+    if (dueDate == tomorrow) return 'Tomorrow';
+
+    return '${_getMonthName(date.month)} ${date.day}';
   }
 }
 
