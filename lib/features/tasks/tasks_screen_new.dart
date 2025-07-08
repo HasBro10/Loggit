@@ -36,10 +36,10 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
   bool showOverdueOnly = false;
   TaskSortOption sortOption = TaskSortOption.dueDate;
   int selectedFilter = 0; // 0 = All, 1 = Pending, 2 = Completed
-  late int selectedDayIndex;
+  int selectedDayIndex = 0; // 0 = Today (default to today)
   late List<String> days;
   late List<int> dates;
-  int selectedTabIndex = 0; // 0 = Week, 1 = Month, 2 = All
+  int selectedTabIndex = 0; // 0 = Week, 1 = Month, 2 = All (default to Week)
   int selectedTimeFilter =
       0; // 0 = All Time, 1 = This Week, 2 = This Month, 3 = Next 3 Months, 4 = Overdue
 
@@ -69,8 +69,8 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
       dates.add(date.day);
     }
 
-    // Set selectedDayIndex to -1 to show all tasks by default
-    selectedDayIndex = -1;
+    // Set selectedDayIndex to 0 to show today's tasks by default
+    selectedDayIndex = 0;
 
     // Generate dummy tasks for testing
     _generateDummyTasks();
@@ -482,45 +482,46 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                         _buildAllTasksView(isDark),
                       SizedBox(height: LoggitSpacing.lg),
                       // Search bar (show for all views)
-                      Container(
-                        decoration: BoxDecoration(
-                          color: isDark ? LoggitColors.darkCard : Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                decoration: InputDecoration(
-                                  prefixIcon: Icon(
-                                    Icons.search,
-                                    color: LoggitColors.lighterGraySubtext,
-                                  ),
-                                  hintText: 'Search Tasks',
-                                  border: InputBorder.none,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              decoration: InputDecoration(
+                                hintText: 'Search Tasks',
+                                prefixIcon: Icon(
+                                  Icons.search,
+                                  color: Colors.grey[500],
                                 ),
-                                onChanged: (value) {
-                                  setState(() {
-                                    searchQuery = value;
-                                  });
-                                },
-                              ),
-                            ),
-                            Material(
-                              color: Colors.transparent,
-                              shape: const CircleBorder(),
-                              child: IconButton(
-                                icon: Icon(
-                                  Icons.tune,
-                                  color: LoggitColors.darkGrayText,
+                                filled: true,
+                                fillColor: Color(0xFFF1F5F9),
+                                contentPadding: EdgeInsets.symmetric(
+                                  vertical: 0,
+                                  horizontal: 0,
                                 ),
-                                iconSize: 24,
-                                onPressed: _showFilterSheet,
-                                tooltip: 'Filter',
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide.none,
+                                ),
                               ),
+                              onChanged: (value) {
+                                setState(() {
+                                  searchQuery = value;
+                                });
+                              },
                             ),
-                          ],
-                        ),
+                          ),
+                          SizedBox(width: 8),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: IconButton(
+                              icon: Icon(Icons.tune, color: Colors.grey[700]),
+                              onPressed: _showFilterSheet,
+                            ),
+                          ),
+                        ],
                       ),
                       SizedBox(height: LoggitSpacing.lg),
                       // Date context header (only for Week and Month views)
@@ -2721,18 +2722,44 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
       children: [
         // Time-based filters
         Container(
+          width: double.infinity,
+          padding: EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: Colors.grey.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Expanded(child: _buildTimeFilterChip('All Time', 0, isDark)),
-              Expanded(child: _buildTimeFilterChip('This Week', 1, isDark)),
-              Expanded(child: _buildTimeFilterChip('This Month', 2, isDark)),
-              Expanded(child: _buildTimeFilterChip('Next 3 Months', 3, isDark)),
-              Expanded(child: _buildTimeFilterChip('Overdue', 4, isDark)),
+            color: Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 2,
+                offset: Offset(0, 1),
+              ),
             ],
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final screenWidth = constraints.maxWidth;
+              final threeMonthLabel = screenWidth > 370 ? '3 Months' : '3 Mon';
+              final chipWidgets = [
+                _buildTimeFilterChip('All', 0, isDark),
+                _buildTimeFilterChip('Week', 1, isDark),
+                _buildTimeFilterChip('Month', 2, isDark),
+                _buildTimeFilterChip(threeMonthLabel, 3, isDark),
+                _buildTimeFilterChip('Overdue', 4, isDark),
+              ];
+              if (screenWidth < 340) {
+                // On very small screens, make the bar horizontally scrollable
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(children: chipWidgets),
+                );
+              } else {
+                // On normal/wide screens, space chips evenly
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: chipWidgets,
+                );
+              }
+            },
           ),
         ),
         SizedBox(height: 16),
@@ -2767,21 +2794,29 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
           selectedTimeFilter = index;
         });
       },
-      child: Container(
-        padding: EdgeInsets.symmetric(vertical: 12),
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 180),
+        padding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
         decoration: BoxDecoration(
-          color: isSelected ? LoggitColors.teal : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+          color: isSelected
+              ? LoggitColors.teal.withOpacity(0.1)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          border: isSelected
+              ? Border.all(color: LoggitColors.teal, width: 2)
+              : null,
         ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: isSelected
-                ? Colors.white
-                : (isDark ? Colors.white : Colors.black),
+        child: Center(
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: isSelected
+                  ? Colors.black
+                  : (isDark ? Colors.white : Colors.black),
+            ),
           ),
         ),
       ),
@@ -2822,7 +2857,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white : Colors.black,
+                    color: isDark ? Colors.white : LoggitColors.darkGrayText,
                     decoration: task.isCompleted
                         ? TextDecoration.lineThrough
                         : null,
