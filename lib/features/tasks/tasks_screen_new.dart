@@ -481,49 +481,6 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                       else // All View
                         _buildAllTasksView(isDark),
                       SizedBox(height: LoggitSpacing.lg),
-                      // Search bar (show for all views)
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              decoration: InputDecoration(
-                                hintText: 'Search Tasks',
-                                prefixIcon: Icon(
-                                  Icons.search,
-                                  color: Colors.grey[500],
-                                ),
-                                filled: true,
-                                fillColor: Color(0xFFF1F5F9),
-                                contentPadding: EdgeInsets.symmetric(
-                                  vertical: 0,
-                                  horizontal: 0,
-                                ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  borderSide: BorderSide.none,
-                                ),
-                              ),
-                              onChanged: (value) {
-                                setState(() {
-                                  searchQuery = value;
-                                });
-                              },
-                            ),
-                          ),
-                          SizedBox(width: 8),
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Color(0xFFF1F5F9),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: IconButton(
-                              icon: Icon(Icons.tune, color: Colors.grey[700]),
-                              onPressed: _showFilterSheet,
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: LoggitSpacing.lg),
                       // Date context header (only for Week and Month views)
                       if (selectedTabIndex != 2)
                         Container(
@@ -593,39 +550,32 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                       if (selectedTabIndex != 2)
                         SizedBox(height: LoggitSpacing.md),
                       // Tasks section (for Week and Month views)
-                      if (selectedTabIndex != 2) ...[
+                      if (selectedTabIndex == 0) ...[
                         if (filteredTasks.isNotEmpty)
                           ...filteredTasks.map(
-                            (task) => _SwipeToDeleteTaskCard(
-                              key: ValueKey(
-                                task.title +
-                                    (task.dueDate?.toIso8601String() ?? ''),
-                              ),
-                              task: task,
-                              onDelete: () {
-                                setState(() {
-                                  tasks.remove(task);
-                                });
-                              },
+                            (task) => GestureDetector(
                               onTap: () => _showTaskModal(context, task: task),
-                              onComplete: () {
-                                setState(() {
-                                  final idx = tasks.indexOf(task);
-                                  if (idx != -1) {
-                                    tasks[idx] = task.copyWith(
-                                      isCompleted: true,
-                                      status: TaskStatus.completed,
-                                    );
-                                  }
-                                });
-                              },
-                              isDark: isDark,
-                              closeOptionsNotifier: closeSwipeOptionsNotifier,
-                              openCardKeyNotifier: openSwipeCardKey,
-                              cardKey: ValueKey(
-                                task.title +
-                                    (task.dueDate?.toIso8601String() ?? ''),
-                              ),
+                              child: _buildTaskCard(task, isDark),
+                            ),
+                          )
+                        else
+                          _buildEmptyState(isDark),
+                      ] else if (selectedTabIndex == 1) ...[
+                        if (tasks.isNotEmpty)
+                          ...tasks.map(
+                            (task) => GestureDetector(
+                              onTap: () => _showTaskModal(context, task: task),
+                              child: _buildTaskCard(task, isDark),
+                            ),
+                          )
+                        else
+                          _buildEmptyState(isDark),
+                      ] else ...[
+                        if (_getFilteredTasksForAllView().isNotEmpty)
+                          ..._getFilteredTasksForAllView().map(
+                            (task) => GestureDetector(
+                              onTap: () => _showTaskModal(context, task: task),
+                              child: _buildTaskCard(task, isDark),
                             ),
                           )
                         else
@@ -962,6 +912,9 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                               SizedBox(height: 18),
                               // Date & Time single button
                               Container(
+                                padding: EdgeInsets.symmetric(
+                                  vertical: 10,
+                                ), // Reduced height
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(30),
                                   border: Border.all(
@@ -2477,6 +2430,9 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
           // Reset date selection when switching to "All" tab
           if (index == 2) {
             selectedDayIndex = -1;
+          } else if (index == 0) {
+            selectedDayIndex =
+                0; // Always select today when returning to Week tab
           }
         });
       },
@@ -2663,6 +2619,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
             ),
           ),
           SizedBox(height: 16),
+          // No task cards or messages here!
         ],
       ),
     );
@@ -2717,53 +2674,40 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
   }
 
   Widget _buildAllTasksView(bool isDark) {
+    final filteredTasks = _getFilteredTasksForAllView();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Time-based filters
-        Container(
-          width: double.infinity,
-          padding: EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.02),
-                blurRadius: 2,
-                offset: Offset(0, 1),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              RichText(
+                text: TextSpan(
+                  children: [
+                    TextSpan(
+                      text: 'Showing: ',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    TextSpan(
+                      text: '${filteredTasks.length}',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final screenWidth = constraints.maxWidth;
-              final threeMonthLabel = screenWidth > 370 ? '3 Months' : '3 Mon';
-              final chipWidgets = [
-                _buildTimeFilterChip('All', 0, isDark),
-                _buildTimeFilterChip('Week', 1, isDark),
-                _buildTimeFilterChip('Month', 2, isDark),
-                _buildTimeFilterChip(threeMonthLabel, 3, isDark),
-                _buildTimeFilterChip('Overdue', 4, isDark),
-              ];
-              if (screenWidth < 340) {
-                // On very small screens, make the bar horizontally scrollable
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(children: chipWidgets),
-                );
-              } else {
-                // On normal/wide screens, space chips evenly
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: chipWidgets,
-                );
-              }
-            },
-          ),
         ),
-        SizedBox(height: 16),
-        // Tasks list
         Container(
           decoration: BoxDecoration(
             color: isDark ? LoggitColors.darkCard : Colors.white,
@@ -2777,7 +2721,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
             ],
           ),
           child: Column(
-            children: _getFilteredTasksForAllView()
+            children: filteredTasks
                 .map((task) => _buildTaskCard(task, isDark))
                 .toList(),
           ),
@@ -2824,110 +2768,184 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
   }
 
   Widget _buildTaskCard(Task task, bool isDark) {
-    return Container(
-      margin: EdgeInsets.all(8),
-      padding: EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isDark ? LoggitColors.darkBg : Colors.grey.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: _getPriorityColor(task.priority).withOpacity(0.3),
-          width: 1,
-        ),
-      ),
-      child: Row(
+    return Slidable(
+      endActionPane: ActionPane(
+        motion: const BehindMotion(),
         children: [
-          // Priority indicator
-          Container(
-            width: 4,
-            height: 40,
-            decoration: BoxDecoration(
-              color: _getPriorityColor(task.priority),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          SizedBox(width: 12),
-          // Task details
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  task.title,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white : LoggitColors.darkGrayText,
-                    decoration: task.isCompleted
-                        ? TextDecoration.lineThrough
-                        : null,
-                  ),
-                ),
-                if (task.description != null) ...[
-                  SizedBox(height: 4),
-                  Text(
-                    task.description!,
-                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                  ),
-                ],
-                SizedBox(height: 8),
-                Row(
-                  children: [
-                    if (task.category != null) ...[
-                      Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _getCategoryColor(
-                            task.category!,
-                          ).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          task.category!,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: _getCategoryColor(task.category!),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                    ],
-                    if (task.dueDate != null) ...[
-                      Icon(
-                        Icons.calendar_today,
-                        size: 14,
-                        color: Colors.grey[600],
-                      ),
-                      SizedBox(width: 4),
-                      Text(
-                        _formatDate(task.dueDate!),
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-          // Status indicator
-          Container(
-            width: 20,
-            height: 20,
-            decoration: BoxDecoration(
-              color: task.isCompleted
-                  ? Colors.green
-                  : Colors.grey.withOpacity(0.3),
-              shape: BoxShape.circle,
-            ),
-            child: task.isCompleted
-                ? Icon(Icons.check, size: 14, color: Colors.white)
-                : null,
+          SlidableAction(
+            onPressed: (context) {
+              setState(() {
+                tasks.remove(task);
+              });
+            },
+            backgroundColor: Colors.red,
+            foregroundColor: Colors.white,
+            icon: Icons.delete,
+            label: 'Delete',
+            borderRadius: BorderRadius.circular(8),
           ),
         ],
+      ),
+      child: Container(
+        margin: EdgeInsets.all(8),
+        padding: EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isDark ? LoggitColors.darkBg : Colors.grey.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: _getPriorityColor(task.priority).withOpacity(0.3),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            // Priority indicator
+            Container(
+              width: 4,
+              height: 40,
+              decoration: BoxDecoration(
+                color: _getPriorityColor(task.priority),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            SizedBox(width: 12),
+            // Task details
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    task.title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : LoggitColors.darkGrayText,
+                      decoration: task.isCompleted
+                          ? TextDecoration.lineThrough
+                          : null,
+                    ),
+                  ),
+                  if (task.description != null) ...[
+                    SizedBox(height: 4),
+                    Text(
+                      task.description!,
+                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                    ),
+                  ],
+                  SizedBox(height: 8),
+                  Row(
+                    children: [
+                      if (task.category != null) ...[
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _getCategoryColor(
+                              task.category!,
+                            ).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            task.category!,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: _getCategoryColor(task.category!),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                      ],
+                      if (task.dueDate != null) ...[
+                        Icon(
+                          Icons.calendar_today,
+                          size: 14,
+                          color: Colors.grey[600],
+                        ),
+                        SizedBox(width: 4),
+                        Text(
+                          _formatDateDayMonthYear(task.dueDate!),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        if (task.timeOfDay != null) ...[
+                          SizedBox(width: 6),
+                          Text(
+                            task.timeOfDay!.format(context),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[500],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            // Status indicator
+            GestureDetector(
+              onTap: () async {
+                final shouldToggle = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: Text(
+                      task.isCompleted ? 'Mark as Pending?' : 'Complete Task?',
+                    ),
+                    content: Text(
+                      task.isCompleted
+                          ? 'Are you sure you want to mark this task as pending?'
+                          : 'Are you sure you want to mark this task as completed?',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        child: Text('Yes'),
+                      ),
+                    ],
+                  ),
+                );
+                if (shouldToggle == true) {
+                  setState(() {
+                    final idx = tasks.indexOf(task);
+                    if (idx != -1) {
+                      tasks[idx] = task.copyWith(
+                        isCompleted: !task.isCompleted,
+                        status: !task.isCompleted
+                            ? TaskStatus.completed
+                            : TaskStatus.notStarted,
+                      );
+                    }
+                  });
+                }
+              },
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: task.isCompleted ? Colors.green : Colors.transparent,
+                  border: Border.all(
+                    color: task.isCompleted ? Colors.green : Colors.grey,
+                    width: 2,
+                  ),
+                  shape: BoxShape.circle,
+                ),
+                child: task.isCompleted
+                    ? Icon(Icons.check, size: 16, color: Colors.white)
+                    : null,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2991,16 +3009,28 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
     }
   }
 
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final tomorrow = today.add(Duration(days: 1));
-    final dueDate = DateTime(date.year, date.month, date.day);
+  String _formatDateDayMonthYear(DateTime date) {
+    // Example: 12 May 2024
+    final day = date.day;
+    final month = _getMonthName(date.month).substring(0, 3); // Short month
+    final year = date.year;
+    return '$day $month $year';
+  }
 
-    if (dueDate == today) return 'Today';
-    if (dueDate == tomorrow) return 'Tomorrow';
+  String priorityString(Task task) {
+    switch (task.priority) {
+      case TaskPriority.high:
+        return 'High Priority';
+      case TaskPriority.medium:
+        return 'Medium Priority';
+      case TaskPriority.low:
+        return 'Low Priority';
+    }
+  }
 
-    return '${_getMonthName(date.month)} ${date.day}';
+  String weekdayString(int weekday) {
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return days[(weekday - 1) % 7];
   }
 }
 
@@ -3218,429 +3248,4 @@ class _PriorityChip extends StatelessWidget {
       ),
     );
   }
-}
-
-class _SwipeToDeleteTaskCard extends StatefulWidget {
-  final Task task;
-  final VoidCallback onDelete;
-  final VoidCallback onTap;
-  final bool isDark;
-  final VoidCallback onComplete;
-  final ValueNotifier<int> closeOptionsNotifier;
-  final ValueNotifier<Key?> openCardKeyNotifier;
-  final Key cardKey;
-  const _SwipeToDeleteTaskCard({
-    super.key,
-    required this.task,
-    required this.onDelete,
-    required this.onTap,
-    required this.isDark,
-    required this.onComplete,
-    required this.closeOptionsNotifier,
-    required this.openCardKeyNotifier,
-    required this.cardKey,
-  });
-  @override
-  State<_SwipeToDeleteTaskCard> createState() => _SwipeToDeleteTaskCardState();
-}
-
-class _SwipeToDeleteTaskCardState extends State<_SwipeToDeleteTaskCard>
-    with SingleTickerProviderStateMixin {
-  double _dragExtent = 0;
-  bool _showDelete = false;
-  late AnimationController _controller;
-  final GlobalKey _cardKey = GlobalKey();
-  double? _cardHeight;
-
-  @override
-  void initState() {
-    super.initState();
-    widget.closeOptionsNotifier.addListener(_closeSwipeOptions);
-    widget.openCardKeyNotifier.addListener(_checkOpenCardKey);
-    _controller = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: 200),
-    );
-    WidgetsBinding.instance.addPostFrameCallback((_) => _measureCardHeight());
-  }
-
-  void _closeSwipeOptions() {
-    if (_showDelete) {
-      setState(() {
-        _showDelete = false;
-      });
-    }
-  }
-
-  void _checkOpenCardKey() {
-    if (widget.openCardKeyNotifier.value != widget.cardKey && _showDelete) {
-      setState(() {
-        _showDelete = false;
-      });
-    }
-  }
-
-  void _measureCardHeight() {
-    final context = _cardKey.currentContext;
-    if (context != null) {
-      final box = context.findRenderObject() as RenderBox?;
-      if (box != null && mounted) {
-        setState(() {
-          _cardHeight = box.size.height;
-        });
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    widget.closeOptionsNotifier.removeListener(_closeSwipeOptions);
-    widget.openCardKeyNotifier.removeListener(_checkOpenCardKey);
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _onHorizontalDragUpdate(DragUpdateDetails details) {
-    setState(() {
-      _dragExtent += details.primaryDelta ?? 0;
-      if (_dragExtent < -60) {
-        _showDelete = true;
-        widget.openCardKeyNotifier.value = widget.cardKey;
-        _controller.forward();
-      } else if (_dragExtent > -20) {
-        _showDelete = false;
-        _controller.reverse();
-      }
-    });
-  }
-
-  void _onHorizontalDragEnd(DragEndDetails details) {
-    if (_dragExtent < -60) {
-      setState(() {
-        _showDelete = true;
-        _controller.forward();
-      });
-    } else {
-      setState(() {
-        _showDelete = false;
-        _controller.reverse();
-      });
-    }
-    _dragExtent = 0;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        // Transparent overlay to dismiss options
-        if (_showDelete)
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _showDelete = false;
-                });
-              },
-              behavior: HitTestBehavior.translucent,
-              child: Container(),
-            ),
-          ),
-        // The actual card with swipe logic
-        GestureDetector(
-          onHorizontalDragUpdate: _onHorizontalDragUpdate,
-          onHorizontalDragEnd: _onHorizontalDragEnd,
-          onTap: () {
-            // Close swipe options first if THIS card has them open
-            if (_showDelete) {
-              setState(() {
-                _showDelete = false;
-              });
-              return;
-            }
-            // Then handle the tap normally
-            widget.onTap();
-          },
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 4),
-            padding: const EdgeInsets.all(8), // Increased padding for shadow
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
-                  blurRadius: 8,
-                  offset: Offset(0, 2),
-                  spreadRadius: 0,
-                ),
-              ],
-            ),
-            child: Stack(
-              children: [
-                // Task card (underneath)
-                AnimatedContainer(
-                  key: _cardKey,
-                  duration: Duration(milliseconds: 200),
-                  curve: Curves.easeOut,
-                  child: buildTaskCard(
-                    context,
-                    widget.task,
-                    widget.isDark,
-                    noMargin: true,
-                  ),
-                ),
-                // Dual-action overlay (swipe left)
-                AnimatedPositioned(
-                  duration: Duration(milliseconds: 200),
-                  right: _showDelete ? 0 : -60,
-                  top: 0,
-                  bottom: 0,
-                  child: AnimatedOpacity(
-                    duration: Duration(milliseconds: 200),
-                    opacity: _showDelete ? 1 : 0,
-                    child: SizedBox(
-                      height: _cardHeight ?? 78,
-                      width: 60,
-                      child: Column(
-                        children: [
-                          // Complete button (top half)
-                          Expanded(
-                            child: Align(
-                              alignment: Alignment.topRight,
-                              child: Container(
-                                width: 60,
-                                height: double.infinity,
-                                decoration: BoxDecoration(
-                                  color: Colors.green,
-                                  borderRadius: BorderRadius.only(
-                                    topRight: Radius.circular(16),
-                                  ),
-                                ),
-                                child: Center(
-                                  child: IconButton(
-                                    icon: Icon(
-                                      Icons.check,
-                                      color: Colors.white,
-                                    ),
-                                    onPressed: () {
-                                      widget.onComplete();
-                                      setState(() {
-                                        _showDelete = false;
-                                      });
-                                    },
-                                    tooltip: 'Mark as Completed',
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          // Delete button (bottom half)
-                          Expanded(
-                            child: Align(
-                              alignment: Alignment.bottomRight,
-                              child: Container(
-                                width: 60,
-                                height: double.infinity,
-                                decoration: BoxDecoration(
-                                  color: Colors.red,
-                                  borderRadius: BorderRadius.only(
-                                    bottomRight: Radius.circular(16),
-                                  ),
-                                ),
-                                child: Center(
-                                  child: IconButton(
-                                    icon: Icon(
-                                      Icons.delete,
-                                      color: Colors.white,
-                                    ),
-                                    onPressed: () async {
-                                      final confirmed = await showDialog<bool>(
-                                        context: context,
-                                        builder: (ctx) => AlertDialog(
-                                          title: Text('Delete Task'),
-                                          content: Text(
-                                            'Are you sure you want to delete this task?',
-                                          ),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.of(ctx).pop(false),
-                                              child: Text('Cancel'),
-                                            ),
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.of(ctx).pop(true),
-                                              child: Text(
-                                                'Delete',
-                                                style: TextStyle(
-                                                  color: Colors.red,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                      if (confirmed == true) {
-                                        widget.onDelete();
-                                        setState(() {
-                                          _showDelete = false;
-                                        });
-                                      }
-                                    },
-                                    tooltip: 'Delete',
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// Top-level functions for task card building
-Widget buildTaskCard(
-  BuildContext context,
-  Task task,
-  bool isDark, {
-  bool noMargin = false,
-}) {
-  Widget statusWidget;
-  if (task.isCompleted) {
-    statusWidget = Container(
-      width: 18,
-      height: 18,
-      decoration: BoxDecoration(color: Colors.green, shape: BoxShape.circle),
-      child: Center(child: Icon(Icons.check, color: Colors.white, size: 12)),
-    );
-  } else {
-    statusWidget = Container(
-      width: 18,
-      height: 18,
-      decoration: BoxDecoration(color: Colors.orange, shape: BoxShape.circle),
-      child: Center(
-        child: Text(
-          'P',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
-          ),
-        ),
-      ),
-    );
-  }
-  String dateLabel = task.dueDate != null
-      ? (task.dueDate!.day == DateTime.now().day &&
-                task.dueDate!.month == DateTime.now().month &&
-                task.dueDate!.year == DateTime.now().year
-            ? 'Today'
-            : '${weekdayString(task.dueDate!.weekday)}, ${task.dueDate!.day}/${task.dueDate!.month}/${task.dueDate!.year}')
-      : '';
-  String timeLabel = task.timeOfDay != null
-      ? '${task.timeOfDay!.hour.toString().padLeft(2, '0')}:${task.timeOfDay!.minute.toString().padLeft(2, '0')}'
-      : '';
-  String category = task.category ?? '';
-  String priority = priorityString(task);
-  IconData categoryIcon = category == 'Work'
-      ? Icons.work
-      : category == 'Personal'
-      ? Icons.person
-      : Icons.business;
-  Color categoryIconColor = category == 'Work'
-      ? Colors.brown[300]!
-      : category == 'Personal'
-      ? Colors.green
-      : Colors.blue;
-  Color priorityIconColor = priority.contains('High')
-      ? Colors.red
-      : priority.contains('Medium')
-      ? Colors.orange
-      : Colors.green;
-  return Container(
-    margin: noMargin
-        ? null
-        : const EdgeInsets.symmetric(horizontal: 0, vertical: 12),
-    padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: isDark ? LoggitColors.darkCard : Colors.white,
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                task.title,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                  color: isDark ? Colors.white : LoggitColors.darkGrayText,
-                ),
-              ),
-            ),
-          ],
-        ),
-        if (dateLabel.isNotEmpty || timeLabel.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 8.0),
-            child: Text(
-              [dateLabel, timeLabel].where((s) => s.isNotEmpty).join(' '),
-              style: TextStyle(color: LoggitColors.lighterGraySubtext),
-            ),
-          ),
-        SizedBox(height: 4),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Icon(categoryIcon, size: 16, color: categoryIconColor),
-            SizedBox(width: 4),
-            Text(
-              category,
-              style: TextStyle(color: LoggitColors.lighterGraySubtext),
-            ),
-            SizedBox(width: 12),
-            Icon(Icons.flag, size: 16, color: priorityIconColor),
-            SizedBox(width: 4),
-            Text(
-              priority,
-              style: TextStyle(color: LoggitColors.lighterGraySubtext),
-            ),
-            Spacer(),
-            SizedBox(
-              height: 20,
-              child: Align(alignment: Alignment.center, child: statusWidget),
-            ),
-          ],
-        ),
-      ],
-    ),
-  );
-}
-
-String priorityString(Task task) {
-  switch (task.priority) {
-    case TaskPriority.high:
-      return 'High Priority';
-    case TaskPriority.medium:
-      return 'Medium Priority';
-    case TaskPriority.low:
-      return 'Low Priority';
-  }
-}
-
-String weekdayString(int weekday) {
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  return days[(weekday - 1) % 7];
 }
