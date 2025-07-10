@@ -429,13 +429,26 @@ class _RemindersScreenState extends State<RemindersScreen> {
           children: [
             // Fixed header
             Container(
-              padding: const EdgeInsets.all(LoggitSpacing.screenPadding),
+              padding: EdgeInsets.all(
+                Responsive.responsiveFont(
+                  context,
+                  LoggitSpacing.screenPadding.toDouble(),
+                  min: 8,
+                  max: 32,
+                ),
+              ),
               child: Row(
                 children: [
                   IconButton(
                     icon: Icon(
                       Icons.arrow_back,
                       color: isDark ? Colors.white : LoggitColors.darkGrayText,
+                      size: Responsive.responsiveIcon(
+                        context,
+                        28,
+                        min: 20,
+                        max: 44,
+                      ),
                     ),
                     onPressed: widget.onBack,
                   ),
@@ -444,7 +457,12 @@ class _RemindersScreenState extends State<RemindersScreen> {
                     'Reminders',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 28,
+                      fontSize: Responsive.responsiveFont(
+                        context,
+                        28,
+                        min: 18,
+                        max: 36,
+                      ),
                       color: isDark ? Colors.white : LoggitColors.darkGrayText,
                     ),
                   ),
@@ -456,7 +474,14 @@ class _RemindersScreenState extends State<RemindersScreen> {
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 child: Padding(
-                  padding: const EdgeInsets.all(LoggitSpacing.screenPadding),
+                  padding: EdgeInsets.all(
+                    Responsive.responsiveFont(
+                      context,
+                      LoggitSpacing.screenPadding.toDouble(),
+                      min: 8,
+                      max: 32,
+                    ),
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -633,7 +658,12 @@ class _RemindersScreenState extends State<RemindersScreen> {
                             'Reminders (${filteredReminders.length})',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
-                              fontSize: 18,
+                              fontSize: Responsive.responsiveFont(
+                                context,
+                                18,
+                                min: 12,
+                                max: 28,
+                              ),
                               color: Colors.black,
                             ),
                           ),
@@ -641,7 +671,12 @@ class _RemindersScreenState extends State<RemindersScreen> {
                             Text(
                               '${days[selectedDayIndex]} ${DateTime.now().month}/${DateTime.now().year}',
                               style: TextStyle(
-                                fontSize: 14,
+                                fontSize: Responsive.responsiveFont(
+                                  context,
+                                  14,
+                                  min: 10,
+                                  max: 20,
+                                ),
                                 color: Colors.grey[600],
                                 fontWeight: FontWeight.normal,
                               ),
@@ -715,7 +750,12 @@ class _RemindersScreenState extends State<RemindersScreen> {
                                     r.title,
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 17,
+                                      fontSize: Responsive.responsiveFont(
+                                        context,
+                                        17,
+                                        min: 12,
+                                        max: 24,
+                                      ),
                                       color: Colors.black,
                                     ),
                                   ),
@@ -723,7 +763,12 @@ class _RemindersScreenState extends State<RemindersScreen> {
                                   Text(
                                     _formatDateTime(r.reminderTime),
                                     style: TextStyle(
-                                      fontSize: 13,
+                                      fontSize: Responsive.responsiveFont(
+                                        context,
+                                        13,
+                                        min: 10,
+                                        max: 18,
+                                      ),
                                       color: Colors.grey[600],
                                     ),
                                   ),
@@ -733,7 +778,12 @@ class _RemindersScreenState extends State<RemindersScreen> {
                                       child: Text(
                                         _recurrenceText(r),
                                         style: TextStyle(
-                                          fontSize: 12,
+                                          fontSize: Responsive.responsiveFont(
+                                            context,
+                                            12,
+                                            min: 9,
+                                            max: 16,
+                                          ),
                                           color: Colors.teal[700],
                                         ),
                                       ),
@@ -807,7 +857,11 @@ class _RemindersScreenState extends State<RemindersScreen> {
             await _loadReminders();
           }
         },
-        child: Icon(Icons.add, color: Colors.white, size: 32),
+        child: Icon(
+          Icons.add,
+          color: Colors.white,
+          size: Responsive.responsiveIcon(context, 32, min: 20, max: 44),
+        ),
       ),
     );
   }

@@ -329,9 +329,14 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             ),
             // Feature card buttons (Tasks, Expenses)
             Padding(
-              padding: const EdgeInsets.symmetric(
+              padding: EdgeInsets.symmetric(
                 horizontal: LoggitSpacing.screenPadding,
-                vertical: LoggitSpacing.lg,
+                vertical: Responsive.responsiveFont(
+                  context,
+                  16,
+                  min: 8,
+                  max: 32,
+                ),
               ),
               child: LayoutBuilder(
                 builder: (context, constraints) {
@@ -375,34 +380,56 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             Expanded(
               child: ListView(
                 controller: _scrollController,
-                padding: const EdgeInsets.symmetric(
+                padding: EdgeInsets.symmetric(
                   horizontal: LoggitSpacing.screenPadding,
-                  vertical: LoggitSpacing.lg,
+                  vertical: Responsive.responsiveFont(
+                    context,
+                    16,
+                    min: 8,
+                    max: 32,
+                  ),
                 ),
                 children: [
                   // Intro bubble
                   _buildIntroBubble(context, isDark),
-                  SizedBox(height: 20),
+                  SizedBox(
+                    height: Responsive.responsiveFont(
+                      context,
+                      20,
+                      min: 10,
+                      max: 40,
+                    ),
+                  ),
                   // All chat bubbles with consistent spacing
                   for (int i = 0; i < _messages.length; i++) ...[
                     _buildChatBubble(context, _messages[i], isDark),
-                    if (i != _messages.length - 1) SizedBox(height: 20),
+                    if (i != _messages.length - 1)
+                      SizedBox(
+                        height: Responsive.responsiveFont(
+                          context,
+                          20,
+                          min: 10,
+                          max: 40,
+                        ),
+                      ),
                   ],
                 ],
               ),
             ),
             // Input field above bottom nav
             Padding(
-              padding: const EdgeInsets.fromLTRB(
+              padding: EdgeInsets.fromLTRB(
                 LoggitSpacing.screenPadding,
                 0,
                 LoggitSpacing.screenPadding,
-                12,
+                Responsive.responsiveFont(context, 12, min: 6, max: 24),
               ),
               child: Container(
                 decoration: BoxDecoration(
                   color: isDark ? LoggitColors.darkCard : Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(
+                    Responsive.responsiveFont(context, 24, min: 12, max: 32),
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -418,19 +445,39 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                             color: isDark
                                 ? LoggitColors.darkSubtext
                                 : Color(0xFF6B7280),
-                            fontSize: 16,
+                            fontSize: Responsive.responsiveFont(
+                              context,
+                              16,
+                              min: 12,
+                              max: 22,
+                            ),
                           ),
                           isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 16,
-                            horizontal: 16,
+                          contentPadding: EdgeInsets.symmetric(
+                            vertical: Responsive.responsiveFont(
+                              context,
+                              16,
+                              min: 8,
+                              max: 24,
+                            ),
+                            horizontal: Responsive.responsiveFont(
+                              context,
+                              16,
+                              min: 8,
+                              max: 24,
+                            ),
                           ),
                         ),
                         style: TextStyle(
                           color: isDark
                               ? LoggitColors.darkText
                               : LoggitColors.darkGrayText,
-                          fontSize: 16,
+                          fontSize: Responsive.responsiveFont(
+                            context,
+                            16,
+                            min: 12,
+                            max: 22,
+                          ),
                         ),
                         onSubmitted: (_) => _sendMessage(),
                       ),
@@ -439,6 +486,12 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                       icon: Icon(
                         Icons.send,
                         color: isDark ? Colors.white : LoggitColors.tealDark,
+                        size: Responsive.responsiveIcon(
+                          context,
+                          28,
+                          min: 20,
+                          max: 44,
+                        ),
                       ),
                       onPressed: _sendMessage,
                     ),
