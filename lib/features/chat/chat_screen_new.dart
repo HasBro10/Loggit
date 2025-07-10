@@ -11,6 +11,7 @@ import '../../models/log_entry.dart';
 import '../../services/log_parser_service.dart';
 import '../../shared/design/widgets/feature_card_button.dart';
 import '../../shared/utils/responsive.dart';
+import '../../shared/widgets/responsive_layout.dart';
 import '../reminders/reminders_screen.dart';
 
 class ChatScreenNew extends StatefulWidget {
@@ -313,96 +314,106 @@ class _ChatScreenNewState extends State<ChatScreenNew>
         child: Column(
           children: [
             // Top header
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+            ResponsiveContainer(
+              padding: EdgeInsets.fromLTRB(
+                Responsive.adaptiveSpacing(context, 24),
+                Responsive.adaptiveSpacing(context, 16),
+                Responsive.adaptiveSpacing(context, 24),
+                Responsive.adaptiveSpacing(context, 8),
+              ),
+              centerContent: false,
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text(
+                child: ResponsiveText(
                   'Loggit',
+                  baseFontSize: 32,
                   style: TextStyle(
                     fontWeight: FontWeight.w900,
-                    fontSize: 32,
                     color: isDark ? Colors.white : Colors.black,
                   ),
                 ),
               ),
             ),
             // Feature card buttons (Tasks, Expenses)
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: LoggitSpacing.screenPadding,
-                vertical: LoggitSpacing.lg,
+            ResponsiveContainer(
+              padding: EdgeInsets.symmetric(
+                horizontal: Responsive.adaptiveSpacing(context, LoggitSpacing.screenPadding),
+                vertical: Responsive.adaptiveSpacing(context, LoggitSpacing.lg),
               ),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return Row(
-                    children: [
-                      Flexible(
-                        child: FeatureCardButton(
-                          label: 'Tasks',
-                          icon: Icons.check_circle,
-                          iconBgColor: LoggitColors.tealDark,
-                          iconColor: Colors.white,
-                          cardColor: isDark
-                              ? LoggitColors.darkCard
-                              : Color(0xFFECFDF5),
-                          selected: true,
-                          onTap: widget.onShowTasks,
-                          textColor: isDark ? Colors.white : Colors.black,
-                        ),
-                      ),
-                      SizedBox(width: constraints.maxWidth < 400 ? 8 : 16),
-                      Flexible(
-                        child: FeatureCardButton(
-                          label: 'Expenses',
-                          icon: Icons.list_alt,
-                          iconBgColor: LoggitColors.indigo,
-                          iconColor: Colors.white,
-                          cardColor: isDark
-                              ? LoggitColors.darkCard
-                              : Color(0xFFF4F3FF),
-                          selected: false,
-                          onTap: () {},
-                          textColor: isDark ? Colors.white : Colors.black,
-                        ),
-                      ),
-                    ],
-                  );
-                },
+              child: ResponsiveRowColumn(
+                spacing: Responsive.adaptiveSpacing(context, 12),
+                children: [
+                  Flexible(
+                    child: FeatureCardButton(
+                      label: 'Tasks',
+                      icon: Icons.check_circle,
+                      iconBgColor: LoggitColors.tealDark,
+                      iconColor: Colors.white,
+                      cardColor: isDark
+                          ? LoggitColors.darkCard
+                          : Color(0xFFECFDF5),
+                      selected: true,
+                      onTap: widget.onShowTasks,
+                      textColor: isDark ? Colors.white : Colors.black,
+                    ),
+                  ),
+                  Flexible(
+                    child: FeatureCardButton(
+                      label: 'Expenses',
+                      icon: Icons.list_alt,
+                      iconBgColor: LoggitColors.indigo,
+                      iconColor: Colors.white,
+                      cardColor: isDark
+                          ? LoggitColors.darkCard
+                          : Color(0xFFF4F3FF),
+                      selected: false,
+                      onTap: () {},
+                      textColor: isDark ? Colors.white : Colors.black,
+                    ),
+                  ),
+                ],
               ),
             ),
             // Chat bubbles (including animated intro as first bubble)
             Expanded(
-              child: ListView(
-                controller: _scrollController,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: LoggitSpacing.screenPadding,
-                  vertical: LoggitSpacing.lg,
-                ),
-                children: [
-                  // Intro bubble
-                  _buildIntroBubble(context, isDark),
-                  SizedBox(height: 20),
-                  // All chat bubbles with consistent spacing
-                  for (int i = 0; i < _messages.length; i++) ...[
-                    _buildChatBubble(context, _messages[i], isDark),
-                    if (i != _messages.length - 1) SizedBox(height: 20),
+              child: ResponsiveContainer(
+                centerContent: false,
+                child: ListView(
+                  controller: _scrollController,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: Responsive.adaptiveSpacing(context, LoggitSpacing.screenPadding),
+                    vertical: Responsive.adaptiveSpacing(context, LoggitSpacing.lg),
+                  ),
+                  children: [
+                    // Intro bubble
+                    _buildIntroBubble(context, isDark),
+                    ResponsiveSpacing(20),
+                    // All chat bubbles with consistent spacing
+                    for (int i = 0; i < _messages.length; i++) ...[
+                      _buildChatBubble(context, _messages[i], isDark),
+                      if (i != _messages.length - 1) ResponsiveSpacing(20),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
             // Input field above bottom nav
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                LoggitSpacing.screenPadding,
+            ResponsiveContainer(
+              padding: EdgeInsets.fromLTRB(
+                Responsive.adaptiveSpacing(context, LoggitSpacing.screenPadding),
                 0,
-                LoggitSpacing.screenPadding,
-                12,
+                Responsive.adaptiveSpacing(context, LoggitSpacing.screenPadding),
+                Responsive.adaptiveSpacing(context, 12),
               ),
               child: Container(
+                constraints: BoxConstraints(
+                  maxWidth: Responsive.maxContentWidth(context),
+                ),
                 decoration: BoxDecoration(
                   color: isDark ? LoggitColors.darkCard : Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(
+                    Responsive.adaptiveSpacing(context, 24),
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -418,24 +429,28 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                             color: isDark
                                 ? LoggitColors.darkSubtext
                                 : Color(0xFF6B7280),
-                            fontSize: 16,
+                            fontSize: Responsive.responsiveFont(context, 16),
                           ),
                           isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 16,
-                            horizontal: 16,
+                          contentPadding: EdgeInsets.symmetric(
+                            vertical: Responsive.adaptiveSpacing(context, 16),
+                            horizontal: Responsive.adaptiveSpacing(context, 16),
                           ),
                         ),
                         style: TextStyle(
                           color: isDark
                               ? LoggitColors.darkText
                               : LoggitColors.darkGrayText,
-                          fontSize: 16,
+                          fontSize: Responsive.responsiveFont(context, 16),
                         ),
                         onSubmitted: (_) => _sendMessage(),
                       ),
                     ),
                     IconButton(
+                      iconSize: Responsive.responsiveIcon(context, 24),
+                      padding: EdgeInsets.all(
+                        Responsive.adaptiveSpacing(context, 12),
+                      ),
                       icon: Icon(
                         Icons.send,
                         color: isDark ? Colors.white : LoggitColors.tealDark,

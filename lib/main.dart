@@ -72,7 +72,7 @@ class _LoggitAppState extends State<LoggitApp> {
           ),
           hintStyle: TextStyle(color: const Color(0xFF64748b).withOpacity(0.7)),
         ),
-        textTheme: const TextTheme(
+        textTheme: TextTheme(
           titleLarge: TextStyle(fontWeight: FontWeight.bold, fontSize: 32),
           titleMedium: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
           bodyLarge: TextStyle(fontSize: 16),
@@ -111,7 +111,7 @@ class _LoggitAppState extends State<LoggitApp> {
           ),
           hintStyle: TextStyle(color: LoggitColors.darkSubtext),
         ),
-        textTheme: const TextTheme(
+        textTheme: TextTheme(
           titleLarge: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 32,
@@ -428,7 +428,7 @@ class _LoggitHomeState extends State<LoggitHome> {
   Widget _buildRemindersTab() {
     final theme = Theme.of(context);
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       children: [
         _buildSectionHeader('Reminders', Icons.alarm, _reminders.length),
         if (_reminders.isEmpty)
@@ -445,7 +445,7 @@ class _LoggitHomeState extends State<LoggitHome> {
   Widget _buildNotesTab() {
     final theme = Theme.of(context);
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       children: [
         _buildSectionHeader('Notes', Icons.note, _notes.length),
         if (_notes.isEmpty)
@@ -462,7 +462,7 @@ class _LoggitHomeState extends State<LoggitHome> {
   Widget _buildGymLogsTab() {
     final theme = Theme.of(context);
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       children: [
         _buildSectionHeader('Workouts', Icons.fitness_center, _gymLogs.length),
         if (_gymLogs.isEmpty)
