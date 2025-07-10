@@ -249,3 +249,10 @@ This way, Cursor will know exactly where to place each type of file, keeping you
 ---
 
 These rules ensure consistent, maintainable, and high-quality code development for the Loggit project. 
+
+## Responsive UI Rule
+
+- All widgets, form fields, and page elements must be responsive and adapt to screen size.
+- Always ensure alignment and organization, so elements do not disappear, overlap, or become unaligned on any device.
+- Use Flexible, Expanded, Wrap, or other responsive layout widgets as needed.
+- This is mandatory for all new UI code. 

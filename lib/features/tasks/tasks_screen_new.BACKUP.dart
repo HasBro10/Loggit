@@ -8,7 +8,6 @@ import 'task_model.dart';
 import '../../shared/utils/responsive.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
-import 'package:table_calendar/table_calendar.dart';
 
 enum TaskSortOption { dueDate, priority, category }
 
@@ -84,7 +83,6 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
   }
 
   void _generateDummyTasks() {
-    print('Generating dummy tasks');
     tasks = [
       Task(
         title: 'Buy groceries',
@@ -196,29 +194,6 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
   }
 
   String _getSelectedDateContext() {
-    // Check if we're in month view and have a selected date
-    if (selectedTabIndex == 1 && _selectedDateForMonthView != null) {
-      final date = _selectedDateForMonthView!;
-      final today = DateTime.now();
-      final isToday =
-          date.year == today.year &&
-          date.month == today.month &&
-          date.day == today.day;
-      final isTomorrow =
-          date.year == today.year &&
-          date.month == today.month &&
-          date.day == today.day + 1;
-
-      if (isToday) {
-        return 'Today';
-      } else if (isTomorrow) {
-        return 'Tomorrow';
-      } else {
-        return '${_getMonthName(date.month)} ${date.day}';
-      }
-    }
-
-    // Week view logic (existing)
     if (selectedDayIndex == 0) {
       return 'Today';
     } else if (selectedDayIndex == 1) {
@@ -236,7 +211,6 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
 
   @override
   Widget build(BuildContext context) {
-    print('Building TasksScreenNew, tasks.length: ${tasks.length}');
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final now = DateTime.now();
 
@@ -455,7 +429,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                                             MainAxisAlignment.center,
                                         children: [
                                           Text(
-                                            days[i],
+                                            _getUserFriendlyDateLabel(i),
                                             style: TextStyle(
                                               fontSize: 12,
                                               color: selected
@@ -497,7 +471,6 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                                 isDark,
                                 filteredTasks.length,
                               ),
-                              SizedBox(height: LoggitSpacing.md),
                               _buildAllTasksView(isDark),
                             ],
                           ),
@@ -531,12 +504,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                                     SizedBox(width: 8),
                                     RichText(
                                       text: TextSpan(
-                                        text:
-                                            (selectedTabIndex == 1 &&
-                                                _selectedDateForMonthView !=
-                                                    null)
-                                            ? _getSelectedDateContext()
-                                            : selectedDayIndex >= 0
+                                        text: selectedDayIndex >= 0
                                             ? _getSelectedDateContext()
                                             : 'All Tasks',
                                         style: TextStyle(
@@ -595,6 +563,22 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                         ] else if (selectedTabIndex == 1) ...[
                           if (_getFilteredTasksForMonthView().isNotEmpty)
                             ..._getFilteredTasksForMonthView().map(
+                              (task) => GestureDetector(
+                                onTap: () {
+                                  if (_openDeleteTask.value != null) {
+                                    _openDeleteTask.value = null;
+                                    return;
+                                  }
+                                  _showTaskModal(context, task: task);
+                                },
+                                child: _buildTaskCard(task, isDark),
+                              ),
+                            )
+                          else
+                            _buildEmptyState(isDark),
+                        ] else ...[
+                          if (_getFilteredTasksForAllView().isNotEmpty)
+                            ..._getFilteredTasksForAllView().map(
                               (task) => GestureDetector(
                                 onTap: () {
                                   if (_openDeleteTask.value != null) {
@@ -720,7 +704,6 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      enableDrag: true,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -945,14 +928,15 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                                   ),
                                 ),
                               SizedBox(height: 18),
-                              // Date & Time buttons - aligned and responsive
+                              // Date & Time buttons - separate pill buttons
                               Row(
                                 children: [
+                                  // Date button
                                   Flexible(
                                     child: Container(
                                       padding: EdgeInsets.symmetric(
                                         vertical: 10,
-                                        horizontal: 10,
+                                        horizontal: 8,
                                       ),
                                       decoration: BoxDecoration(
                                         borderRadius: BorderRadius.circular(25),
@@ -984,24 +968,20 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                                           children: [
                                             Icon(
                                               Icons.calendar_today,
-                                              size: 16,
+                                              size: 18,
                                               color: LoggitColors.teal,
                                             ),
-                                            SizedBox(width: 6),
-                                            Flexible(
-                                              child: Text(
-                                                dueDate == null
-                                                    ? 'Pick Date'
-                                                    : '${weekdayString(dueDate!.weekday)}, ${dueDate!.day} ${_monthString(dueDate!.month)}',
-                                                style: TextStyle(
-                                                  color: isDark
-                                                      ? Colors.white
-                                                      : LoggitColors
-                                                            .darkGrayText,
-                                                  fontWeight: FontWeight.w500,
-                                                  fontSize: 13,
-                                                ),
-                                                overflow: TextOverflow.ellipsis,
+                                            SizedBox(width: 8),
+                                            Text(
+                                              dueDate == null
+                                                  ? 'Pick Date'
+                                                  : '${weekdayString(dueDate!.weekday)}, ${dueDate!.day} ${_monthString(dueDate!.month)}',
+                                              style: TextStyle(
+                                                color: isDark
+                                                    ? Colors.white
+                                                    : LoggitColors.darkGrayText,
+                                                fontWeight: FontWeight.w500,
+                                                fontSize: 14,
                                               ),
                                             ),
                                           ],
@@ -1009,12 +989,13 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                                       ),
                                     ),
                                   ),
-                                  SizedBox(width: 8),
+                                  SizedBox(width: 6),
+                                  // Time button
                                   Flexible(
                                     child: Container(
                                       padding: EdgeInsets.symmetric(
                                         vertical: 10,
-                                        horizontal: 10,
+                                        horizontal: 8,
                                       ),
                                       decoration: BoxDecoration(
                                         borderRadius: BorderRadius.circular(25),
@@ -1046,26 +1027,20 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                                           children: [
                                             Icon(
                                               Icons.access_time,
-                                              size: 16,
+                                              size: 18,
                                               color: LoggitColors.teal,
                                             ),
-                                            SizedBox(width: 6),
-                                            Flexible(
-                                              child: Text(
-                                                timeOfDay == null
-                                                    ? 'Pick Time'
-                                                    : timeOfDay!.format(
-                                                        context,
-                                                      ),
-                                                style: TextStyle(
-                                                  color: isDark
-                                                      ? Colors.white
-                                                      : LoggitColors
-                                                            .darkGrayText,
-                                                  fontWeight: FontWeight.w500,
-                                                  fontSize: 13,
-                                                ),
-                                                overflow: TextOverflow.ellipsis,
+                                            SizedBox(width: 8),
+                                            Text(
+                                              timeOfDay == null
+                                                  ? 'Pick Time'
+                                                  : timeOfDay!.format(context),
+                                              style: TextStyle(
+                                                color: isDark
+                                                    ? Colors.white
+                                                    : LoggitColors.darkGrayText,
+                                                fontWeight: FontWeight.w500,
+                                                fontSize: 14,
                                               ),
                                             ),
                                           ],
@@ -1395,115 +1370,129 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                         horizontal: LoggitSpacing.screenPadding,
                         vertical: 16,
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SizedBox(
-                            width: 120,
-                            height: 44,
-                            child: OutlinedButton(
-                              style: OutlinedButton.styleFrom(
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                side: BorderSide(
-                                  color: Colors.black26,
-                                  width: 1,
-                                ),
-                                textStyle: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 16,
-                                ),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minWidth: 80,
+                                maxWidth: 120,
                               ),
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: Text(
-                                'Cancel',
-                                style: TextStyle(color: Colors.black),
+                              child: SizedBox(
+                                height: 44,
+                                child: OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    side: BorderSide(
+                                      color: Colors.black26,
+                                      width: 1,
+                                    ),
+                                    textStyle: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  onPressed: () => Navigator.of(context).pop(),
+                                  child: Text(
+                                    'Cancel',
+                                    style: TextStyle(color: Colors.black),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                          SizedBox(width: 20),
-                          SizedBox(
-                            width: 120,
-                            height: 44,
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: LoggitColors.teal,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                textStyle: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
+                            SizedBox(width: 10),
+                            ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minWidth: 80,
+                                maxWidth: 120,
+                              ),
+                              child: SizedBox(
+                                height: 44,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: LoggitColors.teal,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    textStyle: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  onPressed: () {
+                                    setModalState(() {
+                                      showTitleError = titleController.text
+                                          .trim()
+                                          .isEmpty;
+                                      showCategoryError =
+                                          category == null ||
+                                          category?.trim().isEmpty == true;
+                                      showDateTimeError =
+                                          dueDate == null || timeOfDay == null;
+                                    });
+                                    if (showTitleError ||
+                                        showCategoryError ||
+                                        showDateTimeError) {
+                                      return;
+                                    }
+                                    // Validate mandatory fields
+                                    if (titleController.text.trim().isEmpty) {
+                                      setModalState(() {
+                                        error = 'Title is required.';
+                                      });
+                                      return;
+                                    }
+                                    if (category == null ||
+                                        category?.trim().isEmpty == true) {
+                                      setModalState(() {
+                                        error = 'Category is required.';
+                                      });
+                                      return;
+                                    }
+                                    if (dueDate == null || timeOfDay == null) {
+                                      setModalState(() {
+                                        error = 'Date & Time is required.';
+                                      });
+                                      return;
+                                    }
+                                    setModalState(() {
+                                      error = null;
+                                    });
+                                    final newTask = Task(
+                                      title: titleController.text,
+                                      description: descController.text,
+                                      dueDate: dueDate,
+                                      isCompleted:
+                                          status == TaskStatus.completed,
+                                      timestamp: DateTime.now(),
+                                      category: category,
+                                      recurrenceType: recurrenceType,
+                                      timeOfDay: timeOfDay,
+                                      priority: priority,
+                                      status: status,
+                                      reminder: reminder,
+                                    );
+                                    setState(() {
+                                      if (isEditing) {
+                                        final idx = tasks.indexOf(task);
+                                        if (idx != -1) tasks[idx] = newTask;
+                                      } else {
+                                        tasks.add(newTask);
+                                      }
+                                    });
+                                    Navigator.of(context).pop();
+                                  },
+                                  child: Text(isEditing ? 'Save' : 'Add'),
                                 ),
                               ),
-                              onPressed: () {
-                                setModalState(() {
-                                  showTitleError = titleController.text
-                                      .trim()
-                                      .isEmpty;
-                                  showCategoryError =
-                                      category == null ||
-                                      category?.trim().isEmpty == true;
-                                  showDateTimeError =
-                                      dueDate == null || timeOfDay == null;
-                                });
-                                if (showTitleError ||
-                                    showCategoryError ||
-                                    showDateTimeError) {
-                                  return;
-                                }
-                                // Validate mandatory fields
-                                if (titleController.text.trim().isEmpty) {
-                                  setModalState(() {
-                                    error = 'Title is required.';
-                                  });
-                                  return;
-                                }
-                                if (category == null ||
-                                    category?.trim().isEmpty == true) {
-                                  setModalState(() {
-                                    error = 'Category is required.';
-                                  });
-                                  return;
-                                }
-                                if (dueDate == null || timeOfDay == null) {
-                                  setModalState(() {
-                                    error = 'Date & Time is required.';
-                                  });
-                                  return;
-                                }
-                                setModalState(() {
-                                  error = null;
-                                });
-                                final newTask = Task(
-                                  title: titleController.text,
-                                  description: descController.text,
-                                  dueDate: dueDate,
-                                  isCompleted: status == TaskStatus.completed,
-                                  timestamp: DateTime.now(),
-                                  category: category,
-                                  recurrenceType: recurrenceType,
-                                  timeOfDay: timeOfDay,
-                                  priority: priority,
-                                  status: status,
-                                  reminder: reminder,
-                                );
-                                setState(() {
-                                  if (isEditing) {
-                                    final idx = tasks.indexOf(task);
-                                    if (idx != -1) tasks[idx] = newTask;
-                                  } else {
-                                    tasks.add(newTask);
-                                  }
-                                });
-                                Navigator.of(context).pop();
-                              },
-                              child: Text(isEditing ? 'Save' : 'Add'),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                     if (error != null)
@@ -2505,7 +2494,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                       );
                     },
                   ),
-                  SizedBox(height: 12),
+                  SizedBox(height: 24),
                   // Enhanced buttons
                   Row(
                     children: [
@@ -2842,16 +2831,11 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
       title = 'No tasks yet';
       subtitle = 'Tap the + button to create your first task';
       icon = '';
-    } else if (selectedTabIndex == 1 && _selectedDateForMonthView != null) {
-      // Month view with selected date - always show calendar icon
-      title = 'No tasks for ${_getSelectedDateContext()}';
-      subtitle = 'Tap the + button to add a task for this day';
-      icon = '📋';
     } else if (selectedDayIndex >= 0) {
-      // Week view with selected date
+      // No tasks for selected date
       title = 'No tasks for ${_getSelectedDateContext()}';
       subtitle = 'Tap the + button to add a task for this day';
-      icon = '📋';
+      icon = '📅';
     } else if (searchQuery.isNotEmpty) {
       // No search results
       title = 'No matching tasks';
@@ -2871,12 +2855,12 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
       // No tasks in "All Tasks" mode
       title = 'No tasks found';
       subtitle = 'Try selecting a specific date or add new tasks';
-      icon = '📋';
+      icon = '📝';
     } else {
       // No tasks (fallback)
       title = 'No tasks found';
       subtitle = 'Try adjusting your filters or add new tasks';
-      icon = '📋';
+      icon = '📝';
     }
 
     return Container(
@@ -3543,34 +3527,58 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
 
   Widget _buildAllTasksView(bool isDark) {
     final filteredTasks = _getFilteredTasksForAllView();
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? LoggitColors.darkCard : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 4,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: filteredTasks
-            .map(
-              (task) => GestureDetector(
-                onTap: () {
-                  if (_openDeleteTask.value != null) {
-                    _openDeleteTask.value = null;
-                    return;
-                  }
-                  _showTaskModal(context, task: task);
-                },
-                child: _buildTaskCard(task, isDark),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              RichText(
+                text: TextSpan(
+                  children: [
+                    TextSpan(
+                      text: 'Showing: ',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    TextSpan(
+                      text: '${filteredTasks.length}',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            )
-            .toList(),
-      ),
+            ],
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: isDark ? LoggitColors.darkCard : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 4,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            children: filteredTasks
+                .map((task) => _buildTaskCard(task, isDark))
+                .toList(),
+          ),
+        ),
+      ],
     );
   }
 
@@ -3728,108 +3736,26 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
               onTap: () async {
                 final shouldToggle = await showDialog<bool>(
                   context: context,
-                  builder: (context) {
-                    final isDark =
-                        Theme.of(context).brightness == Brightness.dark;
-                    return AlertDialog(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
+                  builder: (context) => AlertDialog(
+                    title: Text(
+                      task.isCompleted ? 'Mark as Pending?' : 'Complete Task?',
+                    ),
+                    content: Text(
+                      task.isCompleted
+                          ? 'Are you sure you want to mark this task as pending?'
+                          : 'Are you sure you want to mark this task as completed?',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: Text('Cancel'),
                       ),
-                      backgroundColor: isDark
-                          ? LoggitColors.darkCard
-                          : Colors.white,
-                      title: Row(
-                        children: [
-                          Container(
-                            padding: EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: task.isCompleted
-                                  ? Colors.orange.withOpacity(0.1)
-                                  : Colors.green.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(
-                              task.isCompleted
-                                  ? Icons.undo
-                                  : Icons.check_circle,
-                              color: task.isCompleted
-                                  ? Colors.orange
-                                  : Colors.green,
-                              size: 24,
-                            ),
-                          ),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              task.isCompleted
-                                  ? 'Mark as Pending?'
-                                  : 'Complete Task?',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: isDark
-                                    ? Colors.white
-                                    : LoggitColors.darkGrayText,
-                              ),
-                            ),
-                          ),
-                        ],
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        child: Text('Yes'),
                       ),
-                      content: Text(
-                        task.isCompleted
-                            ? 'Are you sure you want to mark this task as pending?'
-                            : 'Are you sure you want to mark this task as completed?',
-                        style: TextStyle(
-                          fontSize: 15,
-                          color: isDark ? Colors.white70 : Colors.grey[600],
-                        ),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(false),
-                          style: TextButton.styleFrom(
-                            foregroundColor: isDark
-                                ? Colors.white70
-                                : Colors.grey[600],
-                          ),
-                          child: Text(
-                            'Cancel',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                        Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: task.isCompleted
-                                  ? [Colors.orange, Colors.orange.shade600]
-                                  : [Colors.green, Colors.green.shade600],
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: TextButton(
-                            onPressed: () => Navigator.of(context).pop(true),
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.white,
-                              padding: EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 8,
-                              ),
-                            ),
-                            child: Text(
-                              'Confirm',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
+                    ],
+                  ),
                 );
                 if (shouldToggle == true) {
                   setState(() {
@@ -4071,8 +3997,8 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
     required DateTime? initialDate,
     required ValueChanged<DateTime> onDateChanged,
   }) async {
-    DateTime selectedDate = initialDate ?? DateTime.now();
-    DateTime focusedDate = DateTime(selectedDate.year, selectedDate.month);
+    DateTime tempDate = initialDate ?? DateTime.now();
+    DateTime displayedMonth = DateTime(tempDate.year, tempDate.month);
 
     await showDialog(
       context: context,
@@ -4085,189 +4011,204 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),
-              insetPadding: EdgeInsets.symmetric(
-                horizontal: MediaQuery.of(context).size.width > 600 ? 40 : 16,
-                vertical: MediaQuery.of(context).size.height > 800 ? 40 : 16,
-              ),
               child: Container(
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.95,
-                  maxHeight: MediaQuery.of(context).size.height * 0.7,
-                ),
-                padding: EdgeInsets.all(8),
+                constraints: BoxConstraints(maxWidth: 700, minWidth: 500),
+                padding: EdgeInsets.zero,
                 decoration: BoxDecoration(
-                  color: isDark ? LoggitColors.darkCard : Colors.white,
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: Offset(0, 4),
+                      color: Colors.black.withOpacity(0.02),
+                      blurRadius: 2,
+                      offset: Offset(0, 1),
                     ),
                   ],
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Expanded(
-                      child: SingleChildScrollView(
-                        child: TableCalendar(
-                          firstDay: DateTime.utc(2020, 1, 1),
-                          lastDay: DateTime.utc(2030, 12, 31),
-                          focusedDay: focusedDate,
-                          selectedDayPredicate: (day) {
-                            return isSameDay(selectedDate, day);
-                          },
-                          onDaySelected: (selectedDay, focusedDay) {
-                            setDialogState(() {
-                              selectedDate = selectedDay;
-                              focusedDate = focusedDay;
-                            });
-                          },
-                          onPageChanged: (focusedDay) {
-                            setDialogState(() {
-                              focusedDate = focusedDay;
-                            });
-                          },
-                          calendarFormat: CalendarFormat.month,
-                          startingDayOfWeek: StartingDayOfWeek.sunday,
-                          headerStyle: HeaderStyle(
-                            formatButtonVisible: false,
-                            titleCentered: true,
-                            titleTextStyle: TextStyle(
-                              fontSize: 16,
+                    Text(
+                      'Select Date',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: isDark
+                            ? Colors.white
+                            : LoggitColors.darkGrayText,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    // Month header with arrows
+                    Container(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          IconButton(
+                            icon: Icon(
+                              Icons.chevron_left,
+                              color: Colors.grey[600],
+                            ),
+                            onPressed: () {
+                              setDialogState(() {
+                                displayedMonth = DateTime(
+                                  displayedMonth.year,
+                                  displayedMonth.month - 1,
+                                );
+                              });
+                            },
+                          ),
+                          Text(
+                            '${_getMonthName(displayedMonth.month)} ${displayedMonth.year}',
+                            style: TextStyle(
+                              fontSize: 18,
                               fontWeight: FontWeight.bold,
                               color: isDark ? Colors.white : Colors.black,
                             ),
-                            leftChevronIcon: Icon(
-                              Icons.chevron_left,
-                              color: isDark ? Colors.white70 : Colors.grey[600],
-                            ),
-                            rightChevronIcon: Icon(
+                          ),
+                          IconButton(
+                            icon: Icon(
                               Icons.chevron_right,
-                              color: isDark ? Colors.white70 : Colors.grey[600],
+                              color: Colors.grey[600],
                             ),
+                            onPressed: () {
+                              setDialogState(() {
+                                displayedMonth = DateTime(
+                                  displayedMonth.year,
+                                  displayedMonth.month + 1,
+                                );
+                              });
+                            },
                           ),
-                          daysOfWeekStyle: DaysOfWeekStyle(
-                            weekdayStyle: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: isDark ? Colors.white70 : Colors.grey[600],
-                            ),
-                            weekendStyle: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: isDark ? Colors.white70 : Colors.grey[600],
-                            ),
-                          ),
-                          calendarStyle: CalendarStyle(
-                            outsideDaysVisible: false,
-                            weekendTextStyle: TextStyle(
-                              color: isDark ? Colors.white70 : Colors.black87,
-                            ),
-                            holidayTextStyle: TextStyle(
-                              color: isDark ? Colors.white70 : Colors.black87,
-                            ),
-                            defaultTextStyle: TextStyle(
-                              color: isDark ? Colors.white : Colors.black87,
-                            ),
-                            selectedDecoration: BoxDecoration(
-                              color: LoggitColors.teal,
-                              shape: BoxShape.circle,
-                            ),
-                            todayDecoration: BoxDecoration(
-                              color: LoggitColors.teal.withOpacity(0.3),
-                              shape: BoxShape.circle,
-                            ),
-                            markerDecoration: BoxDecoration(
-                              color: LoggitColors.teal,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ),
+                        ],
                       ),
                     ),
-                    SizedBox(height: 2),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 8,
-                      children: [
-                        SizedBox(
-                          width: 120,
-                          child: Container(
-                            height: 44,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: LoggitColors.teal.withOpacity(0.3),
-                                width: 1,
-                              ),
-                            ),
-                            child: TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              style: TextButton.styleFrom(
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-                              child: Text(
-                                'Cancel',
-                                style: TextStyle(
-                                  color: isDark ? Colors.white : Colors.black,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 120,
-                          child: Container(
-                            height: 44,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  LoggitColors.teal,
-                                  LoggitColors.teal.withOpacity(0.8),
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(10),
-                              boxShadow: [
-                                BoxShadow(
+                    // Weekday headers
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children:
+                            ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+                                .map(
+                                  (day) => Expanded(
+                                    child: Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 2,
+                                      ),
+                                      child: Text(
+                                        day,
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    // Calendar grid
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: _buildCalendarGrid(
+                        displayedMonth,
+                        tempDate,
+                        isDark,
+                        (selectedDate) {
+                          setDialogState(() {
+                            tempDate = selectedDate;
+                          });
+                        },
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    // Enhanced buttons
+                    SizedBox(height: 12),
+                    // Enhanced buttons
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              height: 40,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
                                   color: LoggitColors.teal.withOpacity(0.3),
-                                  blurRadius: 6,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: ElevatedButton(
-                              onPressed: () {
-                                onDateChanged(selectedDate);
-                                Navigator.of(context).pop();
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.transparent,
-                                shadowColor: Colors.transparent,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
+                                  width: 1,
                                 ),
                               ),
-                              child: Text(
-                                'Confirm',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
+                              child: TextButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                style: TextButton.styleFrom(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                child: Text(
+                                  'Cancel',
+                                  style: TextStyle(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Container(
+                              height: 40,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    LoggitColors.teal,
+                                    LoggitColors.teal.withOpacity(0.8),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: LoggitColors.teal.withOpacity(0.3),
+                                    blurRadius: 6,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  onDateChanged(tempDate);
+                                  Navigator.of(context).pop();
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.transparent,
+                                  shadowColor: Colors.transparent,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                child: Text(
+                                  'OK',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),

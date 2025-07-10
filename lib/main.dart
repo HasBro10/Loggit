@@ -12,9 +12,11 @@ import 'services/favorites_service.dart';
 import 'features/chat/chat_screen_new.dart';
 import 'features/tasks/tasks_screen_new.dart';
 import 'shared/design/color_guide.dart';
+import 'package:device_preview/device_preview.dart';
+import 'package:flutter/foundation.dart';
 
 void main() {
-  runApp(const LoggitApp());
+  runApp(DevicePreview(enabled: !kReleaseMode, builder: (context) => MyApp()));
 }
 
 class LoggitApp extends StatefulWidget {
