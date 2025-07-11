@@ -25,7 +25,9 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
   final ScrollController _scrollController = ScrollController();
   final ValueNotifier<int> closeSwipeOptionsNotifier = ValueNotifier<int>(0);
   final ValueNotifier<Key?> openSwipeCardKey = ValueNotifier<Key?>(null);
-  final ValueNotifier<Task?> _openDeleteTask = ValueNotifier<Task?>(null);
+  final ValueNotifier<String?> _openDeleteTaskTitle = ValueNotifier<String?>(
+    null,
+  );
 
   List<Task> tasks = [];
 
@@ -51,6 +53,11 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
     DateTime.now().month,
   );
 
+  // Drag tracking variables for swipe gestures
+  bool _isDragging = false;
+  double _dragStartX = 0;
+  double _dragDistance = 0;
+
   @override
   void initState() {
     super.initState();
@@ -70,8 +77,8 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
     days = [];
     dates = [];
 
-    // Generate 7 days starting from today
-    for (int i = 0; i < 7; i++) {
+    // Generate 14 days starting from today
+    for (int i = 0; i < 14; i++) {
       final date = today.add(Duration(days: i));
       days.add(weekDays[date.weekday % 7]);
       dates.add(date.day);
@@ -178,25 +185,32 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
     if (index == 0) return 'Today';
     if (index == 1) return 'Tomorrow';
 
+    final weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     final today = DateTime.now();
     final targetDate = today.add(Duration(days: index));
-    final now = DateTime.now();
 
-    // Check if it's this week
-    final weekStart = now.subtract(Duration(days: now.weekday - 1));
-    final weekEnd = weekStart.add(Duration(days: 6));
-
-    if (targetDate.isAfter(weekStart.subtract(Duration(days: 1))) &&
-        targetDate.isBefore(weekEnd.add(Duration(days: 1)))) {
-      return days[index]; // Just show day name for this week
-    }
-
-    // For next week, show day name and date
-    return '${days[index]} ${dates[index]}';
+    // Show consistent day names for all days
+    return weekDays[targetDate.weekday % 7];
   }
 
   String _getSelectedDateContext() {
-    if (selectedDayIndex == 0) {
+    if (selectedTabIndex == 1) {
+      // Month tab - use the selected date from month view
+      final selectedDate = _getSelectedDateForMonthView();
+      if (selectedDate != null) {
+        final today = DateTime.now();
+        final isToday =
+            selectedDate.year == today.year &&
+            selectedDate.month == today.month &&
+            selectedDate.day == today.day;
+        if (isToday) {
+          return 'Today';
+        } else {
+          return '${_monthString(selectedDate.month)} ${selectedDate.day}';
+        }
+      }
+      return 'Today';
+    } else if (selectedDayIndex == 0) {
       return 'Today';
     } else if (selectedDayIndex == 1) {
       return 'Tomorrow';
@@ -227,10 +241,16 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
               false);
 
       // Status filter
-      final matchesStatus =
-          selectedFilter == 0 || // All
-          (selectedFilter == 1 && !task.isCompleted) || // Pending
-          (selectedFilter == 2 && task.isCompleted); // Completed
+      final matchesStatus = selectedTabIndex == 2
+          ? (statusFilter == 'All' ||
+                (statusFilter == 'Pending' && !task.isCompleted) ||
+                (statusFilter == 'Completed' && task.isCompleted) ||
+                (statusFilter == 'Overdue' &&
+                    task.dueDate != null &&
+                    _isTaskOverdue(task)))
+          : (selectedFilter == 0 || // All
+                (selectedFilter == 1 && !task.isCompleted) || // Pending
+                (selectedFilter == 2 && task.isCompleted)); // Completed
 
       // Category filter
       final matchesCategory =
@@ -289,9 +309,26 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
     filteredTasks.sort((a, b) {
       switch (sortOption) {
         case TaskSortOption.dueDate:
-          return (a.dueDate ?? DateTime(2100)).compareTo(
-            b.dueDate ?? DateTime(2100),
-          );
+          // Get the effective scheduled time for each task
+          DateTime getEffectiveTime(Task task) {
+            if (task.dueDate == null) return DateTime(2100);
+
+            // If task has a specific timeOfDay, combine it with the dueDate
+            if (task.timeOfDay != null) {
+              return DateTime(
+                task.dueDate!.year,
+                task.dueDate!.month,
+                task.dueDate!.day,
+                task.timeOfDay!.hour,
+                task.timeOfDay!.minute,
+              );
+            }
+
+            // Otherwise use the dueDate as is
+            return task.dueDate!;
+          }
+
+          return getEffectiveTime(a).compareTo(getEffectiveTime(b));
         case TaskSortOption.priority:
           return priorityString(
             b,
@@ -303,7 +340,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
 
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onTap: () => _openDeleteTask.value = null,
+      onTap: () => _openDeleteTaskTitle.value = null,
       child: Scaffold(
         backgroundColor: isDark ? LoggitColors.darkBg : LoggitColors.pureWhite,
         body: SafeArea(
@@ -321,7 +358,11 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                             ? Colors.white
                             : LoggitColors.darkGrayText,
                       ),
-                      onPressed: widget.onBack,
+                      onPressed: () {
+                        // Close any open delete button first
+                        _openDeleteTaskTitle.value = null;
+                        widget.onBack();
+                      },
                     ),
                     SizedBox(width: 4),
                     Text(
@@ -359,7 +400,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                                 child: _buildTabButton('Week', 0, isDark),
                               ),
                               Expanded(
-                                child: _buildTabButton('Month', 1, isDark),
+                                child: _buildTabButton('Calendar', 1, isDark),
                               ),
                               Expanded(
                                 child: _buildTabButton('All', 2, isDark),
@@ -397,6 +438,8 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                                   final selected = i == selectedDayIndex;
                                   return GestureDetector(
                                     onTap: () {
+                                      // Close any open delete button first
+                                      _openDeleteTaskTitle.value = null;
                                       setState(() {
                                         selectedDayIndex = i;
                                         // When a specific date is selected, we're no longer in "All" mode
@@ -471,8 +514,42 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                               _buildAllTabSearchBar(isDark),
                               _buildAllTabContextBar(
                                 isDark,
-                                filteredTasks.length,
+                                _getFilteredTasksForAllView().length,
                               ),
+                              SizedBox(height: 12),
+                              // Simple filter chips below the header
+                              SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                padding: EdgeInsets.symmetric(horizontal: 16),
+                                child: Row(
+                                  children: [
+                                    _buildSimpleFilterChip(
+                                      'All',
+                                      'All',
+                                      isDark,
+                                    ),
+                                    SizedBox(width: 8),
+                                    _buildSimpleFilterChip(
+                                      'Pending',
+                                      'Pending',
+                                      isDark,
+                                    ),
+                                    SizedBox(width: 8),
+                                    _buildSimpleFilterChip(
+                                      'Completed',
+                                      'Completed',
+                                      isDark,
+                                    ),
+                                    SizedBox(width: 8),
+                                    _buildSimpleFilterChip(
+                                      'Overdue',
+                                      'Overdue',
+                                      isDark,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              SizedBox(height: 12),
                               _buildAllTasksView(isDark),
                             ],
                           ),
@@ -506,7 +583,11 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                                     SizedBox(width: 8),
                                     RichText(
                                       text: TextSpan(
-                                        text: selectedDayIndex >= 0
+                                        text:
+                                            (selectedTabIndex == 1 &&
+                                                    _getSelectedDateForMonthView() !=
+                                                        null) ||
+                                                selectedDayIndex >= 0
                                             ? _getSelectedDateContext()
                                             : 'All Tasks',
                                         style: TextStyle(
@@ -530,9 +611,11 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                                         ),
                                       ),
                                       TextSpan(
-                                        text: '${filteredTasks.length}',
+                                        text: selectedTabIndex == 1
+                                            ? '${_getFilteredTasksForMonthView().length}'
+                                            : '${filteredTasks.length}',
                                         style: TextStyle(
-                                          fontSize: 18,
+                                          fontSize: 14,
                                           fontWeight: FontWeight.w600,
                                           color: Colors.grey[600],
                                         ),
@@ -549,20 +632,11 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                         if (selectedTabIndex == 0) ...[
                           if (filteredTasks.isNotEmpty)
                             ...filteredTasks.map(
-                              (task) => GestureDetector(
-                                onHorizontalDragUpdate: (details) {
-                                  if (details.delta.dx < -2) {
-                                    _openDeleteTask.value = task;
-                                  }
-                                },
-                                onTap: () {
-                                  if (_openDeleteTask.value != null) {
-                                    _openDeleteTask.value = null;
-                                    return;
-                                  }
-                                  _showTaskModal(context, task: task);
-                                },
-                                child: _buildTaskCard(task, isDark),
+                              (task) => _buildTaskCard(
+                                task,
+                                isDark,
+                                onTap: () =>
+                                    _showTaskModal(context, task: task),
                               ),
                             )
                           else
@@ -570,20 +644,11 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                         ] else if (selectedTabIndex == 1) ...[
                           if (_getFilteredTasksForMonthView().isNotEmpty)
                             ..._getFilteredTasksForMonthView().map(
-                              (task) => GestureDetector(
-                                onHorizontalDragUpdate: (details) {
-                                  if (details.delta.dx < -2) {
-                                    _openDeleteTask.value = task;
-                                  }
-                                },
-                                onTap: () {
-                                  if (_openDeleteTask.value != null) {
-                                    _openDeleteTask.value = null;
-                                    return;
-                                  }
-                                  _showTaskModal(context, task: task);
-                                },
-                                child: _buildTaskCard(task, isDark),
+                              (task) => _buildTaskCard(
+                                task,
+                                isDark,
+                                onTap: () =>
+                                    _showTaskModal(context, task: task),
                               ),
                             )
                           else
@@ -600,7 +665,11 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
         ),
         floatingActionButton: FloatingActionButton(
           backgroundColor: LoggitColors.teal,
-          onPressed: () => _showTaskModal(context),
+          onPressed: () {
+            // Close any open delete button first
+            _openDeleteTaskTitle.value = null;
+            _showTaskModal(context);
+          },
           child: Icon(Icons.add, color: Colors.white, size: 24),
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
@@ -822,6 +891,8 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                               SizedBox(height: 6),
                               TextField(
                                 controller: descController,
+                                minLines: 1,
+                                maxLines: 5, // allow up to 5 lines
                                 decoration: InputDecoration(
                                   filled: true,
                                   fillColor: isDark
@@ -832,6 +903,10 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                                     borderSide: BorderSide.none,
                                   ),
                                   hintText: 'Enter description',
+                                ),
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.normal,
                                 ),
                               ),
                               SizedBox(height: 18),
@@ -1362,129 +1437,137 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                         horizontal: LoggitSpacing.screenPadding,
                         vertical: 16,
                       ),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            ConstrainedBox(
-                              constraints: BoxConstraints(
-                                minWidth: 80,
-                                maxWidth: 120,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: Responsive.responsiveFont(
+                                context,
+                                48,
+                                min: 44,
+                                max: 60,
                               ),
-                              child: SizedBox(
-                                height: 44,
-                                child: OutlinedButton(
-                                  style: OutlinedButton.styleFrom(
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    side: BorderSide(
-                                      color: Colors.black26,
-                                      width: 1,
-                                    ),
-                                    textStyle: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 16,
+                              child: OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  side: BorderSide(
+                                    color: Colors.black26,
+                                    width: 1,
+                                  ),
+                                  textStyle: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: Responsive.responsiveFont(
+                                      context,
+                                      16,
+                                      min: 14,
+                                      max: 20,
                                     ),
                                   ),
-                                  onPressed: () => Navigator.of(context).pop(),
-                                  child: Text(
-                                    'Cancel',
-                                    style: TextStyle(color: Colors.black),
-                                  ),
+                                ),
+                                onPressed: () => Navigator.of(context).pop(),
+                                child: Text(
+                                  'Cancel',
+                                  style: TextStyle(color: Colors.black),
                                 ),
                               ),
                             ),
-                            SizedBox(width: 10),
-                            ConstrainedBox(
-                              constraints: BoxConstraints(
-                                minWidth: 80,
-                                maxWidth: 120,
+                          ),
+                          SizedBox(width: 16),
+                          Expanded(
+                            child: SizedBox(
+                              height: Responsive.responsiveFont(
+                                context,
+                                48,
+                                min: 44,
+                                max: 60,
                               ),
-                              child: SizedBox(
-                                height: 44,
-                                child: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: LoggitColors.teal,
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    textStyle: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: LoggitColors.teal,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  textStyle: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: Responsive.responsiveFont(
+                                      context,
+                                      16,
+                                      min: 14,
+                                      max: 20,
                                     ),
                                   ),
-                                  onPressed: () {
-                                    setModalState(() {
-                                      showTitleError = titleController.text
-                                          .trim()
-                                          .isEmpty;
-                                      showCategoryError =
-                                          category == null ||
-                                          category?.trim().isEmpty == true;
-                                      showDateTimeError =
-                                          dueDate == null || timeOfDay == null;
-                                    });
-                                    if (showTitleError ||
-                                        showCategoryError ||
-                                        showDateTimeError) {
-                                      return;
-                                    }
-                                    // Validate mandatory fields
-                                    if (titleController.text.trim().isEmpty) {
-                                      setModalState(() {
-                                        error = 'Title is required.';
-                                      });
-                                      return;
-                                    }
-                                    if (category == null ||
-                                        category?.trim().isEmpty == true) {
-                                      setModalState(() {
-                                        error = 'Category is required.';
-                                      });
-                                      return;
-                                    }
-                                    if (dueDate == null || timeOfDay == null) {
-                                      setModalState(() {
-                                        error = 'Date & Time is required.';
-                                      });
-                                      return;
-                                    }
-                                    setModalState(() {
-                                      error = null;
-                                    });
-                                    final newTask = Task(
-                                      title: titleController.text,
-                                      description: descController.text,
-                                      dueDate: dueDate,
-                                      isCompleted:
-                                          status == TaskStatus.completed,
-                                      timestamp: DateTime.now(),
-                                      category: category,
-                                      recurrenceType: recurrenceType,
-                                      timeOfDay: timeOfDay,
-                                      priority: priority,
-                                      status: status,
-                                      reminder: reminder,
-                                    );
-                                    setState(() {
-                                      if (isEditing) {
-                                        final idx = tasks.indexOf(task);
-                                        if (idx != -1) tasks[idx] = newTask;
-                                      } else {
-                                        tasks.add(newTask);
-                                      }
-                                    });
-                                    Navigator.of(context).pop();
-                                  },
-                                  child: Text(isEditing ? 'Save' : 'Add'),
                                 ),
+                                onPressed: () {
+                                  setModalState(() {
+                                    showTitleError = titleController.text
+                                        .trim()
+                                        .isEmpty;
+                                    showCategoryError =
+                                        category == null ||
+                                        category?.trim().isEmpty == true;
+                                    showDateTimeError =
+                                        dueDate == null || timeOfDay == null;
+                                  });
+                                  if (showTitleError ||
+                                      showCategoryError ||
+                                      showDateTimeError) {
+                                    return;
+                                  }
+                                  // Validate mandatory fields
+                                  if (titleController.text.trim().isEmpty) {
+                                    setModalState(() {
+                                      error = 'Title is required.';
+                                    });
+                                    return;
+                                  }
+                                  if (category == null ||
+                                      category?.trim().isEmpty == true) {
+                                    setModalState(() {
+                                      error = 'Category is required.';
+                                    });
+                                    return;
+                                  }
+                                  if (dueDate == null || timeOfDay == null) {
+                                    setModalState(() {
+                                      error = 'Date & Time is required.';
+                                    });
+                                    return;
+                                  }
+                                  setModalState(() {
+                                    error = null;
+                                  });
+                                  final newTask = Task(
+                                    title: titleController.text,
+                                    description: descController.text,
+                                    dueDate: dueDate,
+                                    isCompleted: status == TaskStatus.completed,
+                                    timestamp: DateTime.now(),
+                                    category: category,
+                                    recurrenceType: recurrenceType,
+                                    timeOfDay: timeOfDay,
+                                    priority: priority,
+                                    status: status,
+                                    reminder: reminder,
+                                  );
+                                  setState(() {
+                                    if (isEditing) {
+                                      final idx = tasks.indexOf(task);
+                                      if (idx != -1) tasks[idx] = newTask;
+                                    } else {
+                                      tasks.add(newTask);
+                                    }
+                                  });
+                                  Navigator.of(context).pop();
+                                },
+                                child: Text(isEditing ? 'Save' : 'Add'),
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                     if (error != null)
@@ -1585,113 +1668,6 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     SizedBox(height: 20),
-                                    // Status Filters
-                                    Text(
-                                      'Status',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: Responsive.responsiveFont(
-                                          context,
-                                          13,
-                                          min: 11,
-                                          max: 15,
-                                        ),
-                                        color: isDark
-                                            ? Colors.white70
-                                            : LoggitColors.darkGrayText
-                                                  .withOpacity(0.7),
-                                      ),
-                                    ),
-                                    SizedBox(height: 6),
-                                    _FilterCheckbox(
-                                      label: 'All Tasks',
-                                      value: localStatusFilter == 'All',
-                                      onChanged: (val) {
-                                        setModalState(
-                                          () => localStatusFilter = 'All',
-                                        );
-                                      },
-                                      isDark: isDark,
-                                      fontSize: Responsive.responsiveFont(
-                                        context,
-                                        13,
-                                        min: 11,
-                                        max: 14,
-                                      ),
-                                    ),
-                                    _FilterCheckbox(
-                                      label: 'Pending',
-                                      value: localStatusFilter == 'Pending',
-                                      onChanged: (val) {
-                                        setModalState(
-                                          () => localStatusFilter = 'Pending',
-                                        );
-                                      },
-                                      isDark: isDark,
-                                      fontSize: Responsive.responsiveFont(
-                                        context,
-                                        13,
-                                        min: 11,
-                                        max: 14,
-                                      ),
-                                    ),
-                                    _FilterCheckbox(
-                                      label: 'Completed',
-                                      value: localStatusFilter == 'Completed',
-                                      onChanged: (val) {
-                                        setModalState(
-                                          () => localStatusFilter = 'Completed',
-                                        );
-                                      },
-                                      isDark: isDark,
-                                      fontSize: Responsive.responsiveFont(
-                                        context,
-                                        13,
-                                        min: 11,
-                                        max: 14,
-                                      ),
-                                    ),
-                                    _FilterCheckbox(
-                                      label: 'Due Soon (3 days)',
-                                      value: localStatusFilter == 'Due Soon',
-                                      onChanged: (val) {
-                                        setModalState(
-                                          () => localStatusFilter = 'Due Soon',
-                                        );
-                                      },
-                                      isDark: isDark,
-                                      fontSize: Responsive.responsiveFont(
-                                        context,
-                                        13,
-                                        min: 11,
-                                        max: 14,
-                                      ),
-                                    ),
-                                    _FilterCheckbox(
-                                      label: 'Overdue',
-                                      value: localShowOverdueOnly,
-                                      onChanged: (val) {
-                                        setModalState(
-                                          () => localShowOverdueOnly =
-                                              val ?? false,
-                                        );
-                                      },
-                                      isDark: isDark,
-                                      fontSize: Responsive.responsiveFont(
-                                        context,
-                                        13,
-                                        min: 11,
-                                        max: 14,
-                                      ),
-                                    ),
-
-                                    SizedBox(height: 8),
-                                    Divider(
-                                      color: isDark
-                                          ? LoggitColors.darkBorder
-                                          : LoggitColors.divider,
-                                    ),
-                                    SizedBox(height: 8),
 
                                     // Category Filters
                                     Text(
@@ -2816,82 +2792,80 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
   }
 
   Widget _buildEmptyState(bool isDark) {
-    String title, subtitle, icon;
+    String emptyTitle, emptySubtitle, emptyIcon = '';
 
     if (tasks.isEmpty) {
       // No tasks at all
-      title = 'No tasks yet';
-      subtitle = 'Tap the + button to create your first task';
-      icon = '';
+      emptyTitle = 'No tasks yet';
+      emptySubtitle = 'Tap the + button to create your first task';
+      emptyIcon = '📋';
     } else if (selectedDayIndex >= 0) {
       // No tasks for selected date
-      title = 'No tasks for ${_getSelectedDateContext()}';
-      subtitle = 'Tap the + button to add a task for this day';
-      icon = '📅';
+      emptyTitle = 'No tasks for ${_getSelectedDateContext()}';
+      emptySubtitle = 'Tap the + button to add a task for this day';
+      emptyIcon = '📋';
     } else if (searchQuery.isNotEmpty) {
       // No search results
-      title = 'No matching tasks';
-      subtitle = 'Try adjusting your search terms';
-      icon = '🔍';
+      emptyTitle = 'No matching tasks';
+      emptySubtitle = 'Try adjusting your search terms';
+      emptyIcon = '📋';
     } else if (selectedFilter == 1) {
       // No pending tasks
-      title = 'No pending tasks';
-      subtitle = 'All tasks are completed! 🎉';
-      icon = '✅';
+      emptyTitle = 'No pending tasks';
+      emptySubtitle = 'All tasks are completed!';
+      emptyIcon = '📋';
     } else if (selectedFilter == 2) {
       // No completed tasks
-      title = 'No completed tasks';
-      subtitle = 'Complete some tasks to see them here';
-      icon = '📋';
+      emptyTitle = 'No completed tasks';
+      emptySubtitle = 'Complete some tasks to see them here';
+      emptyIcon = '📋';
     } else if (selectedDayIndex < 0) {
       // No tasks in "All Tasks" mode
-      title = 'No tasks found';
-      subtitle = 'Try selecting a specific date or add new tasks';
-      icon = '📝';
+      emptyTitle = 'No tasks found';
+      emptySubtitle = 'Try selecting a specific date or add new tasks';
+      emptyIcon = '📋';
     } else {
       // No tasks (fallback)
-      title = 'No tasks found';
-      subtitle = 'Try adjusting your filters or add new tasks';
-      icon = '📝';
+      emptyTitle = 'No tasks found';
+      emptySubtitle = 'Try adjusting your filters or add new tasks';
+      emptyIcon = '📋';
     }
 
-    return Container(
-      margin: EdgeInsets.symmetric(vertical: 40),
-      padding: EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          if (tasks.isEmpty)
-            Icon(
-              Icons.calendar_today,
-              size: 40,
-              color: isDark ? Colors.white54 : Colors.grey[500],
+    return Center(
+      child: Container(
+        margin: EdgeInsets.symmetric(vertical: 40),
+        padding: EdgeInsets.symmetric(horizontal: 20),
+        constraints: BoxConstraints(maxWidth: 400),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              emptyIcon,
+              style: TextStyle(fontSize: 64),
+              textAlign: TextAlign.center,
             ),
-          if (tasks.isEmpty == false)
-            Text(icon, style: TextStyle(fontSize: 64)),
-          SizedBox(height: 16),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.white : LoggitColors.darkGrayText,
+            SizedBox(height: 16),
+            Text(
+              emptyTitle,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white : LoggitColors.darkGrayText,
+              ),
+              textAlign: TextAlign.center,
             ),
-            textAlign: TextAlign.center,
-          ),
-          SizedBox(height: 8),
-          Text(
-            subtitle,
-            style: TextStyle(
-              fontSize: 14,
-              color: isDark ? Colors.grey[400] : Colors.grey[600],
+            SizedBox(height: 8),
+            Text(
+              emptySubtitle,
+              style: TextStyle(
+                fontSize: 14,
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+              ),
+              textAlign: TextAlign.center,
             ),
-            textAlign: TextAlign.center,
-          ),
-          if (tasks.isEmpty || selectedDayIndex >= 0) ...[
-            // Removed extra Add Task button (FAB already exists)
           ],
-        ],
+        ),
       ),
     );
   }
@@ -2900,14 +2874,26 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
     final isSelected = selectedTabIndex == index;
     return GestureDetector(
       onTap: () {
+        // Close any open delete button first
+        _openDeleteTaskTitle.value = null;
         setState(() {
           selectedTabIndex = index;
-          // Reset date selection when switching to "All" tab
-          if (index == 2) {
-            selectedDayIndex = -1;
-          } else if (index == 0) {
-            selectedDayIndex =
-                0; // Always select today when returning to Week tab
+          // Reset to current date when switching tabs
+          if (index == 0) {
+            // Week tab - select today
+            selectedDayIndex = 0;
+          } else if (index == 1) {
+            // Month tab - always reset to today and current month
+            selectedDayIndex = 0;
+            _displayedMonth = DateTime(
+              DateTime.now().year,
+              DateTime.now().month,
+            );
+            _selectedDateForMonthView = DateTime.now();
+          } else if (index == 2) {
+            // All tab - select today and reset filter to "All"
+            selectedDayIndex = 0;
+            statusFilter = 'All';
           }
         });
       },
@@ -2968,6 +2954,8 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                 IconButton(
                   icon: Icon(Icons.chevron_left, color: Colors.grey[600]),
                   onPressed: () {
+                    // Close any open delete button first
+                    _openDeleteTaskTitle.value = null;
                     setState(() {
                       _displayedMonth = DateTime(
                         _displayedMonth.year,
@@ -3333,6 +3321,8 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                 IconButton(
                   icon: Icon(Icons.chevron_right, color: Colors.grey[600]),
                   onPressed: () {
+                    // Close any open delete button first
+                    _openDeleteTaskTitle.value = null;
                     setState(() {
                       _displayedMonth = DateTime(
                         _displayedMonth.year,
@@ -3366,100 +3356,133 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
             ),
           ),
           SizedBox(height: 8),
-          // Calendar grid
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              children: List.generate(6, (weekIndex) {
-                return Row(
-                  children: List.generate(7, (dayIndex) {
-                    final dayNumber =
-                        weekIndex * 7 + dayIndex - firstWeekday + 1;
-                    final isValidDay =
-                        dayNumber > 0 && dayNumber <= daysInMonth;
-                    final today = DateTime.now();
-                    final isToday =
-                        dayNumber == today.day &&
-                        _displayedMonth.month == today.month &&
-                        _displayedMonth.year == today.year;
-                    final selectedDate = _getSelectedDateForMonthView();
-                    final isSelected =
-                        selectedDate != null &&
-                        dayNumber == selectedDate.day &&
-                        _displayedMonth.month == selectedDate.month &&
-                        _displayedMonth.year == selectedDate.year;
-                    final hasTasks = tasks.any(
-                      (task) =>
-                          task.dueDate != null &&
-                          task.dueDate!.year == _displayedMonth.year &&
-                          task.dueDate!.month == _displayedMonth.month &&
-                          task.dueDate!.day == dayNumber,
-                    );
+          // Calendar grid with swipe gestures
+          GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onHorizontalDragEnd: (details) {
+              final velocityThreshold = 300.0;
+              if (details.primaryVelocity != null &&
+                  details.primaryVelocity! > velocityThreshold) {
+                // Swipe right - previous month
+                setState(() {
+                  _displayedMonth = DateTime(
+                    _displayedMonth.year,
+                    _displayedMonth.month - 1,
+                  );
+                });
+              } else if (details.primaryVelocity != null &&
+                  details.primaryVelocity! < -velocityThreshold) {
+                // Swipe left - next month
+                setState(() {
+                  _displayedMonth = DateTime(
+                    _displayedMonth.year,
+                    _displayedMonth.month + 1,
+                  );
+                });
+              }
+            },
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: List.generate(6, (weekIndex) {
+                  return Row(
+                    children: List.generate(7, (dayIndex) {
+                      final dayNumber =
+                          weekIndex * 7 + dayIndex - firstWeekday + 1;
+                      final isValidDay =
+                          dayNumber > 0 && dayNumber <= daysInMonth;
+                      final today = DateTime.now();
+                      final isToday =
+                          dayNumber == today.day &&
+                          _displayedMonth.month == today.month &&
+                          _displayedMonth.year == today.year;
+                      final selectedDate = _getSelectedDateForMonthView();
+                      final isSelected =
+                          selectedDate != null &&
+                          dayNumber == selectedDate.day &&
+                          _displayedMonth.month == selectedDate.month &&
+                          _displayedMonth.year == selectedDate.year;
+                      final hasTasks = tasks.any(
+                        (task) =>
+                            task.dueDate != null &&
+                            task.dueDate!.year == _displayedMonth.year &&
+                            task.dueDate!.month == _displayedMonth.month &&
+                            task.dueDate!.day == dayNumber,
+                      );
 
-                    return Expanded(
-                      child: GestureDetector(
-                        onTap: isValidDay
-                            ? () {
-                                setState(() {
-                                  // Set the selected date for month view
-                                  _setSelectedDateForMonthView(
-                                    DateTime(
-                                      _displayedMonth.year,
-                                      _displayedMonth.month,
-                                      dayNumber,
-                                    ),
-                                  );
-                                });
-                              }
-                            : null,
-                        child: Container(
-                          height: 36,
-                          margin: EdgeInsets.symmetric(vertical: 0.5),
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? LoggitColors.teal
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(8),
-                            border: isToday
-                                ? Border.all(color: LoggitColors.teal, width: 2)
-                                : isSelected
-                                ? Border.all(color: LoggitColors.teal, width: 2)
-                                : null,
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                isValidDay ? dayNumber.toString() : '',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                  color: isSelected
-                                      ? Colors.white
-                                      : isValidDay
-                                      ? (isDark ? Colors.white : Colors.black)
-                                      : Colors.transparent,
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: isValidDay
+                              ? () {
+                                  // Close any open delete button first
+                                  _openDeleteTaskTitle.value = null;
+                                  setState(() {
+                                    // Set the selected date for month view
+                                    _setSelectedDateForMonthView(
+                                      DateTime(
+                                        _displayedMonth.year,
+                                        _displayedMonth.month,
+                                        dayNumber,
+                                      ),
+                                    );
+                                  });
+                                }
+                              : null,
+                          child: Container(
+                            height: 36,
+                            margin: EdgeInsets.symmetric(vertical: 0.5),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? LoggitColors.teal
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(8),
+                              border: isToday
+                                  ? Border.all(
+                                      color: LoggitColors.teal,
+                                      width: 2,
+                                    )
+                                  : isSelected
+                                  ? Border.all(
+                                      color: LoggitColors.teal,
+                                      width: 2,
+                                    )
+                                  : null,
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  isValidDay ? dayNumber.toString() : '',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : isValidDay
+                                        ? (isDark ? Colors.white : Colors.black)
+                                        : Colors.transparent,
+                                  ),
                                 ),
-                              ),
-                              SizedBox(height: 4),
-                              Container(
-                                height: 6,
-                                width: 6,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: hasTasks
-                                      ? LoggitColors.teal
-                                      : Colors.transparent,
+                                SizedBox(height: 4),
+                                Container(
+                                  height: 6,
+                                  width: 6,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: hasTasks
+                                        ? LoggitColors.teal
+                                        : Colors.transparent,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  }),
-                );
-              }),
+                      );
+                    }),
+                  );
+                }),
+              ),
             ),
           ),
           SizedBox(height: 16),
@@ -3522,52 +3545,12 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              RichText(
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'Showing: ',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                    TextSpan(
-                      text: '${filteredTasks.length}',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
         if (filteredTasks.isNotEmpty)
           ...filteredTasks.map(
-            (task) => GestureDetector(
-              onHorizontalDragUpdate: (details) {
-                if (details.delta.dx < -2) {
-                  _openDeleteTask.value = task;
-                }
-              },
-              onTap: () {
-                if (_openDeleteTask.value != null) {
-                  _openDeleteTask.value = null;
-                  return;
-                }
-                _showTaskModal(context, task: task);
-              },
-              child: _buildTaskCard(task, isDark),
+            (task) => _buildTaskCard(
+              task,
+              isDark,
+              onTap: () => _showTaskModal(context, task: task),
             ),
           )
         else
@@ -3613,177 +3596,391 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
     );
   }
 
-  Widget _buildTaskCard(Task task, bool isDark) {
-    return OverlayDeleteTaskCard(
-      task: task,
-      isDark: isDark,
-      onDelete: () {
-        setState(() {
-          tasks.remove(task);
-        });
-      },
-      openDeleteTask: _openDeleteTask,
-      child: Container(
-        margin: EdgeInsets.symmetric(vertical: 4),
-        padding: EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isDark ? LoggitColors.darkBg : Colors.grey.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: _getPriorityColor(task.priority).withOpacity(0.3),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            // Priority indicator
-            Container(
-              width: 4,
-              height: 40,
-              decoration: BoxDecoration(
-                color: _getPriorityColor(task.priority),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            SizedBox(width: 12),
-            // Task details
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    task.title,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white : LoggitColors.darkGrayText,
-                      decoration: task.isCompleted
-                          ? TextDecoration.lineThrough
-                          : null,
+  Widget _buildTaskCard(Task task, bool isDark, {VoidCallback? onTap}) {
+    return Stack(
+      children: [
+        OverlayDeleteTaskCard(
+          task: task,
+          isDark: isDark,
+          onDelete: () {
+            setState(() {
+              tasks.remove(task);
+            });
+          },
+          onTap: onTap,
+          openDeleteTaskTitle: _openDeleteTaskTitle,
+          child: GestureDetector(
+            onTap: onTap,
+            child: StatefulBuilder(
+              builder: (context, setCardState) {
+                bool isPressed = false;
+                return GestureDetector(
+                  onTap: onTap,
+                  onTapDown: (_) => setCardState(() => isPressed = true),
+                  onTapUp: (_) => setCardState(() => isPressed = false),
+                  onTapCancel: () => setCardState(() => isPressed = false),
+                  child: AnimatedContainer(
+                    duration: Duration(milliseconds: 120),
+                    margin: EdgeInsets.symmetric(vertical: 8),
+                    padding: EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? LoggitColors.darkBg
+                          : Colors.grey.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _getPriorityColor(
+                          task.priority,
+                        ).withOpacity(0.3),
+                        width: 1,
+                      ),
+                      boxShadow: isPressed
+                          ? [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.18),
+                                blurRadius: 16,
+                                offset: Offset(0, 8),
+                                spreadRadius: 1,
+                              ),
+                            ]
+                          : [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.01),
+                                blurRadius: 1,
+                                offset: Offset(0, 0.5),
+                                spreadRadius: 0,
+                              ),
+                            ],
                     ),
-                  ),
-                  if (task.description != null) ...[
-                    SizedBox(height: 4),
-                    Text(
-                      task.description!,
-                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                    ),
-                  ],
-                  SizedBox(height: 8),
-                  Row(
-                    children: [
-                      if (task.category != null) ...[
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Vertically center the priority indicator
                         Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
+                          width: 4,
+                          height: 48,
                           decoration: BoxDecoration(
-                            color: _getCategoryColor(
-                              task.category!,
-                            ).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            task.category!,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: _getCategoryColor(task.category!),
-                              fontWeight: FontWeight.w500,
-                            ),
+                            color: _getPriorityColor(task.priority),
+                            borderRadius: BorderRadius.circular(2),
                           ),
                         ),
-                        SizedBox(width: 8),
+                        SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                task.title,
+                                style: TextStyle(
+                                  fontSize: Responsive.responsiveFont(
+                                    context,
+                                    18,
+                                    min: 15,
+                                    max: 24,
+                                  ),
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark
+                                      ? Colors.white
+                                      : LoggitColors.darkGrayText,
+                                  decoration: task.isCompleted
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                ),
+                              ),
+                              if (task.description != null &&
+                                  task.description!.isNotEmpty) ...[
+                                SizedBox(height: 6),
+                                Text(
+                                  task.description!,
+                                  style: TextStyle(
+                                    fontSize: Responsive.responsiveFont(
+                                      context,
+                                      15,
+                                      min: 13,
+                                      max: 20,
+                                    ),
+                                    color: isDark
+                                        ? Colors.grey[300]
+                                        : Colors.grey[700],
+                                  ),
+                                ),
+                              ],
+                              SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  if (task.category != null) ...[
+                                    Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 5,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: _getCategoryColor(
+                                          task.category!,
+                                        ).withOpacity(0.12),
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                      child: Text(
+                                        task.category!,
+                                        style: TextStyle(
+                                          fontSize: Responsive.responsiveFont(
+                                            context,
+                                            13,
+                                            min: 12,
+                                            max: 18,
+                                          ),
+                                          color: _getCategoryColor(
+                                            task.category!,
+                                          ),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(width: 10),
+                                  ],
+                                  if (task.dueDate != null) ...[
+                                    Icon(
+                                      Icons.calendar_today,
+                                      size: Responsive.responsiveFont(
+                                        context,
+                                        16,
+                                        min: 14,
+                                        max: 22,
+                                      ),
+                                      color: Colors.grey[600],
+                                    ),
+                                    SizedBox(width: 5),
+                                    Text(
+                                      _formatDateDayMonthYear(task.dueDate!),
+                                      style: TextStyle(
+                                        fontSize: Responsive.responsiveFont(
+                                          context,
+                                          13,
+                                          min: 12,
+                                          max: 18,
+                                        ),
+                                        color: Colors.grey[600],
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    if (task.timeOfDay != null) ...[
+                                      SizedBox(width: 8),
+                                      Text(
+                                        task.timeOfDay!.format(context),
+                                        style: TextStyle(
+                                          fontSize: Responsive.responsiveFont(
+                                            context,
+                                            13,
+                                            min: 12,
+                                            max: 18,
+                                          ),
+                                          color: Colors.grey[500],
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
-                      if (task.dueDate != null) ...[
-                        Icon(
-                          Icons.calendar_today,
-                          size: 14,
-                          color: Colors.grey[600],
-                        ),
-                        SizedBox(width: 4),
-                        Text(
-                          _formatDateDayMonthYear(task.dueDate!),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                        if (task.timeOfDay != null) ...[
-                          SizedBox(width: 6),
-                          Text(
-                            task.timeOfDay!.format(context),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[500],
-                            ),
-                          ),
-                        ],
-                      ],
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            // Status indicator
-            GestureDetector(
-              onTap: () async {
-                final shouldToggle = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: Text(
-                      task.isCompleted ? 'Mark as Pending?' : 'Complete Task?',
                     ),
-                    content: Text(
-                      task.isCompleted
-                          ? 'Are you sure you want to mark this task as pending?'
-                          : 'Are you sure you want to mark this task as completed?',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(false),
-                        child: Text('Cancel'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(true),
-                        child: Text('Yes'),
-                      ),
-                    ],
                   ),
                 );
-                if (shouldToggle == true) {
-                  setState(() {
-                    final idx = tasks.indexOf(task);
-                    if (idx != -1) {
-                      tasks[idx] = task.copyWith(
-                        isCompleted: !task.isCompleted,
-                        status: !task.isCompleted
-                            ? TaskStatus.completed
-                            : TaskStatus.notStarted,
-                      );
-                    }
-                  });
-                }
               },
-              child: Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: task.isCompleted ? Colors.green : Colors.transparent,
-                  border: Border.all(
-                    color: task.isCompleted ? Colors.green : Colors.grey,
-                    width: 2,
-                  ),
-                  shape: BoxShape.circle,
-                ),
-                child: task.isCompleted
-                    ? Icon(Icons.check, size: 16, color: Colors.white)
-                    : null,
-              ),
             ),
-          ],
+          ),
         ),
-      ),
+        // Circle checkbox in top right corner - outside the overlay
+        Positioned(
+          top: 24,
+          right: 20,
+          child: ValueListenableBuilder<String?>(
+            valueListenable: _openDeleteTaskTitle,
+            builder: (context, openDeleteTaskTitle, child) {
+              // Hide checkbox when delete button is open for this task
+              final isVisible = openDeleteTaskTitle != task.title;
+
+              return AnimatedOpacity(
+                duration: Duration(milliseconds: 200),
+                opacity: isVisible ? 1.0 : 0.0,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () async {
+                    print('Checkbox tapped for task: ${task.title}');
+                    final shouldToggle = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        title: Row(
+                          children: [
+                            Icon(
+                              task.isCompleted
+                                  ? Icons.undo
+                                  : Icons.check_circle,
+                              color: task.isCompleted
+                                  ? Colors.orange
+                                  : Colors.green,
+                              size: 28,
+                            ),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                task.isCompleted
+                                    ? 'Mark as Pending?'
+                                    : 'Complete Task?',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 20,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        content: Text(
+                          task.isCompleted
+                              ? 'Are you sure you want to mark this task as pending?'
+                              : 'Are you sure you want to mark this task as completed?',
+                          style: TextStyle(fontSize: 16),
+                        ),
+                        actionsPadding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        actionsAlignment: MainAxisAlignment.center,
+                        actions: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: Responsive.isMobile(context) ? 100 : 120,
+                                child: OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    side: BorderSide(
+                                      color: Colors.grey.shade400,
+                                    ),
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: Responsive.isMobile(context)
+                                          ? 16
+                                          : 20,
+                                      vertical: Responsive.isMobile(context)
+                                          ? 10
+                                          : 12,
+                                    ),
+                                  ),
+                                  onPressed: () =>
+                                      Navigator.of(context).pop(false),
+                                  child: Text(
+                                    'Cancel',
+                                    style: TextStyle(
+                                      fontSize: Responsive.responsiveFont(
+                                        context,
+                                        16,
+                                        min: 14,
+                                        max: 18,
+                                      ),
+                                      color: Colors.black,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              SizedBox(
+                                width: Responsive.isMobile(context) ? 12 : 16,
+                              ),
+                              SizedBox(
+                                width: Responsive.isMobile(context) ? 100 : 120,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: task.isCompleted
+                                        ? Colors.orange
+                                        : Colors.green,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: Responsive.isMobile(context)
+                                          ? 16
+                                          : 20,
+                                      vertical: Responsive.isMobile(context)
+                                          ? 10
+                                          : 12,
+                                    ),
+                                  ),
+                                  onPressed: () =>
+                                      Navigator.of(context).pop(true),
+                                  child: Text(
+                                    'Yes',
+                                    style: TextStyle(
+                                      fontSize: Responsive.responsiveFont(
+                                        context,
+                                        16,
+                                        min: 14,
+                                        max: 18,
+                                      ),
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                    if (shouldToggle == true) {
+                      setState(() {
+                        final idx = tasks.indexOf(task);
+                        if (idx != -1) {
+                          tasks[idx] = task.copyWith(
+                            isCompleted: !task.isCompleted,
+                            status: !task.isCompleted
+                                ? TaskStatus.completed
+                                : TaskStatus.notStarted,
+                          );
+                        }
+                      });
+                    }
+                  },
+                  child: Container(
+                    width: 26,
+                    height: 26,
+                    decoration: BoxDecoration(
+                      color: task.isCompleted
+                          ? Colors.green
+                          : Colors.transparent,
+                      border: Border.all(
+                        color: task.isCompleted ? Colors.green : Colors.grey,
+                        width: 2,
+                      ),
+                      shape: BoxShape.circle,
+                    ),
+                    child: task.isCompleted
+                        ? Icon(
+                            Icons.check,
+                            size: Responsive.responsiveFont(
+                              context,
+                              13,
+                              min: 11,
+                              max: 15,
+                            ),
+                            color: Colors.white,
+                          )
+                        : null,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -3791,35 +3988,146 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    return tasks.where((task) {
-      if (task.dueDate == null) return selectedTimeFilter == 0; // All Time
+    final filteredTasks = tasks.where((task) {
+      // Search filter
+      final matchesSearch =
+          searchQuery.isEmpty ||
+          task.title.toLowerCase().contains(searchQuery.toLowerCase()) ||
+          (task.description?.toLowerCase().contains(
+                searchQuery.toLowerCase(),
+              ) ??
+              false);
 
-      final dueDate = DateTime(
-        task.dueDate!.year,
-        task.dueDate!.month,
-        task.dueDate!.day,
-      );
+      // Status filter
+      final matchesStatus =
+          statusFilter == 'All' ||
+          (statusFilter == 'Pending' && !task.isCompleted) ||
+          (statusFilter == 'Completed' && task.isCompleted) ||
+          (statusFilter == 'Overdue' &&
+              task.dueDate != null &&
+              _isTaskOverdue(task));
 
-      switch (selectedTimeFilter) {
-        case 0: // All Time
-          return true;
-        case 1: // This Week
-          final weekStart = today.subtract(Duration(days: today.weekday - 1));
-          final weekEnd = weekStart.add(Duration(days: 6));
-          return dueDate.isAfter(weekStart.subtract(Duration(days: 1))) &&
-              dueDate.isBefore(weekEnd.add(Duration(days: 1)));
-        case 2: // This Month
-          return dueDate.year == now.year && dueDate.month == now.month;
-        case 3: // Next 3 Months
-          final threeMonthsFromNow = DateTime(now.year, now.month + 3);
-          return dueDate.isAfter(today.subtract(Duration(days: 1))) &&
-              dueDate.isBefore(threeMonthsFromNow);
-        case 4: // Overdue
-          return dueDate.isBefore(today) && !task.isCompleted;
-        default:
-          return true;
+      // Category filter
+      final matchesCategory =
+          categoryFilter == null || task.category == categoryFilter;
+
+      // Priority filter
+      final matchesPriority =
+          priorityFilter == null || priorityString(task) == priorityFilter;
+
+      // Recurrence filter
+      final matchesRecurrence =
+          recurrenceFilter == null ||
+          (recurrenceFilter == 'Recurring' &&
+              task.recurrenceType != RecurrenceType.none) ||
+          (recurrenceFilter == 'One-time' &&
+              task.recurrenceType == RecurrenceType.none);
+
+      // Date range filter
+      final matchesDateRange =
+          (dateFromFilter == null ||
+              (task.dueDate != null &&
+                  task.dueDate!.isAfter(dateFromFilter!))) &&
+          (dateToFilter == null ||
+              (task.dueDate != null &&
+                  task.dueDate!.isBefore(
+                    dateToFilter!.add(Duration(days: 1)),
+                  )));
+
+      // Overdue filter
+      final matchesOverdue =
+          !showOverdueOnly || (task.dueDate != null && _isTaskOverdue(task));
+
+      // Due soon filter (due within 3 days)
+      final matchesDueSoon =
+          statusFilter != 'Due Soon' ||
+          (statusFilter == 'Due Soon' && _isTaskDueSoon(task));
+
+      // Time filter
+      bool matchesTimeFilter = true;
+      if (task.dueDate == null) {
+        matchesTimeFilter = selectedTimeFilter == 0; // All Time
+      } else {
+        final dueDate = DateTime(
+          task.dueDate!.year,
+          task.dueDate!.month,
+          task.dueDate!.day,
+        );
+
+        switch (selectedTimeFilter) {
+          case 0: // All Time
+            matchesTimeFilter = true;
+            break;
+          case 1: // This Week
+            final weekStart = today.subtract(Duration(days: today.weekday - 1));
+            final weekEnd = weekStart.add(Duration(days: 6));
+            matchesTimeFilter =
+                dueDate.isAfter(weekStart.subtract(Duration(days: 1))) &&
+                dueDate.isBefore(weekEnd.add(Duration(days: 1)));
+            break;
+          case 2: // This Month
+            matchesTimeFilter =
+                dueDate.year == now.year && dueDate.month == now.month;
+            break;
+          case 3: // Next 3 Months
+            final threeMonthsFromNow = DateTime(now.year, now.month + 3);
+            matchesTimeFilter =
+                dueDate.isAfter(today.subtract(Duration(days: 1))) &&
+                dueDate.isBefore(threeMonthsFromNow);
+            break;
+          case 4: // Overdue
+            matchesTimeFilter = dueDate.isBefore(today) && !task.isCompleted;
+            break;
+          default:
+            matchesTimeFilter = true;
+        }
       }
+
+      return matchesSearch &&
+          matchesStatus &&
+          matchesCategory &&
+          matchesPriority &&
+          matchesRecurrence &&
+          matchesDateRange &&
+          matchesOverdue &&
+          matchesDueSoon &&
+          matchesTimeFilter;
     }).toList();
+
+    // Sort the filtered tasks
+    filteredTasks.sort((a, b) {
+      switch (sortOption) {
+        case TaskSortOption.dueDate:
+          // Get the effective scheduled time for each task
+          DateTime getEffectiveTime(Task task) {
+            if (task.dueDate == null) return DateTime(2100);
+
+            // If task has a specific timeOfDay, combine it with the dueDate
+            if (task.timeOfDay != null) {
+              return DateTime(
+                task.dueDate!.year,
+                task.dueDate!.month,
+                task.dueDate!.day,
+                task.timeOfDay!.hour,
+                task.timeOfDay!.minute,
+              );
+            }
+
+            // Otherwise use the dueDate as is
+            return task.dueDate!;
+          }
+
+          return getEffectiveTime(a).compareTo(getEffectiveTime(b));
+        case TaskSortOption.priority:
+          return priorityString(
+            b,
+          ).compareTo(priorityString(a)); // High > Medium > Low
+        case TaskSortOption.category:
+          return (a.category ?? '').compareTo(b.category ?? '');
+      }
+    });
+
+    return filteredTasks;
   }
 
   List<Task> _getFilteredTasksForMonthView() {
@@ -3828,13 +4136,48 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
       return []; // No date selected, show no tasks
     }
 
-    return tasks.where((task) {
+    final filteredTasks = tasks.where((task) {
       if (task.dueDate == null) return false;
 
       return task.dueDate!.year == selectedDate.year &&
           task.dueDate!.month == selectedDate.month &&
           task.dueDate!.day == selectedDate.day;
     }).toList();
+
+    // Sort the filtered tasks
+    filteredTasks.sort((a, b) {
+      switch (sortOption) {
+        case TaskSortOption.dueDate:
+          // Get the effective scheduled time for each task
+          DateTime getEffectiveTime(Task task) {
+            if (task.dueDate == null) return DateTime(2100);
+
+            // If task has a specific timeOfDay, combine it with the dueDate
+            if (task.timeOfDay != null) {
+              return DateTime(
+                task.dueDate!.year,
+                task.dueDate!.month,
+                task.dueDate!.day,
+                task.timeOfDay!.hour,
+                task.timeOfDay!.minute,
+              );
+            }
+
+            // Otherwise use the dueDate as is
+            return task.dueDate!;
+          }
+
+          return getEffectiveTime(a).compareTo(getEffectiveTime(b));
+        case TaskSortOption.priority:
+          return priorityString(
+            b,
+          ).compareTo(priorityString(a)); // High > Medium > Low
+        case TaskSortOption.category:
+          return (a.category ?? '').compareTo(b.category ?? '');
+      }
+    });
+
+    return filteredTasks;
   }
 
   Color _getPriorityColor(TaskPriority priority) {
@@ -3973,7 +4316,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                 TextSpan(
                   text: '$count',
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: Colors.grey[600],
                   ),
@@ -4001,6 +4344,11 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
         final isDark = Theme.of(context).brightness == Brightness.dark;
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            // Local variables for drag tracking
+            bool isDragging = false;
+            double dragStartX = 0;
+            double dragDistance = 0;
+
             return Dialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
@@ -4022,17 +4370,6 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      'Select Date',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: isDark
-                            ? Colors.white
-                            : LoggitColors.darkGrayText,
-                      ),
-                    ),
-                    SizedBox(height: 8),
                     // Month header with arrows
                     Container(
                       padding: EdgeInsets.symmetric(vertical: 8),
@@ -4106,18 +4443,65 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                       ),
                     ),
                     SizedBox(height: 4),
-                    // Calendar grid
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: _buildCalendarGrid(
-                        displayedMonth,
-                        tempDate,
-                        isDark,
-                        (selectedDate) {
+                    // Calendar grid with swipe gestures
+                    GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onHorizontalDragUpdate: (details) {
+                        // Track drag distance for swipe detection
+                        if (!isDragging) {
+                          isDragging = true;
+                          dragStartX = details.globalPosition.dx;
+                        }
+                        dragDistance = details.globalPosition.dx - dragStartX;
+                      },
+                      onHorizontalDragEnd: (details) {
+                        print(
+                          'Swipe detected: distance = $dragDistance, velocity = ${details.primaryVelocity}',
+                        );
+                        isDragging = false;
+
+                        // Use both distance and velocity for more reliable detection
+                        final distanceThreshold = 50.0;
+                        final velocityThreshold = 200.0;
+
+                        if (dragDistance > distanceThreshold ||
+                            details.primaryVelocity! > velocityThreshold) {
+                          print('Swiping right - going to previous month');
+                          // Swipe right - previous month
                           setDialogState(() {
-                            tempDate = selectedDate;
+                            displayedMonth = DateTime(
+                              displayedMonth.year,
+                              displayedMonth.month - 1,
+                            );
                           });
-                        },
+                        } else if (dragDistance < -distanceThreshold ||
+                            details.primaryVelocity! < -velocityThreshold) {
+                          print('Swiping left - going to next month');
+                          // Swipe left - next month
+                          setDialogState(() {
+                            displayedMonth = DateTime(
+                              displayedMonth.year,
+                              displayedMonth.month + 1,
+                            );
+                          });
+                        }
+
+                        // Reset drag tracking
+                        dragDistance = 0;
+                        dragStartX = 0;
+                      },
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        child: _buildCalendarGrid(
+                          displayedMonth,
+                          tempDate,
+                          isDark,
+                          (selectedDate) {
+                            setDialogState(() {
+                              tempDate = selectedDate;
+                            });
+                          },
+                        ),
                       ),
                     ),
                     SizedBox(height: 12),
@@ -4243,19 +4627,10 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                 dayNumber == today.day &&
                 displayedMonth.month == today.month &&
                 displayedMonth.year == today.year;
-            final selectedDate = _getSelectedDateForMonthView();
             final isSelected =
-                selectedDate != null &&
                 dayNumber == selectedDate.day &&
                 displayedMonth.month == selectedDate.month &&
                 displayedMonth.year == selectedDate.year;
-            final hasTasks = tasks.any(
-              (task) =>
-                  task.dueDate != null &&
-                  task.dueDate!.year == displayedMonth.year &&
-                  task.dueDate!.month == displayedMonth.month &&
-                  task.dueDate!.day == dayNumber,
-            );
 
             return Expanded(
               child: GestureDetector(
@@ -4297,17 +4672,6 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                               : Colors.transparent,
                         ),
                       ),
-                      SizedBox(height: 4),
-                      Container(
-                        height: 6,
-                        width: 6,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: hasTasks
-                              ? LoggitColors.teal
-                              : Colors.transparent,
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -4316,6 +4680,43 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
           }),
         );
       }),
+    );
+  }
+
+  Widget _buildSimpleFilterChip(String label, String filterValue, bool isDark) {
+    final isSelected = statusFilter == filterValue;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          statusFilter = filterValue;
+        });
+      },
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 180),
+        padding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? LoggitColors.teal.withOpacity(0.1)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          border: isSelected
+              ? Border.all(color: LoggitColors.teal, width: 2)
+              : null,
+        ),
+        child: Center(
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isSelected
+                  ? Colors.black
+                  : (isDark ? Colors.white : Colors.black),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -4541,13 +4942,15 @@ class OverlayDeleteTaskCard extends StatefulWidget {
   final Task task;
   final bool isDark;
   final VoidCallback onDelete;
-  final ValueNotifier<Task?> openDeleteTask;
+  final ValueNotifier<String?> openDeleteTaskTitle;
+  final VoidCallback? onTap;
   const OverlayDeleteTaskCard({
     required this.child,
     required this.task,
     required this.isDark,
     required this.onDelete,
-    required this.openDeleteTask,
+    required this.openDeleteTaskTitle,
+    this.onTap,
   });
   @override
   State<OverlayDeleteTaskCard> createState() => _OverlayDeleteTaskCardState();
@@ -4557,12 +4960,12 @@ class _OverlayDeleteTaskCardState extends State<OverlayDeleteTaskCard> {
   @override
   void initState() {
     super.initState();
-    widget.openDeleteTask.addListener(_onOpenDeleteChanged);
+    widget.openDeleteTaskTitle.addListener(_onOpenDeleteChanged);
   }
 
   @override
   void dispose() {
-    widget.openDeleteTask.removeListener(_onOpenDeleteChanged);
+    widget.openDeleteTaskTitle.removeListener(_onOpenDeleteChanged);
     super.dispose();
   }
 
@@ -4572,27 +4975,25 @@ class _OverlayDeleteTaskCardState extends State<OverlayDeleteTaskCard> {
 
   void _onHorizontalDragUpdate(DragUpdateDetails details) {
     if (details.delta.dx < -2) {
-      widget.openDeleteTask.value = widget.task;
+      print('Drag detected for task: ${widget.task.title}');
+      widget.openDeleteTaskTitle.value = widget.task.title;
     }
   }
 
   void _onHorizontalDragEnd(DragEndDetails details) {}
-  void _onLongPress() {
-    widget.openDeleteTask.value = widget.task;
-  }
 
   @override
   Widget build(BuildContext context) {
-    final showDelete = widget.openDeleteTask.value == widget.task;
+    final showDelete = widget.openDeleteTaskTitle.value == widget.task.title;
     return Stack(
       children: [
         widget.child,
         AnimatedPositioned(
-          duration: Duration(milliseconds: 250),
+          duration: Duration(milliseconds: 300),
           curve: Curves.easeInOut,
-          top: 3,
-          bottom: 3,
-          right: showDelete ? 0 : -64,
+          top: 8,
+          bottom: 8,
+          right: showDelete ? 0 : -56,
           width: 56,
           child: AnimatedOpacity(
             duration: Duration(milliseconds: 200),
@@ -4620,11 +5021,21 @@ class _OverlayDeleteTaskCardState extends State<OverlayDeleteTaskCard> {
           behavior: HitTestBehavior.translucent,
           onHorizontalDragUpdate: _onHorizontalDragUpdate,
           onHorizontalDragEnd: _onHorizontalDragEnd,
-          onLongPress: _onLongPress,
+          onTap: () {
+            if (showDelete) {
+              widget.openDeleteTaskTitle.value = null;
+              return;
+            }
+            // Only open task modal if no delete button is open anywhere
+            if (widget.openDeleteTaskTitle.value == null &&
+                widget.onTap != null) {
+              widget.onTap!();
+            }
+          },
           child: Align(
             alignment: Alignment.centerLeft,
             child: FractionallySizedBox(
-              widthFactor: 0.8,
+              widthFactor: 0.7,
               child: Container(height: 80, color: Colors.transparent),
             ),
           ),

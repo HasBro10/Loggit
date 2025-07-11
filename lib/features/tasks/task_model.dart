@@ -165,4 +165,42 @@ class Task implements LogEntry {
 
   @override
   String get logType => 'task';
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is Task &&
+        other.title == title &&
+        other.description == description &&
+        other.dueDate == dueDate &&
+        other.isCompleted == isCompleted &&
+        other.timestamp == timestamp &&
+        other.category == category &&
+        other.recurrenceType == recurrenceType &&
+        other.customDays == customDays &&
+        other.interval == interval &&
+        other.timeOfDay == timeOfDay &&
+        other.priority == priority &&
+        other.status == status &&
+        other.reminder == reminder;
+  }
+
+  @override
+  int get hashCode {
+    return Object.hash(
+      title,
+      description,
+      dueDate,
+      isCompleted,
+      timestamp,
+      category,
+      recurrenceType,
+      customDays,
+      interval,
+      timeOfDay,
+      priority,
+      status,
+      reminder,
+    );
+  }
 }

@@ -2,6 +2,8 @@
 
 A personal productivity app built with Flutter for logging expenses, tasks, reminders, notes, and gym workouts through natural language chat.
 
+**Timeline Test**: This line was added to test VS Code's timeline feature.
+
 ## Features
 
 - **Chat Interface**: Log entries using natural language
