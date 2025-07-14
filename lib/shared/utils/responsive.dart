@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:math';
 
 /// Global responsive utilities for Loggit
 class Responsive {

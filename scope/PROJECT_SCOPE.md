@@ -93,6 +93,7 @@ This document outlines the phases, goals, and features of the Loggit app. Each p
       - [x] Notes (e.g. "Note: Client prefers phone calls.")
       - [x] Gym logs (e.g. "Squats 3 sets x 10 reps.")
     - [x] Test parsing for edge cases
+    - [x] **For comprehensive NLP patterns and smart responses, see: `scope/CHAT_NLP-SCOPE.MD`**
 
   - [x] Confirmation Prompts
     - [x] Display confirmation for:
@@ -233,7 +234,6 @@ This document outlines the phases, goals, and features of the Loggit app. Each p
     - [ ] Provide full reports and exports
     - [ ] Enable multi-device sync
     - [ ] Allow multiple business profiles
-    - [ ] Unlock AI analytics when available
 
   - [ ] Subscription Payments
     - [ ] Integrate Google Play billing
@@ -244,38 +244,6 @@ This document outlines the phases, goals, and features of the Loggit app. Each p
   - [ ] Feature Gating
     - [ ] Lock premium features if subscription inactive
     - [ ] Show upgrade prompts for locked features
-
----
-
-- [ ] **Phase 5: AI & Smart Analytics**
-
-  - [ ] Natural-Language Summaries
-    - [ ] Generate summaries like:
-      ```
-      This month, you spent £120 on dining out, 30% more than last month.
-      ```
-    - [ ] Display summaries in dashboard
-
-  - [ ] Smart Suggestions
-    - [ ] Auto-categorize expenses
-    - [ ] Suggest cost-saving opportunities
-    - [ ] Provide tax reminders for business logs
-
-  - [ ] Predictive Analytics
-    - [ ] Create cash flow projection charts
-    - [ ] Identify spending trends
-
-  - [ ] Conversational Q&A
-    - [ ] Accept questions like:
-      ```
-      How much did I spend on groceries last month?
-      ```
-    - [ ] Fetch and display accurate answers
-
-  - [ ] Future Integrations
-    - [ ] OpenAI API integration
-    - [ ] Supabase Edge Functions with AI
-    - [ ] Explore local on-device AI for privacy
 
 ---
 
@@ -313,4 +281,3 @@ This document outlines the phases, goals, and features of the Loggit app. Each p
   - [ ] Receipt uploads
   - [ ] Advanced analytics
   - [ ] Exports and reports
-  - [ ] AI insights

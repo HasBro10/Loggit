@@ -14,6 +14,8 @@ import 'features/tasks/tasks_screen_new.dart';
 import 'shared/design/color_guide.dart';
 import 'package:device_preview/device_preview.dart';
 import 'package:flutter/foundation.dart';
+import 'features/reminders/reminders_screen.dart';
+import 'services/reminders_service.dart';
 
 void main() {
   runApp(
@@ -347,10 +349,13 @@ class _LoggitHomeState extends State<LoggitHome> {
   }
 
   void _addReminder(Reminder reminder) async {
+    print('Adding reminder: ${reminder.title} at ${reminder.reminderTime}');
     setState(() {
       _reminders.add(reminder);
     });
-    await _saveReminders();
+    print('Total reminders after adding: ${_reminders.length}');
+    await RemindersService.addReminder(reminder);
+    print('Reminder saved to persistent storage');
   }
 
   void _addNote(Note note) async {
@@ -402,6 +407,16 @@ class _LoggitHomeState extends State<LoggitHome> {
               });
             }
           },
+          onShowReminders: () {
+            final remindersIndex = _favorites.indexWhere(
+              (f) => f.type == FeatureType.reminders,
+            );
+            if (remindersIndex != -1) {
+              setState(() {
+                _currentTabIndex = remindersIndex;
+              });
+            }
+          },
           onThemeToggle: widget.onThemeToggle,
           currentThemeMode: widget.currentThemeMode,
         );
@@ -421,29 +436,23 @@ class _LoggitHomeState extends State<LoggitHome> {
           },
         );
       case FeatureType.reminders:
-        return _buildRemindersTab();
+        return RemindersScreen(
+          onBack: () {
+            final chatIndex = _favorites.indexWhere(
+              (f) => f.type == FeatureType.chat,
+            );
+            if (chatIndex != -1) {
+              setState(() {
+                _currentTabIndex = chatIndex;
+              });
+            }
+          },
+        );
       case FeatureType.notes:
         return _buildNotesTab();
       case FeatureType.gymLogs:
         return _buildGymLogsTab();
     }
-  }
-
-  Widget _buildRemindersTab() {
-    final theme = Theme.of(context);
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        _buildSectionHeader('Reminders', Icons.alarm, _reminders.length),
-        if (_reminders.isEmpty)
-          _buildEmptyState(
-            'No reminders yet',
-            'Try saying "Remind me to buy milk"',
-          )
-        else
-          ..._reminders.map((reminder) => _buildReminderCard(reminder)),
-      ],
-    );
   }
 
   Widget _buildNotesTab() {

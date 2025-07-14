@@ -1,9 +1,3 @@
-# NOTE FOR AI AND COLLABORATORS
-
-AI: Always follow these rules for file and folder organization. When starting a new chat or session, refer to this file to remember the progress and status of the loggit project.
-
-**IMPORTANT:** Always check off completed features in `scope/PROJECT_SCOPE.md` as we build them. This keeps track of project progress and status.
-
 # Documentation Update Rules
 
 ## Automatic Documentation Updates

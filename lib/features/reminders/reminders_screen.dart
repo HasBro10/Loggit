@@ -5,6 +5,7 @@ import '../../shared/utils/responsive.dart';
 import '../../services/reminders_service.dart';
 import 'reminder_model.dart';
 import 'reminder_edit_modal.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 
 class RemindersScreen extends StatefulWidget {
   final VoidCallback onBack;
@@ -15,26 +16,31 @@ class RemindersScreen extends StatefulWidget {
 }
 
 class _RemindersScreenState extends State<RemindersScreen> {
-  // Set default selectedDayIndex to today
-  late int selectedDayIndex;
-  int selectedFilter = -1; // -1 means no filter selected
-  final List<String> days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu'];
-  final List<int> dates = [14, 16, 17, 18, 19];
+  // Dynamic date bar state
+  int selectedDayIndex = 0; // 0 = Today
+  late List<String> days;
+  late List<int> dates;
+
+  int selectedFilter = 0; // 0 means "All" filter selected by default
 
   List<Reminder> reminders = [];
   bool isLoading = true;
   final TextEditingController _searchController = TextEditingController();
   String searchQuery = '';
 
+  final ValueNotifier<String?> openDeleteReminderTitle = ValueNotifier<String?>(
+    null,
+  );
+
   @override
   void initState() {
     super.initState();
-    // Set selectedDayIndex to today's day
-    final today = DateTime.now();
-    final weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    final todayAbbr = weekDays[today.weekday % 7];
-    final idx = days.indexOf(todayAbbr);
-    selectedDayIndex = idx >= 0 ? idx : 0;
+    _generateDynamicDates();
+    // Default to current date (today) when page loads
+    selectedFilter = 0; // "All" filter
+    selectedDayIndex = 0; // Today (current date) selected by default
+    // Close any open delete overlay when page loads
+    openDeleteReminderTitle.value = null;
     // Add dummy reminders for demo if list is empty
     if (reminders.isEmpty) {
       reminders = [
@@ -209,9 +215,33 @@ class _RemindersScreenState extends State<RemindersScreen> {
     });
   }
 
+  void _generateDynamicDates() {
+    final today = DateTime.now();
+    final weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    days = [];
+    dates = [];
+    for (int i = 0; i < 14; i++) {
+      final date = today.add(Duration(days: i));
+      days.add(weekDays[date.weekday % 7]);
+      dates.add(date.day);
+    }
+    selectedDayIndex = 0;
+  }
+
+  String _getUserFriendlyDateLabel(int index) {
+    if (index == 0) return 'Today';
+    if (index == 1) return 'Tomorrow';
+    final weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    final today = DateTime.now();
+    final targetDate = today.add(Duration(days: index));
+    return weekDays[targetDate.weekday % 7];
+  }
+
   Future<void> _loadReminders() async {
     setState(() => isLoading = true);
     reminders = await RemindersService.loadReminders();
+    // Sort reminders by time (soonest first)
+    reminders.sort((a, b) => a.reminderTime.compareTo(b.reminderTime));
     if (reminders.isEmpty) {
       reminders = [
         Reminder(
@@ -322,7 +352,14 @@ class _RemindersScreenState extends State<RemindersScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    // Close any open delete overlay when disposing
+    openDeleteReminderTitle.value = null;
     super.dispose();
+  }
+
+  // Method to close any open delete overlay
+  void _closeDeleteOverlay() {
+    openDeleteReminderTitle.value = null;
   }
 
   @override
@@ -344,74 +381,78 @@ class _RemindersScreenState extends State<RemindersScreen> {
             dates[selectedDayIndex],
           )
         : null;
-    // Filter reminders by selected date (ignore time), including recurrence
-    List<Reminder> filteredReminders = reminders.where((r) {
-      // If "All" filter is selected, show all reminders regardless of date
-      if (selectedFilter == 0) {
-        return true;
-      }
+    // Filter reminders based on selected filter and date
+    List<Reminder> filteredReminders = [];
 
-      // If a specific date is selected, filter by that date
-      if (selectedDayIndex >= 0 && selectedDate != null) {
-        // If not recurring, match date
-        if (r.recurrenceType == RecurrenceType.none) {
-          return r.reminderTime.year == selectedDate.year &&
-              r.reminderTime.month == selectedDate.month &&
-              r.reminderTime.day == selectedDate.day;
+    switch (selectedFilter) {
+      case 0: // All
+        // If a specific date is selected, filter by that date
+        if (selectedDayIndex >= 0 && selectedDate != null) {
+          filteredReminders = reminders.where((r) {
+            // If not recurring, match date
+            if (r.recurrenceType == RecurrenceType.none) {
+              return r.reminderTime.year == selectedDate.year &&
+                  r.reminderTime.month == selectedDate.month &&
+                  r.reminderTime.day == selectedDate.day;
+            }
+            // If recurring, check if selectedDate is in recurrence
+            if (r.endDate != null && selectedDate.isAfter(r.endDate!))
+              return false;
+            if (selectedDate.isBefore(r.reminderTime)) return false;
+            switch (r.recurrenceType) {
+              case RecurrenceType.daily:
+                return !_isAfterEnd(r, selectedDate) &&
+                    !selectedDate.isBefore(r.reminderTime);
+              case RecurrenceType.weekly:
+                return !_isAfterEnd(r, selectedDate) &&
+                    selectedDate.weekday == r.reminderTime.weekday &&
+                    !selectedDate.isBefore(r.reminderTime);
+              case RecurrenceType.monthly:
+                return !_isAfterEnd(r, selectedDate) &&
+                    selectedDate.day == r.reminderTime.day &&
+                    !selectedDate.isBefore(r.reminderTime);
+              case RecurrenceType.custom:
+                return !_isAfterEnd(r, selectedDate) &&
+                    r.customDays?.contains(selectedDate.weekday) == true &&
+                    !selectedDate.isBefore(r.reminderTime);
+              case RecurrenceType.everyNDays:
+                if (r.interval == null || r.interval! < 1) return false;
+                final diff = selectedDate.difference(r.reminderTime).inDays;
+                return diff % r.interval! == 0 &&
+                    diff >= 0 &&
+                    !_isAfterEnd(r, selectedDate);
+              case RecurrenceType.everyNWeeks:
+                if (r.interval == null || r.interval! < 1) return false;
+                final diff = selectedDate.difference(r.reminderTime).inDays;
+                return (diff ~/ 7) % r.interval! == 0 &&
+                    diff >= 0 &&
+                    !_isAfterEnd(r, selectedDate);
+              case RecurrenceType.everyNMonths:
+                if (r.interval == null || r.interval! < 1) return false;
+                final monthsDiff =
+                    (selectedDate.year - r.reminderTime.year) * 12 +
+                    (selectedDate.month - r.reminderTime.month);
+                return monthsDiff % r.interval! == 0 &&
+                    selectedDate.day == r.reminderTime.day &&
+                    monthsDiff >= 0 &&
+                    !_isAfterEnd(r, selectedDate);
+              case RecurrenceType.none:
+                return false;
+            }
+          }).toList();
+        } else {
+          // No specific date selected, show all reminders
+          filteredReminders = reminders;
         }
-        // If recurring, check if selectedDate is in recurrence
-        if (r.endDate != null && selectedDate.isAfter(r.endDate!)) return false;
-        if (selectedDate.isBefore(r.reminderTime)) return false;
-        switch (r.recurrenceType) {
-          case RecurrenceType.daily:
-            return !_isAfterEnd(r, selectedDate) &&
-                !selectedDate.isBefore(r.reminderTime);
-          case RecurrenceType.weekly:
-            return !_isAfterEnd(r, selectedDate) &&
-                selectedDate.weekday == r.reminderTime.weekday &&
-                !selectedDate.isBefore(r.reminderTime);
-          case RecurrenceType.monthly:
-            return !_isAfterEnd(r, selectedDate) &&
-                selectedDate.day == r.reminderTime.day &&
-                !selectedDate.isBefore(r.reminderTime);
-          case RecurrenceType.custom:
-            return !_isAfterEnd(r, selectedDate) &&
-                r.customDays?.contains(selectedDate.weekday) == true &&
-                !selectedDate.isBefore(r.reminderTime);
-          case RecurrenceType.everyNDays:
-            if (r.interval == null || r.interval! < 1) return false;
-            final diff = selectedDate.difference(r.reminderTime).inDays;
-            return diff % r.interval! == 0 &&
-                diff >= 0 &&
-                !_isAfterEnd(r, selectedDate);
-          case RecurrenceType.everyNWeeks:
-            if (r.interval == null || r.interval! < 1) return false;
-            final diff = selectedDate.difference(r.reminderTime).inDays;
-            return (diff ~/ 7) % r.interval! == 0 &&
-                diff >= 0 &&
-                !_isAfterEnd(r, selectedDate);
-          case RecurrenceType.everyNMonths:
-            if (r.interval == null || r.interval! < 1) return false;
-            final monthsDiff =
-                (selectedDate.year - r.reminderTime.year) * 12 +
-                (selectedDate.month - r.reminderTime.month);
-            return monthsDiff % r.interval! == 0 &&
-                selectedDate.day == r.reminderTime.day &&
-                monthsDiff >= 0 &&
-                !_isAfterEnd(r, selectedDate);
-          case RecurrenceType.none:
-            return false;
-        }
-      }
-
-      // If no date is selected and not "All" filter, show nothing
-      return false;
-    }).toList();
-    // Further filter by status (only if not "All" filter)
-    if (selectedFilter == 1) {
-      filteredReminders = filteredReminders
-          .where((r) => r.isCompleted)
-          .toList();
+        break;
+      case 1: // Upcoming
+        filteredReminders = reminders.where((r) => !r.isCompleted).toList();
+        break;
+      case 2: // Completed
+        filteredReminders = reminders.where((r) => r.isCompleted).toList();
+        break;
+      default:
+        filteredReminders = reminders;
     }
     // Further filter by search query
     if (searchQuery.isNotEmpty) {
@@ -488,7 +529,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
                       // Date selector bar with background
                       Container(
                         decoration: BoxDecoration(
-                          color: Color(0xFFF1F5F9), // Light background
+                          color: Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
@@ -499,49 +540,58 @@ class _RemindersScreenState extends State<RemindersScreen> {
                           ],
                         ),
                         child: SizedBox(
-                          height: 64,
+                          height: 76,
                           child: ListView.builder(
                             scrollDirection: Axis.horizontal,
                             itemCount: days.length,
                             padding: const EdgeInsets.symmetric(horizontal: 8),
                             physics: BouncingScrollPhysics(),
+                            shrinkWrap: true,
                             itemBuilder: (context, i) {
-                              final selected =
-                                  i == selectedDayIndex &&
-                                  selectedDayIndex >= 0;
+                              final selected = i == selectedDayIndex;
                               return GestureDetector(
                                 onTap: () {
                                   setState(() {
                                     selectedDayIndex = i;
-                                    selectedFilter =
-                                        -1; // Deselect 'All' filter
+                                    // Keep filter as "All" when selecting a date
+                                    // selectedFilter = -1; // Removed this line
+                                    // Close any open delete overlay when selecting a date
+                                    _closeDeleteOverlay();
                                   });
                                 },
                                 child: AnimatedContainer(
                                   duration: Duration(milliseconds: 180),
                                   margin: EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: pillVMargin - 2,
+                                    horizontal: 4,
+                                    vertical: 8,
                                   ),
                                   padding: EdgeInsets.symmetric(
-                                    horizontal: pillHPadding,
-                                    vertical: pillVPadding - 2,
+                                    horizontal: 12,
+                                    vertical: 4,
                                   ),
                                   decoration: BoxDecoration(
                                     color: selected
-                                        ? Color(0xFF1CCFCF)
+                                        ? LoggitColors.teal.withOpacity(0.1)
                                         : Colors.transparent,
                                     borderRadius: BorderRadius.circular(16),
+                                    border: (i == 0 || selected)
+                                        ? Border.all(
+                                            color: LoggitColors.teal,
+                                            width: 2,
+                                          )
+                                        : null,
                                   ),
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Text(
-                                        days[i],
+                                        _getUserFriendlyDateLabel(i),
                                         style: TextStyle(
-                                          fontSize: dayFontSize,
+                                          fontSize: 12,
                                           color: selected
-                                              ? Colors.white
+                                              ? Colors.black
+                                              : i == 0
+                                              ? LoggitColors.teal
                                               : Colors.grey[600],
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -550,9 +600,11 @@ class _RemindersScreenState extends State<RemindersScreen> {
                                       Text(
                                         dates[i].toString(),
                                         style: TextStyle(
-                                          fontSize: dateFontSize,
+                                          fontSize: 16,
                                           color: selected
-                                              ? Colors.white
+                                              ? Colors.black
+                                              : i == 0
+                                              ? LoggitColors.teal
                                               : Colors.grey[800],
                                           fontWeight: FontWeight.bold,
                                         ),
@@ -568,9 +620,13 @@ class _RemindersScreenState extends State<RemindersScreen> {
                       SizedBox(height: LoggitSpacing.lg),
                       // Filter chips
                       Row(
-                        children: List.generate(2, (i) {
-                          final labels = ['All', 'Completed'];
-                          final selected = i == selectedFilter;
+                        children: List.generate(3, (i) {
+                          final labels = ['All', 'Upcoming', 'Completed'];
+                          // "All" is selected only when no specific date is selected (selectedDayIndex == -1)
+                          // When current date is default (selectedDayIndex == 0), "All" should not be highlighted
+                          final selected = i == 0
+                              ? selectedDayIndex == -1
+                              : i == selectedFilter;
                           return Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: ChoiceChip(
@@ -585,11 +641,11 @@ class _RemindersScreenState extends State<RemindersScreen> {
                               selected: selected,
                               onSelected: (_) {
                                 setState(() {
+                                  // Clear date selection when any filter is selected
+                                  selectedDayIndex = -1;
                                   selectedFilter = i;
-                                  // If "All" is selected, deselect any date
-                                  if (i == 0) {
-                                    selectedDayIndex = -1;
-                                  }
+                                  // Close any open delete overlay when changing filters
+                                  _closeDeleteOverlay();
                                 });
                               },
                               selectedColor: LoggitColors.teal,
@@ -667,20 +723,6 @@ class _RemindersScreenState extends State<RemindersScreen> {
                               color: Colors.black,
                             ),
                           ),
-                          if (selectedDayIndex >= 0)
-                            Text(
-                              '${days[selectedDayIndex]} ${DateTime.now().month}/${DateTime.now().year}',
-                              style: TextStyle(
-                                fontSize: Responsive.responsiveFont(
-                                  context,
-                                  14,
-                                  min: 10,
-                                  max: 20,
-                                ),
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.normal,
-                              ),
-                            ),
                         ],
                       ),
                       SizedBox(height: LoggitSpacing.md),
@@ -688,150 +730,447 @@ class _RemindersScreenState extends State<RemindersScreen> {
                       ...filteredReminders.map(
                         (r) => Container(
                           margin: const EdgeInsets.only(bottom: 16),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(18),
-                            onTap: () async {
-                              final result = await showReminderEditModal(
-                                context,
-                                initial: r,
+                          child: OverlayDeleteReminderCard(
+                            reminder: r,
+                            openDeleteReminderTitle: openDeleteReminderTitle,
+                            onDelete: (ctx) async {
+                              final confirm = await showDialog<bool>(
+                                context: ctx,
+                                builder: (ctx2) => AlertDialog(
+                                  title: Text('Delete Reminder'),
+                                  content: Text(
+                                    'Are you sure you want to delete this reminder?',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(ctx2, false),
+                                      child: Text('Cancel'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(ctx2, true),
+                                      child: Text(
+                                        'Delete',
+                                        style: TextStyle(color: Colors.red),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               );
-                              if (result is Reminder) {
-                                await RemindersService.updateReminder(result);
+                              if (confirm == true) {
+                                await RemindersService.deleteReminder(r);
                                 await _loadReminders();
                               }
-                              if (result == 'delete') {
-                                final confirm = await showDialog<bool>(
-                                  context: context,
-                                  builder: (ctx) => AlertDialog(
-                                    title: Text('Delete Reminder'),
-                                    content: Text(
-                                      'Are you sure you want to delete this reminder?',
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(ctx, false),
-                                        child: Text('Cancel'),
-                                      ),
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(ctx, true),
-                                        child: Text(
-                                          'Delete',
-                                          style: TextStyle(color: Colors.red),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                                if (confirm == true) {
-                                  await RemindersService.deleteReminder(r);
-                                  await _loadReminders();
-                                }
-                              }
                             },
-                            child: Container(
-                              padding: const EdgeInsets.all(16),
+                            child: AnimatedContainer(
+                              duration: Duration(milliseconds: 120),
+                              padding: const EdgeInsets.all(18),
                               decoration: BoxDecoration(
                                 color: Colors.white,
-                                borderRadius: BorderRadius.circular(18),
+                                borderRadius: BorderRadius.circular(24),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.08),
-                                    blurRadius: 12,
-                                    offset: Offset(0, 4),
+                                    color: Colors.black.withOpacity(0.10),
+                                    blurRadius: 16,
+                                    offset: Offset(0, 6),
                                   ),
                                 ],
+                                border: Border.all(
+                                  color: r.isCompleted
+                                      ? LoggitColors.teal.withOpacity(0.55)
+                                      : Colors.orange.withOpacity(0.55),
+                                  width: 2,
+                                ),
                               ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                              child: Stack(
                                 children: [
-                                  Text(
-                                    r.title,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: Responsive.responsiveFont(
-                                        context,
-                                        17,
-                                        min: 12,
-                                        max: 24,
-                                      ),
-                                      color: Colors.black,
-                                    ),
-                                  ),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    _formatDateTime(r.reminderTime),
-                                    style: TextStyle(
-                                      fontSize: Responsive.responsiveFont(
-                                        context,
-                                        13,
-                                        min: 10,
-                                        max: 18,
-                                      ),
-                                      color: Colors.grey[600],
-                                    ),
-                                  ),
-                                  if (r.recurrenceType != RecurrenceType.none)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 2),
-                                      child: Text(
-                                        _recurrenceText(r),
-                                        style: TextStyle(
-                                          fontSize: Responsive.responsiveFont(
-                                            context,
-                                            12,
-                                            min: 9,
-                                            max: 16,
-                                          ),
-                                          color: Colors.teal[700],
-                                        ),
-                                      ),
-                                    ),
-                                  SizedBox(height: 10),
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 4,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: r.isCompleted
-                                              ? Colors.green.withOpacity(0.1)
-                                              : Colors.orange.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
+                                  // Main card content (tappable for edit, excludes checkbox area)
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                      top: 0,
+                                      right: 36,
+                                    ), // leave space for checkbox
+                                    child: GestureDetector(
+                                      onHorizontalDragUpdate: (details) {
+                                        if (details.delta.dx < -2) {
+                                          openDeleteReminderTitle.value =
+                                              r.title +
+                                              r.reminderTime.toString();
+                                        }
+                                      },
+                                      onHorizontalDragEnd: (details) {},
+                                      onTap: () {
+                                        // Close any open delete overlay when tapping the card
+                                        if (openDeleteReminderTitle.value !=
+                                            null) {
+                                          openDeleteReminderTitle.value = null;
+                                          return;
+                                        }
+                                      },
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(24),
+                                        onTap: () async {
+                                          if (openDeleteReminderTitle.value !=
+                                              null) {
+                                            openDeleteReminderTitle.value =
+                                                null;
+                                            return;
+                                          }
+                                          final result =
+                                              await showReminderEditModal(
+                                                context,
+                                                initial: r,
+                                              );
+                                          if (result is Reminder) {
+                                            await RemindersService.updateReminder(
+                                              result,
+                                            );
+                                            await _loadReminders();
+                                          }
+                                          if (result == 'delete') {
+                                            final confirm = await showDialog<bool>(
+                                              context: context,
+                                              builder: (ctx) => AlertDialog(
+                                                title: Text('Delete Reminder'),
+                                                content: Text(
+                                                  'Are you sure you want to delete this reminder?',
+                                                ),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () =>
+                                                        Navigator.pop(
+                                                          ctx,
+                                                          false,
+                                                        ),
+                                                    child: Text('Cancel'),
+                                                  ),
+                                                  TextButton(
+                                                    onPressed: () =>
+                                                        Navigator.pop(
+                                                          ctx,
+                                                          true,
+                                                        ),
+                                                    child: Text(
+                                                      'Delete',
+                                                      style: TextStyle(
+                                                        color: Colors.red,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                            if (confirm == true) {
+                                              await RemindersService.deleteReminder(
+                                                r,
+                                              );
+                                              await _loadReminders();
+                                            }
+                                          }
+                                        },
                                         child: Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
-                                            Icon(
-                                              r.isCompleted
-                                                  ? Icons.check_circle
-                                                  : Icons.hourglass_empty,
-                                              color: r.isCompleted
-                                                  ? Colors.green
-                                                  : Colors.orange,
-                                              size: 16,
+                                            // Accent icon - status indicator only
+                                            Column(
+                                              children: [
+                                                Container(
+                                                  width: 44,
+                                                  height: 44,
+                                                  decoration: BoxDecoration(
+                                                    color:
+                                                        _getBellBackgroundColor(
+                                                          r,
+                                                        ),
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: Icon(
+                                                    _getBellIcon(r),
+                                                    color: _getBellIconColor(r),
+                                                    size: 26,
+                                                  ),
+                                                ),
+                                                SizedBox(height: 4),
+                                                Text(
+                                                  _getBellStatusText(r),
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w500,
+                                                    color: _getBellStatusColor(
+                                                      r,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                            SizedBox(width: 4),
-                                            Text(
-                                              r.isCompleted
-                                                  ? 'Completed'
-                                                  : 'Pending',
-                                              style: TextStyle(
-                                                color: r.isCompleted
-                                                    ? Colors.green
-                                                    : Colors.orange,
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: 13,
+                                            SizedBox(width: 16),
+                                            // Main content
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    r.title,
+                                                    style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize:
+                                                          Responsive.responsiveFont(
+                                                            context,
+                                                            17,
+                                                            min: 12,
+                                                            max: 24,
+                                                          ),
+                                                      color: Colors.black,
+                                                    ),
+                                                  ),
+                                                  SizedBox(height: 4),
+                                                  Row(
+                                                    children: [
+                                                      Icon(
+                                                        Icons.calendar_today,
+                                                        size: 15,
+                                                        color: Colors.grey[500],
+                                                      ),
+                                                      SizedBox(width: 4),
+                                                      Text(
+                                                        _formatDateTime(
+                                                          r.reminderTime,
+                                                        ),
+                                                        style: TextStyle(
+                                                          fontSize:
+                                                              Responsive.responsiveFont(
+                                                                context,
+                                                                13,
+                                                                min: 10,
+                                                                max: 18,
+                                                              ),
+                                                          color:
+                                                              Colors.grey[600],
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  if (r.description != null &&
+                                                      r
+                                                          .description!
+                                                          .isNotEmpty) ...[
+                                                    SizedBox(height: 6),
+                                                    Text(
+                                                      r.description!,
+                                                      style: TextStyle(
+                                                        fontSize:
+                                                            Responsive.responsiveFont(
+                                                              context,
+                                                              14,
+                                                              min: 11,
+                                                              max: 18,
+                                                            ),
+                                                        color: Colors.grey[700],
+                                                      ),
+                                                    ),
+                                                  ],
+                                                  SizedBox(height: 10),
+                                                  // Status pill aligned to the left
+                                                  Container(
+                                                    padding:
+                                                        EdgeInsets.symmetric(
+                                                          horizontal: 12,
+                                                          vertical: 5,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: r.isCompleted
+                                                          ? Colors.green
+                                                                .withOpacity(
+                                                                  0.13,
+                                                                )
+                                                          : Colors.orange
+                                                                .withOpacity(
+                                                                  0.13,
+                                                                ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            14,
+                                                          ),
+                                                    ),
+                                                    child: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        Icon(
+                                                          r.isCompleted
+                                                              ? Icons
+                                                                    .check_circle
+                                                              : Icons
+                                                                    .hourglass_empty,
+                                                          color: r.isCompleted
+                                                              ? Colors.green
+                                                              : Colors.orange,
+                                                          size: 15,
+                                                        ),
+                                                        SizedBox(width: 4),
+                                                        Text(
+                                                          r.isCompleted
+                                                              ? 'Completed'
+                                                              : 'Upcoming',
+                                                          style: TextStyle(
+                                                            color: r.isCompleted
+                                                                ? Colors.green
+                                                                : Colors.orange,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            fontSize: 13,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                             ),
                                           ],
                                         ),
                                       ),
-                                    ],
+                                    ),
+                                  ),
+                                  // Circular checkbox in top right (always tappable)
+                                  Positioned(
+                                    top: 0,
+                                    right: 0,
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior
+                                          .translucent, // Ensure all taps are caught
+                                      onTap: () async {
+                                        print(
+                                          'Checkbox tapped for reminder: ${r.title}',
+                                        );
+                                        if (!r.isCompleted) {
+                                          final confirm = await showDialog<bool>(
+                                            context: context,
+                                            builder: (ctx) => AlertDialog(
+                                              backgroundColor: Colors.white,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(20),
+                                              ),
+                                              title: Text(
+                                                'Mark as Complete?',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 18,
+                                                  color: Colors.black,
+                                                ),
+                                              ),
+                                              content: Text(
+                                                'Are you sure you want to mark this reminder as complete?',
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  color: Colors.grey[700],
+                                                ),
+                                              ),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(ctx, false),
+                                                  child: Text(
+                                                    'Cancel',
+                                                    style: TextStyle(
+                                                      color: Colors.grey[600],
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                ),
+                                                ElevatedButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(ctx, true),
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor:
+                                                        LoggitColors.teal,
+                                                    foregroundColor:
+                                                        Colors.white,
+                                                    shape: RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            12,
+                                                          ),
+                                                    ),
+                                                    elevation: 0,
+                                                  ),
+                                                  child: Text(
+                                                    'Complete',
+                                                    style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                          if (confirm != true) {
+                                            print(
+                                              'User cancelled marking as complete',
+                                            );
+                                            return;
+                                          }
+                                        }
+                                        print(
+                                          'Updating reminder completion status...',
+                                        );
+                                        final updated = r.copyWith(
+                                          isCompleted: !r.isCompleted,
+                                        );
+                                        print(
+                                          'Updated reminder isCompleted: ${updated.isCompleted}',
+                                        );
+                                        await RemindersService.updateReminder(
+                                          updated,
+                                        );
+                                        print('Reminder updated in storage');
+
+                                        // Update the local reminders list directly
+                                        final index = reminders.indexWhere(
+                                          (reminder) =>
+                                              reminder.timestamp == r.timestamp,
+                                        );
+                                        if (index != -1) {
+                                          reminders[index] = updated;
+                                          setState(() {});
+                                          print(
+                                            'Local reminders list updated, UI rebuilt',
+                                          );
+                                        }
+                                      },
+                                      child: Container(
+                                        width: 28, // Reduced from 36
+                                        height: 28, // Reduced from 36
+                                        alignment: Alignment.center,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: r.isCompleted
+                                                ? LoggitColors.teal
+                                                : Colors.grey[400]!,
+                                            width: 2.2,
+                                          ),
+                                          color: r.isCompleted
+                                              ? LoggitColors.teal
+                                              : Colors.white,
+                                        ),
+                                        child: r.isCompleted
+                                            ? Icon(
+                                                Icons.check,
+                                                color: Colors.white,
+                                                size:
+                                                    16, // Slightly smaller for new size
+                                              )
+                                            : null,
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -839,6 +1178,10 @@ class _RemindersScreenState extends State<RemindersScreen> {
                           ),
                         ),
                       ),
+                      // Show empty state when no reminders
+                      if (filteredReminders.isEmpty) _buildEmptyState(isDark),
+                      // Bottom padding for FAB
+                      SizedBox(height: 100),
                     ],
                   ),
                 ),
@@ -1006,5 +1349,225 @@ class _RemindersScreenState extends State<RemindersScreen> {
       return ' until ${r.endDate!.day}/${r.endDate!.month}/${r.endDate!.year}';
     }
     return '';
+  }
+
+  // Helper methods for bell icon functionality
+  Color _getBellBackgroundColor(Reminder r) {
+    if (r.isCompleted) {
+      return Colors.green.withOpacity(0.13); // Done - green
+    } else {
+      return LoggitColors.teal.withOpacity(0.13); // Active - teal
+    }
+  }
+
+  IconData _getBellIcon(Reminder r) {
+    if (r.isCompleted) {
+      return Icons.notifications_off; // Silent bell for completed
+    } else {
+      return Icons.notifications_active_rounded; // Active bell
+    }
+  }
+
+  Color _getBellIconColor(Reminder r) {
+    if (r.isCompleted) {
+      return Colors.green; // Done - green
+    } else {
+      return LoggitColors.teal; // Active - teal
+    }
+  }
+
+  String _getBellStatusText(Reminder r) {
+    if (r.isCompleted) {
+      return 'Done';
+    } else {
+      return 'Active';
+    }
+  }
+
+  Color _getBellStatusColor(Reminder r) {
+    if (r.isCompleted) {
+      return Colors.green; // Done - green
+    } else {
+      return LoggitColors.teal; // Active - teal
+    }
+  }
+
+  Widget _buildEmptyState(bool isDark) {
+    String emptyTitle;
+    String emptySubtitle;
+    String emptyIcon;
+
+    // Determine the appropriate message based on the current state
+    if (selectedFilter == 0) {
+      // "All" filter - no reminders at all
+      if (selectedDayIndex == 0) {
+        // Today
+        emptyTitle = 'No reminders for today';
+        emptySubtitle = 'Tap the + button to add a reminder for today';
+        emptyIcon = '📋';
+      } else if (selectedDayIndex == 1) {
+        // Tomorrow
+        emptyTitle = 'No reminders for tomorrow';
+        emptySubtitle = 'Tap the + button to add a reminder for tomorrow';
+        emptyIcon = '📋';
+      } else {
+        // Other selected date
+        final selectedDate = DateTime.now().add(
+          Duration(days: selectedDayIndex),
+        );
+        final dateLabel =
+            '${_getDayName(selectedDate.weekday)} ${selectedDate.day}';
+        emptyTitle = 'No reminders for $dateLabel';
+        emptySubtitle = 'Tap the + button to add a reminder for this day';
+        emptyIcon = '📋';
+      }
+    } else if (selectedFilter == 1) {
+      // "Upcoming" filter
+      emptyTitle = 'No upcoming reminders';
+      emptySubtitle = 'All your reminders are completed!';
+      emptyIcon = '✅';
+    } else if (selectedFilter == 2) {
+      // "Completed" filter
+      emptyTitle = 'No completed reminders';
+      emptySubtitle = 'Complete some reminders to see them here';
+      emptyIcon = '📝';
+    } else {
+      // Fallback
+      emptyTitle = 'No reminders found';
+      emptySubtitle = 'Tap the + button to create your first reminder';
+      emptyIcon = '📋';
+    }
+
+    return Center(
+      child: Container(
+        margin: EdgeInsets.symmetric(vertical: 40),
+        padding: EdgeInsets.symmetric(horizontal: 20),
+        constraints: BoxConstraints(maxWidth: 400),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              emptyIcon,
+              style: TextStyle(fontSize: 64),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 16),
+            Text(
+              emptyTitle,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white : LoggitColors.darkGrayText,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 8),
+            Text(
+              emptySubtitle,
+              style: TextStyle(
+                fontSize: 14,
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getDayName(int weekday) {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return days[weekday % 7];
+  }
+}
+
+class OverlayDeleteReminderCard extends StatefulWidget {
+  final Widget child;
+  final Reminder reminder;
+  final Future<void> Function(BuildContext context) onDelete;
+  final ValueNotifier<String?> openDeleteReminderTitle;
+  final VoidCallback? onTap;
+  const OverlayDeleteReminderCard({
+    required this.child,
+    required this.reminder,
+    required this.onDelete,
+    required this.openDeleteReminderTitle,
+    this.onTap,
+  });
+  @override
+  State<OverlayDeleteReminderCard> createState() =>
+      _OverlayDeleteReminderCardState();
+}
+
+class _OverlayDeleteReminderCardState extends State<OverlayDeleteReminderCard> {
+  @override
+  void initState() {
+    super.initState();
+    widget.openDeleteReminderTitle.addListener(_onOpenDeleteChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.openDeleteReminderTitle.removeListener(_onOpenDeleteChanged);
+    super.dispose();
+  }
+
+  void _onOpenDeleteChanged() {
+    setState(() {});
+  }
+
+  void _onHorizontalDragUpdate(DragUpdateDetails details) {
+    if (details.delta.dx < -2) {
+      widget.openDeleteReminderTitle.value =
+          widget.reminder.title + widget.reminder.reminderTime.toString();
+    }
+  }
+
+  void _onHorizontalDragEnd(DragEndDetails details) {}
+
+  @override
+  Widget build(BuildContext context) {
+    final showDelete =
+        widget.openDeleteReminderTitle.value ==
+        widget.reminder.title + widget.reminder.reminderTime.toString();
+    return Stack(
+      children: [
+        widget.child,
+        // Delete overlay (no gesture detection to avoid conflicts)
+        AnimatedPositioned(
+          duration: Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          top: 0,
+          bottom: 0,
+          right: showDelete ? 0 : -72,
+          width: 72,
+          child: AnimatedOpacity(
+            duration: Duration(milliseconds: 200),
+            opacity: showDelete ? 1.0 : 0.0,
+            child: Material(
+              color: Colors.red.withOpacity(0.95),
+              borderRadius: BorderRadius.only(
+                topRight: Radius.circular(24),
+                bottomRight: Radius.circular(24),
+              ),
+              child: InkWell(
+                borderRadius: BorderRadius.only(
+                  topRight: Radius.circular(24),
+                  bottomRight: Radius.circular(24),
+                ),
+                onTap: () async {
+                  await widget.onDelete(context);
+                },
+                child: Center(
+                  child: Icon(Icons.delete, color: Colors.white, size: 28),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

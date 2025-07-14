@@ -15,6 +15,23 @@ Future<Reminder?> showReminderEditModal(
   );
   DateTime? date = isEditing ? initial.reminderTime : null;
 
+  // Reminder advance time options
+  final List<String> advanceTimeOptions = [
+    'At the time',
+    '5 minutes before',
+    '15 minutes before',
+    '30 minutes before',
+    '1 hour before',
+    '2 hours before',
+    '1 day before',
+  ];
+  String selectedAdvanceTime = 'At the time';
+
+  // Validation state variables
+  final ValueNotifier<bool> showTitleError = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> showDateError = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> showTimeError = ValueNotifier<bool>(false);
+
   return showModalBottomSheet<Reminder>(
     context: context,
     isScrollControlled: true,
@@ -29,7 +46,7 @@ Future<Reminder?> showReminderEditModal(
       return StatefulBuilder(
         builder: (context, setModalState) {
           return FractionallySizedBox(
-            heightFactor: 0.9,
+            heightFactor: 0.6,
             child: SafeArea(
               child: Column(
                 children: [
@@ -96,6 +113,21 @@ Future<Reminder?> showReminderEditModal(
                                   borderRadius: BorderRadius.circular(12),
                                   borderSide: BorderSide.none,
                                 ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: showTitleError.value
+                                      ? BorderSide(color: Colors.red, width: 2)
+                                      : BorderSide.none,
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: showTitleError.value
+                                      ? BorderSide(color: Colors.red, width: 2)
+                                      : BorderSide(
+                                          color: LoggitColors.teal,
+                                          width: 2,
+                                        ),
+                                ),
                                 hintText: 'Enter title',
                               ),
                             ),
@@ -136,52 +168,219 @@ Future<Reminder?> showReminderEditModal(
                               ),
                             ),
                             SizedBox(height: 6),
-                            GestureDetector(
-                              onTap: () async {
-                                // Always use current time for new reminders
-                                final initialPickerDate =
-                                    date ?? DateTime.now();
-                                await _showDateTimePicker(
-                                  context,
-                                  initialDate: initialPickerDate,
-                                  onDateTimeChanged: (dt) {
-                                    setModalState(() {
-                                      date = dt;
-                                    });
-                                  },
-                                );
-                              },
-                              child: Container(
-                                width: double.infinity,
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 14,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Color(0xFFF1F5F9),
-                                  borderRadius: BorderRadius.circular(30),
-                                  border: Border.all(color: Colors.grey[300]!),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.event,
-                                      size: 18,
-                                      color: LoggitColors.teal,
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      date == null
-                                          ? 'Pick Date & Time'
-                                          : '${_weekdayString(date!.weekday)}, ${date!.day} ${_monthString(date!.month)} ${date!.year}  ${TimeOfDay.fromDateTime(date!).format(context)}',
-                                      style: TextStyle(
-                                        color: Colors.black,
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 15,
+                            Row(
+                              children: [
+                                // Date pill button
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () async {
+                                      final initialDate =
+                                          date ?? DateTime.now();
+                                      await _showDatePicker(
+                                        context,
+                                        initialDate: initialDate,
+                                        onDateChanged: (selectedDate) {
+                                          setModalState(() {
+                                            // Preserve the time if it exists, otherwise use current time
+                                            final currentTime = date != null
+                                                ? TimeOfDay.fromDateTime(date!)
+                                                : TimeOfDay.now();
+                                            date = DateTime(
+                                              selectedDate.year,
+                                              selectedDate.month,
+                                              selectedDate.day,
+                                              currentTime.hour,
+                                              currentTime.minute,
+                                            );
+                                          });
+                                        },
+                                      );
+                                    },
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 14,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Color(0xFFF1F5F9),
+                                        borderRadius: BorderRadius.circular(30),
+                                        border: Border.all(
+                                          color: showDateError.value
+                                              ? Colors.red
+                                              : Colors.grey[300]!,
+                                          width: showDateError.value ? 2 : 1,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.calendar_today,
+                                            size: 18,
+                                            color: LoggitColors.teal,
+                                          ),
+                                          SizedBox(width: 8),
+                                          Flexible(
+                                            child: Text(
+                                              date == null
+                                                  ? 'Pick Date'
+                                                  : '${_weekdayString(date!.weekday)}, ${date!.day} ${_monthString(date!.month)} ${date!.year}',
+                                              style: TextStyle(
+                                                color: Colors.black,
+                                                fontWeight: FontWeight.w500,
+                                                fontSize: 15,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                  ],
+                                  ),
+                                ),
+                                SizedBox(width: 12),
+                                // Time pill button
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () async {
+                                      final initialTime = date != null
+                                          ? TimeOfDay.fromDateTime(date!)
+                                          : TimeOfDay.now();
+                                      await _showTimePicker(
+                                        context,
+                                        initialTime: initialTime,
+                                        onTimeChanged: (selectedTime) {
+                                          setModalState(() {
+                                            // Preserve the date if it exists, otherwise use today
+                                            final currentDate =
+                                                date ?? DateTime.now();
+                                            date = DateTime(
+                                              currentDate.year,
+                                              currentDate.month,
+                                              currentDate.day,
+                                              selectedTime.hour,
+                                              selectedTime.minute,
+                                            );
+                                          });
+                                        },
+                                      );
+                                    },
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 14,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Color(0xFFF1F5F9),
+                                        borderRadius: BorderRadius.circular(30),
+                                        border: Border.all(
+                                          color: showTimeError.value
+                                              ? Colors.red
+                                              : Colors.grey[300]!,
+                                          width: showTimeError.value ? 2 : 1,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.access_time,
+                                            size: 18,
+                                            color: LoggitColors.teal,
+                                          ),
+                                          SizedBox(width: 8),
+                                          Flexible(
+                                            child: Text(
+                                              date == null
+                                                  ? 'Pick Time'
+                                                  : TimeOfDay.fromDateTime(
+                                                      date!,
+                                                    ).format(context),
+                                              style: TextStyle(
+                                                color: Colors.black,
+                                                fontWeight: FontWeight.w500,
+                                                fontSize: 15,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 14),
+                            Text(
+                              'Remind me',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                              ),
+                            ),
+                            SizedBox(height: 6),
+                            Container(
+                              width: double.infinity,
+                              height: 48, // Match TextField height
+                              decoration: BoxDecoration(
+                                color: Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.transparent),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: selectedAdvanceTime,
+                                  isExpanded: true,
+                                  icon: Icon(
+                                    Icons.keyboard_arrow_down,
+                                    color: Colors.grey[600],
+                                  ),
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.normal,
+                                    color: Colors.black,
+                                  ),
+                                  dropdownColor: Color(0xFFF1F5F9),
+                                  borderRadius: BorderRadius.circular(12),
+                                  selectedItemBuilder: (context) =>
+                                      advanceTimeOptions
+                                          .map(
+                                            (option) => Padding(
+                                              padding: const EdgeInsets.only(
+                                                left: 14.0,
+                                              ),
+                                              child: Align(
+                                                alignment: Alignment.centerLeft,
+                                                child: Text(option),
+                                              ),
+                                            ),
+                                          )
+                                          .toList(),
+                                  items: advanceTimeOptions.map((
+                                    String option,
+                                  ) {
+                                    return DropdownMenuItem<String>(
+                                      value: option,
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(
+                                          left: 14.0,
+                                        ),
+                                        child: Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(option),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                  onChanged: (String? newValue) {
+                                    if (newValue != null) {
+                                      selectedAdvanceTime = newValue;
+                                      setModalState(() {});
+                                    }
+                                  },
                                 ),
                               ),
                             ),
@@ -208,83 +407,146 @@ Future<Reminder?> showReminderEditModal(
                       horizontal: LoggitSpacing.screenPadding,
                       vertical: 16,
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: 120,
-                          height: 44,
-                          child: OutlinedButton(
-                            style: OutlinedButton.styleFrom(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      color: Colors.white, // Ensure solid background
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 120,
+                            height: 44,
+                            child: OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                side: BorderSide(
+                                  color: Colors.black26,
+                                  width: 1,
+                                ),
+                                textStyle: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                ),
                               ),
-                              side: BorderSide(color: Colors.black26, width: 1),
-                              textStyle: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 16,
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: Text(
+                                'Cancel',
+                                style: TextStyle(color: Colors.black),
                               ),
-                            ),
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: Text(
-                              'Cancel',
-                              style: TextStyle(color: Colors.black),
                             ),
                           ),
-                        ),
-                        SizedBox(width: 20),
-                        SizedBox(
-                          width: 120,
-                          height: 44,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: LoggitColors.teal,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
+                          SizedBox(width: 20),
+                          SizedBox(
+                            width: 120,
+                            height: 44,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: LoggitColors.teal,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                textStyle: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
                               ),
-                              textStyle: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
+                              onPressed: () {
+                                final title = titleController.text.trim();
+                                bool hasError = false;
+
+                                // Validate title
+                                if (title.isEmpty) {
+                                  showTitleError.value = true;
+                                  hasError = true;
+                                } else {
+                                  showTitleError.value = false;
+                                }
+
+                                // Validate date and time
+                                if (date == null) {
+                                  showDateError.value = true;
+                                  showTimeError.value = true;
+                                  hasError = true;
+                                } else {
+                                  showDateError.value = false;
+                                  showTimeError.value = false;
+                                }
+
+                                if (hasError) {
+                                  setModalState(() {
+                                    // Force rebuild to show red borders
+                                  });
+                                  return;
+                                }
+
+                                if (date!.isBefore(DateTime.now())) {
+                                  setModalState(
+                                    () => error =
+                                        'Date/time must be in the future.',
+                                  );
+                                  return;
+                                }
+                                setModalState(() => error = null);
+
+                                // Calculate actual reminder time based on advance time selection
+                                DateTime actualReminderTime = date!;
+                                switch (selectedAdvanceTime) {
+                                  case '5 minutes before':
+                                    actualReminderTime = date!.subtract(
+                                      Duration(minutes: 5),
+                                    );
+                                    break;
+                                  case '15 minutes before':
+                                    actualReminderTime = date!.subtract(
+                                      Duration(minutes: 15),
+                                    );
+                                    break;
+                                  case '30 minutes before':
+                                    actualReminderTime = date!.subtract(
+                                      Duration(minutes: 30),
+                                    );
+                                    break;
+                                  case '1 hour before':
+                                    actualReminderTime = date!.subtract(
+                                      Duration(hours: 1),
+                                    );
+                                    break;
+                                  case '2 hours before':
+                                    actualReminderTime = date!.subtract(
+                                      Duration(hours: 2),
+                                    );
+                                    break;
+                                  case '1 day before':
+                                    actualReminderTime = date!.subtract(
+                                      Duration(days: 1),
+                                    );
+                                    break;
+                                  case 'At the time':
+                                  default:
+                                    actualReminderTime = date!;
+                                    break;
+                                }
+
+                                final reminder = Reminder(
+                                  title: title,
+                                  description:
+                                      descController.text.trim().isEmpty
+                                      ? null
+                                      : descController.text.trim(),
+                                  reminderTime: actualReminderTime,
+                                  isCompleted: initial?.isCompleted ?? false,
+                                  timestamp:
+                                      initial?.timestamp ?? DateTime.now(),
+                                );
+                                Navigator.pop(context, reminder);
+                              },
+                              child: Text('Save'),
                             ),
-                            onPressed: () {
-                              final title = titleController.text.trim();
-                              if (title.isEmpty) {
-                                setModalState(
-                                  () => error = 'Title is required.',
-                                );
-                                return;
-                              }
-                              if (date == null) {
-                                setModalState(
-                                  () => error = 'Date & time is required.',
-                                );
-                                return;
-                              }
-                              if (date!.isBefore(DateTime.now())) {
-                                setModalState(
-                                  () => error =
-                                      'Date/time must be in the future.',
-                                );
-                                return;
-                              }
-                              setModalState(() => error = null);
-                              final reminder = Reminder(
-                                title: title,
-                                description: descController.text.trim().isEmpty
-                                    ? null
-                                    : descController.text.trim(),
-                                reminderTime: date!,
-                                isCompleted: initial?.isCompleted ?? false,
-                                timestamp: initial?.timestamp ?? DateTime.now(),
-                              );
-                              Navigator.pop(context, reminder);
-                            },
-                            child: Text('Save'),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -614,4 +876,474 @@ String _monthString(int month) {
     'Dec',
   ];
   return months[(month - 1) % 12];
+}
+
+Future<void> _showDatePicker(
+  BuildContext context, {
+  required DateTime initialDate,
+  required ValueChanged<DateTime> onDateChanged,
+}) async {
+  final now = DateTime.now();
+  DateTime tempDate = initialDate;
+  DateTime displayedMonth = DateTime(tempDate.year, tempDate.month, 1);
+
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      return StatefulBuilder(
+        builder: (context, setModalState) {
+          return Container(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: 20 + MediaQuery.of(context).viewInsets.bottom,
+            ),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.black87 : Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 20,
+                  offset: Offset(0, -5),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Handle bar
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.grey[600] : Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Text(
+                  'Select Date',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+                SizedBox(height: 16),
+                // Calendar header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        Icons.chevron_left,
+                        color: isDark ? Colors.white : Colors.black,
+                      ),
+                      onPressed: () {
+                        setModalState(() {
+                          displayedMonth = DateTime(
+                            displayedMonth.year,
+                            displayedMonth.month - 1,
+                            1,
+                          );
+                        });
+                      },
+                    ),
+                    Text(
+                      '${_monthString(displayedMonth.month)} ${displayedMonth.year}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: isDark ? Colors.white : Colors.black,
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.chevron_right,
+                        color: isDark ? Colors.white : Colors.black,
+                      ),
+                      onPressed: () {
+                        setModalState(() {
+                          displayedMonth = DateTime(
+                            displayedMonth.year,
+                            displayedMonth.month + 1,
+                            1,
+                          );
+                        });
+                      },
+                    ),
+                  ],
+                ),
+                SizedBox(height: 16),
+                // Calendar grid
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: LoggitColors.teal.withOpacity(0.2),
+                      width: 1,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      // Day headers
+                      Container(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: LoggitColors.teal.withOpacity(0.1),
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(16),
+                          ),
+                        ),
+                        child: Row(
+                          children: ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((
+                            day,
+                          ) {
+                            return Expanded(
+                              child: Center(
+                                child: Text(
+                                  day,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: LoggitColors.teal,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      // Calendar days
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        child: Column(
+                          children: _buildCalendarWeeks(
+                            displayedMonth,
+                            tempDate,
+                            isDark,
+                            (selectedDate) {
+                              setModalState(() {
+                                tempDate = selectedDate;
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () {
+                    onDateChanged(tempDate);
+                    Navigator.of(context).pop();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: LoggitColors.teal,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    textStyle: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  child: Text('Set Date'),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+List<Widget> _buildCalendarWeeks(
+  DateTime displayedMonth,
+  DateTime selectedDate,
+  bool isDark,
+  ValueChanged<DateTime> onDateSelected,
+) {
+  final firstDayOfMonth = DateTime(
+    displayedMonth.year,
+    displayedMonth.month,
+    1,
+  );
+  final lastDayOfMonth = DateTime(
+    displayedMonth.year,
+    displayedMonth.month + 1,
+    0,
+  );
+  final firstWeekday = firstDayOfMonth.weekday % 7; // Sunday = 0
+  final daysInMonth = lastDayOfMonth.day;
+
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+
+  List<Widget> weeks = [];
+  List<Widget> currentWeek = [];
+
+  // Add empty cells for days before the first day of the month
+  for (int i = 0; i < firstWeekday; i++) {
+    currentWeek.add(Expanded(child: Container()));
+  }
+
+  // Add days of the month
+  for (int day = 1; day <= daysInMonth; day++) {
+    final date = DateTime(displayedMonth.year, displayedMonth.month, day);
+    final isSelected =
+        date.year == selectedDate.year &&
+        date.month == selectedDate.month &&
+        date.day == selectedDate.day;
+    final isToday =
+        date.year == today.year &&
+        date.month == today.month &&
+        date.day == today.day;
+    final isPast = date.isBefore(today);
+
+    currentWeek.add(
+      Expanded(
+        child: GestureDetector(
+          onTap: isPast ? null : () => onDateSelected(date),
+          child: Container(
+            height: 40,
+            margin: EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? LoggitColors.teal
+                  : isToday
+                  ? LoggitColors.teal.withOpacity(0.2)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              border: isToday && !isSelected
+                  ? Border.all(color: LoggitColors.teal, width: 2)
+                  : null,
+            ),
+            child: Center(
+              child: Text(
+                day.toString(),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: isSelected || isToday
+                      ? FontWeight.bold
+                      : FontWeight.normal,
+                  color: isSelected
+                      ? Colors.white
+                      : isPast
+                      ? (isDark ? Colors.grey[600] : Colors.grey[400])
+                      : (isDark ? Colors.white : Colors.black),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (currentWeek.length == 7) {
+      weeks.add(Row(children: currentWeek));
+      currentWeek = [];
+    }
+  }
+
+  // Add remaining days to complete the last week
+  while (currentWeek.length < 7) {
+    currentWeek.add(Expanded(child: Container()));
+  }
+  if (currentWeek.isNotEmpty) {
+    weeks.add(Row(children: currentWeek));
+  }
+
+  return weeks;
+}
+
+Future<void> _showTimePicker(
+  BuildContext context, {
+  required TimeOfDay initialTime,
+  required ValueChanged<TimeOfDay> onTimeChanged,
+}) async {
+  TimeOfDay tempTime = initialTime;
+
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      return StatefulBuilder(
+        builder: (context, setModalState) {
+          return Container(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: 20 + MediaQuery.of(context).viewInsets.bottom,
+            ),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.black87 : Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 20,
+                  offset: Offset(0, -5),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Handle bar
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.grey[600] : Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Text(
+                  'Select Time',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+                SizedBox(height: 16),
+                // Time picker
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        isDark ? Colors.black87 : Colors.grey[50]!,
+                        isDark ? Colors.black87.withOpacity(0.8) : Colors.white,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: LoggitColors.teal.withOpacity(0.2),
+                      width: 1,
+                    ),
+                  ),
+                  padding: EdgeInsets.all(16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 120,
+                          child: CupertinoPicker(
+                            scrollController: FixedExtentScrollController(
+                              initialItem: tempTime.hour,
+                            ),
+                            itemExtent: 30,
+                            onSelectedItemChanged: (index) {
+                              setModalState(() {
+                                tempTime = TimeOfDay(
+                                  hour: index,
+                                  minute: tempTime.minute,
+                                );
+                              });
+                            },
+                            children: List.generate(
+                              24,
+                              (i) => Center(
+                                child: Text(
+                                  i.toString().padLeft(2, '0'),
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                    color: isDark ? Colors.white : Colors.black,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Text(
+                        ':',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.black,
+                        ),
+                      ),
+                      Expanded(
+                        child: SizedBox(
+                          height: 120,
+                          child: CupertinoPicker(
+                            scrollController: FixedExtentScrollController(
+                              initialItem: tempTime.minute,
+                            ),
+                            itemExtent: 30,
+                            onSelectedItemChanged: (index) {
+                              setModalState(() {
+                                tempTime = TimeOfDay(
+                                  hour: tempTime.hour,
+                                  minute: index,
+                                );
+                              });
+                            },
+                            children: List.generate(
+                              60,
+                              (i) => Center(
+                                child: Text(
+                                  i.toString().padLeft(2, '0'),
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                    color: isDark ? Colors.white : Colors.black,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () {
+                    onTimeChanged(tempTime);
+                    Navigator.of(context).pop();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: LoggitColors.teal,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    textStyle: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  child: Text('Set Time'),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    },
+  );
 }

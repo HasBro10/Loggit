@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/log_entry.dart';
-import '../tasks/task_model.dart';
-import '../reminders/reminder_model.dart';
+import '../tasks/task_model.dart' as tasks;
+import '../reminders/reminder_model.dart' as reminders;
 
 class ChatMessage extends StatelessWidget {
   final String text;
@@ -76,40 +76,52 @@ class ChatMessage extends StatelessWidget {
         ),
         if (isConfirmation && onConfirmationResponse != null) ...[
           const SizedBox(height: 12.0),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.edit_calendar_outlined, size: 18),
-              label: const Text('Review'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isDark
-                    ? const Color(0xFF005C4B)
-                    : const Color(0xFF2A8CFF),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16.0,
-                  vertical: 8.0,
+          Row(
+            children: [
+              ElevatedButton.icon(
+                icon: const Icon(Icons.check, size: 18),
+                label: const Text('Yes'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isDark
+                      ? const Color(0xFF22C55E) // green
+                      : const Color(0xFF22C55E),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 8.0,
+                  ),
+                  minimumSize: const Size(80, 36),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  elevation: 2,
+                  shadowColor: Colors.black.withOpacity(0.10),
                 ),
-                minimumSize: const Size(100, 36),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                elevation: 4,
-                shadowColor: Colors.black.withOpacity(0.10),
+                onPressed: () => onConfirmationResponse!(true, pendingLogEntry),
               ),
-              onPressed: () async {
-                if (pendingLogEntry != null) {
-                  final updated = await showDialog<LogEntry>(
-                    context: context,
-                    builder: (context) =>
-                        _LogConfirmationDialog(logEntry: pendingLogEntry!),
-                  );
-                  if (updated != null) {
-                    onConfirmationResponse!(true, updated);
-                  }
-                }
-              },
-            ),
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.close, size: 18),
+                label: const Text('No'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isDark
+                      ? const Color(0xFFEF4444) // red
+                      : const Color(0xFFEF4444),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 8.0,
+                  ),
+                  minimumSize: const Size(80, 36),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  elevation: 2,
+                  shadowColor: Colors.black.withOpacity(0.10),
+                ),
+                onPressed: () => onConfirmationResponse!(false),
+              ),
+            ],
           ),
         ],
       ],
@@ -150,44 +162,46 @@ class _LogConfirmationDialogState extends State<_LogConfirmationDialog> {
   late TextEditingController _titleController;
   late DateTime? _date;
   late TimeOfDay? _time;
-  RecurrenceType? _recurrenceType;
+  late reminders.RecurrenceType? _reminderRecurrenceType;
+  late tasks.RecurrenceType? _taskRecurrenceType;
   int? _interval;
   List<int>? _customDays;
 
   @override
   void initState() {
     super.initState();
-    if (widget.logEntry is Task) {
-      final task = widget.logEntry as Task;
+    if (widget.logEntry is tasks.Task) {
+      final task = widget.logEntry as tasks.Task;
       _titleController = TextEditingController(text: task.title);
       _date = task.dueDate;
       _time = task.timeOfDay;
-      _recurrenceType = task.recurrenceType;
+      _taskRecurrenceType = task.recurrenceType;
       _interval = task.interval;
       _customDays = task.customDays;
-    } else if (widget.logEntry is Reminder) {
-      final reminder = widget.logEntry as Reminder;
+    } else if (widget.logEntry is reminders.Reminder) {
+      final reminder = widget.logEntry as reminders.Reminder;
       _titleController = TextEditingController(text: reminder.title);
       _date = reminder.reminderTime;
       _time = TimeOfDay(
         hour: reminder.reminderTime.hour,
         minute: reminder.reminderTime.minute,
       );
-      _recurrenceType = RecurrenceType.none;
+      _reminderRecurrenceType = reminders.RecurrenceType.none;
     } else {
       _titleController = TextEditingController(
         text: widget.logEntry.displayTitle,
       );
       _date = null;
       _time = null;
-      _recurrenceType = RecurrenceType.none;
+      _reminderRecurrenceType = reminders.RecurrenceType.none;
+      _taskRecurrenceType = tasks.RecurrenceType.none;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isTask = widget.logEntry is Task;
-    final isReminder = widget.logEntry is Reminder;
+    final isTask = widget.logEntry is tasks.Task;
+    final isReminder = widget.logEntry is reminders.Reminder;
     return AlertDialog(
       title: Text(
         isTask
@@ -251,20 +265,20 @@ class _LogConfirmationDialogState extends State<_LogConfirmationDialog> {
             ),
             if (isTask) ...[
               const SizedBox(height: 16),
-              DropdownButtonFormField<RecurrenceType>(
-                value: _recurrenceType ?? RecurrenceType.none,
+              DropdownButtonFormField<tasks.RecurrenceType>(
+                value: _taskRecurrenceType ?? tasks.RecurrenceType.none,
                 decoration: const InputDecoration(labelText: 'Recurrence'),
-                items: RecurrenceType.values.map((type) {
+                items: tasks.RecurrenceType.values.map((type) {
                   return DropdownMenuItem(
                     value: type,
-                    child: Text(_recurrenceTypeLabel(type)),
+                    child: Text(_taskRecurrenceTypeLabel(type)),
                   );
                 }).toList(),
-                onChanged: (type) => setState(() => _recurrenceType = type),
+                onChanged: (type) => setState(() => _taskRecurrenceType = type),
               ),
-              if (_recurrenceType == RecurrenceType.everyNDays ||
-                  _recurrenceType == RecurrenceType.everyNWeeks ||
-                  _recurrenceType == RecurrenceType.everyNMonths) ...[
+              if (_taskRecurrenceType == tasks.RecurrenceType.everyNDays ||
+                  _taskRecurrenceType == tasks.RecurrenceType.everyNWeeks ||
+                  _taskRecurrenceType == tasks.RecurrenceType.everyNMonths) ...[
                 const SizedBox(height: 8),
                 TextField(
                   decoration: const InputDecoration(labelText: 'Interval'),
@@ -272,29 +286,42 @@ class _LogConfirmationDialogState extends State<_LogConfirmationDialog> {
                   onChanged: (val) => _interval = int.tryParse(val),
                 ),
               ],
-              if (_recurrenceType == RecurrenceType.custom) ...[
+              if (_taskRecurrenceType == tasks.RecurrenceType.custom) ...[
                 const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  children: List.generate(7, (i) {
-                    final day = i + 1;
-                    final selected = _customDays?.contains(day) ?? false;
-                    return FilterChip(
-                      label: Text(_weekdayLabel(day)),
-                      selected: selected,
-                      onSelected: (sel) {
-                        setState(() {
-                          _customDays = List<int>.from(_customDays ?? []);
-                          if (sel) {
-                            _customDays!.add(day);
-                          } else {
-                            _customDays!.remove(day);
-                          }
-                        });
-                      },
-                    );
-                  }),
+                // Custom days UI here if needed
+              ],
+            ],
+            if (isReminder) ...[
+              const SizedBox(height: 16),
+              DropdownButtonFormField<reminders.RecurrenceType>(
+                value: _reminderRecurrenceType ?? reminders.RecurrenceType.none,
+                decoration: const InputDecoration(labelText: 'Recurrence'),
+                items: reminders.RecurrenceType.values.map((type) {
+                  return DropdownMenuItem(
+                    value: type,
+                    child: Text(_reminderRecurrenceTypeLabel(type)),
+                  );
+                }).toList(),
+                onChanged: (type) =>
+                    setState(() => _reminderRecurrenceType = type),
+              ),
+              if (_reminderRecurrenceType ==
+                      reminders.RecurrenceType.everyNDays ||
+                  _reminderRecurrenceType ==
+                      reminders.RecurrenceType.everyNWeeks ||
+                  _reminderRecurrenceType ==
+                      reminders.RecurrenceType.everyNMonths) ...[
+                const SizedBox(height: 8),
+                TextField(
+                  decoration: const InputDecoration(labelText: 'Interval'),
+                  keyboardType: TextInputType.number,
+                  onChanged: (val) => _interval = int.tryParse(val),
                 ),
+              ],
+              if (_reminderRecurrenceType ==
+                  reminders.RecurrenceType.custom) ...[
+                const SizedBox(height: 8),
+                // Custom days UI here if needed
               ],
             ],
           ],
@@ -308,20 +335,20 @@ class _LogConfirmationDialogState extends State<_LogConfirmationDialog> {
         ElevatedButton(
           onPressed: () {
             if (isTask) {
-              final orig = widget.logEntry as Task;
+              final orig = widget.logEntry as tasks.Task;
               Navigator.pop(
                 context,
                 orig.copyWith(
                   title: _titleController.text.trim(),
                   dueDate: _date,
                   timeOfDay: _time,
-                  recurrenceType: _recurrenceType,
+                  recurrenceType: _taskRecurrenceType,
                   interval: _interval,
                   customDays: _customDays,
                 ),
               );
             } else if (isReminder) {
-              final orig = widget.logEntry as Reminder;
+              final orig = widget.logEntry as reminders.Reminder;
               DateTime reminderTime = _date ?? DateTime.now();
               if (_time != null) {
                 reminderTime = DateTime(
@@ -337,6 +364,9 @@ class _LogConfirmationDialogState extends State<_LogConfirmationDialog> {
                 orig.copyWith(
                   title: _titleController.text.trim(),
                   reminderTime: reminderTime,
+                  recurrenceType: _reminderRecurrenceType,
+                  interval: _interval,
+                  customDays: _customDays,
                 ),
               );
             } else {
@@ -349,29 +379,45 @@ class _LogConfirmationDialogState extends State<_LogConfirmationDialog> {
     );
   }
 
-  String _recurrenceTypeLabel(RecurrenceType type) {
+  String _taskRecurrenceTypeLabel(tasks.RecurrenceType type) {
     switch (type) {
-      case RecurrenceType.none:
+      case tasks.RecurrenceType.none:
         return 'None';
-      case RecurrenceType.daily:
+      case tasks.RecurrenceType.daily:
         return 'Daily';
-      case RecurrenceType.weekly:
+      case tasks.RecurrenceType.weekly:
         return 'Weekly';
-      case RecurrenceType.monthly:
+      case tasks.RecurrenceType.monthly:
         return 'Monthly';
-      case RecurrenceType.everyNDays:
+      case tasks.RecurrenceType.everyNDays:
         return 'Every N Days';
-      case RecurrenceType.everyNWeeks:
+      case tasks.RecurrenceType.everyNWeeks:
         return 'Every N Weeks';
-      case RecurrenceType.everyNMonths:
+      case tasks.RecurrenceType.everyNMonths:
         return 'Every N Months';
-      case RecurrenceType.custom:
+      case tasks.RecurrenceType.custom:
         return 'Custom Days';
     }
   }
 
-  String _weekdayLabel(int day) {
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    return days[day - 1];
+  String _reminderRecurrenceTypeLabel(reminders.RecurrenceType type) {
+    switch (type) {
+      case reminders.RecurrenceType.none:
+        return 'None';
+      case reminders.RecurrenceType.daily:
+        return 'Daily';
+      case reminders.RecurrenceType.weekly:
+        return 'Weekly';
+      case reminders.RecurrenceType.monthly:
+        return 'Monthly';
+      case reminders.RecurrenceType.everyNDays:
+        return 'Every N Days';
+      case reminders.RecurrenceType.everyNWeeks:
+        return 'Every N Weeks';
+      case reminders.RecurrenceType.everyNMonths:
+        return 'Every N Months';
+      case reminders.RecurrenceType.custom:
+        return 'Custom Days';
+    }
   }
 }

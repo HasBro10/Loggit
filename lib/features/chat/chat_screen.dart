@@ -6,6 +6,7 @@ import '../../features/notes/note_model.dart';
 import '../../features/gym/gym_log_model.dart';
 import '../../models/log_entry.dart';
 import '../../services/log_parser_service.dart';
+import '../../services/reminders_service.dart';
 import 'chat_message.dart';
 import 'dart:async';
 
@@ -120,33 +121,43 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     });
   }
 
-  void _sendMessage() {
+  void _sendMessage() async {
     final message = _messageController.text.trim();
     if (message.isNotEmpty) {
       setState(() {
         _messages.add(
           ChatMessage(text: message, isUser: true, timestamp: DateTime.now()),
         );
+      });
 
-        // Use the new LogParserService to parse all log types
-        final logEntry = LogParserService.parseMessage(message);
+      // Use the new LogParserService to parse all log types
+      final logEntry = LogParserService.parseMessage(message);
 
-        if (logEntry != null) {
-          _pendingLog = logEntry;
-          final confirmationMessage = _getConfirmationMessage(logEntry);
-
-          _messages.add(
-            ChatMessage(
-              text: confirmationMessage,
-              isUser: false,
-              timestamp: DateTime.now(),
-              isConfirmation: true,
-              onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
-                  _handleLogConfirmation(confirmed, updatedLogEntry),
-              pendingLogEntry: logEntry,
-            ),
-          );
+      if (logEntry != null) {
+        // Check if this is a query-style message (like "tell me my reminders")
+        if (logEntry.logType == 'reminder' && _isQueryMessage(message)) {
+          await _handleReminderQuery(message);
         } else {
+          // Handle creation of new log entries
+          setState(() {
+            _pendingLog = logEntry;
+            final confirmationMessage = _getConfirmationMessage(logEntry);
+
+            _messages.add(
+              ChatMessage(
+                text: confirmationMessage,
+                isUser: false,
+                timestamp: DateTime.now(),
+                isConfirmation: true,
+                onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
+                    _handleLogConfirmation(confirmed, updatedLogEntry),
+                pendingLogEntry: logEntry,
+              ),
+            );
+          });
+        }
+      } else {
+        setState(() {
           _messages.add(
             ChatMessage(
               text:
@@ -155,10 +166,121 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               timestamp: DateTime.now(),
             ),
           );
-        }
-      });
+        });
+      }
       _messageController.clear();
       _scrollToBottom();
+    }
+  }
+
+  bool _isQueryMessage(String message) {
+    final lowerMessage = message.toLowerCase();
+    return lowerMessage.contains('tell me') ||
+        lowerMessage.contains('show me') ||
+        lowerMessage.contains('what are') ||
+        lowerMessage.contains('list') ||
+        lowerMessage.contains('get') ||
+        lowerMessage.contains('display');
+  }
+
+  Future<void> _handleReminderQuery(String message) async {
+    try {
+      final reminders = await RemindersService.loadReminders();
+      final now = DateTime.now();
+
+      // Filter reminders based on the query
+      List<Reminder> filteredReminders = reminders;
+
+      if (message.toLowerCase().contains('this week')) {
+        final endOfWeek = now.add(Duration(days: 7 - now.weekday));
+        filteredReminders = reminders
+            .where(
+              (r) =>
+                  r.reminderTime.isAfter(now) &&
+                  r.reminderTime.isBefore(endOfWeek),
+            )
+            .toList();
+      } else if (message.toLowerCase().contains('today')) {
+        final endOfDay = DateTime(now.year, now.month, now.day, 23, 59, 59);
+        filteredReminders = reminders
+            .where(
+              (r) =>
+                  r.reminderTime.isAfter(now) &&
+                  r.reminderTime.isBefore(endOfDay),
+            )
+            .toList();
+      } else if (message.toLowerCase().contains('upcoming')) {
+        filteredReminders = reminders
+            .where((r) => r.reminderTime.isAfter(now))
+            .toList();
+      }
+
+      // Sort by reminder time
+      filteredReminders.sort(
+        (a, b) => a.reminderTime.compareTo(b.reminderTime),
+      );
+
+      setState(() {
+        if (filteredReminders.isEmpty) {
+          _messages.add(
+            ChatMessage(
+              text: "No reminders found for your query.",
+              isUser: false,
+              timestamp: DateTime.now(),
+            ),
+          );
+        } else {
+          final response = _formatRemindersResponse(filteredReminders);
+          _messages.add(
+            ChatMessage(
+              text: response,
+              isUser: false,
+              timestamp: DateTime.now(),
+            ),
+          );
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _messages.add(
+          ChatMessage(
+            text: "Sorry, I couldn't retrieve your reminders right now.",
+            isUser: false,
+            timestamp: DateTime.now(),
+          ),
+        );
+      });
+    }
+  }
+
+  String _formatRemindersResponse(List<Reminder> reminders) {
+    if (reminders.isEmpty) return "No reminders found.";
+
+    final buffer = StringBuffer();
+    buffer.writeln("📅 Your reminders:");
+    buffer.writeln();
+
+    for (int i = 0; i < reminders.length; i++) {
+      final reminder = reminders[i];
+      final timeString = _formatReminderTime(reminder.reminderTime);
+      buffer.writeln("${i + 1}. ${reminder.title} - $timeString");
+    }
+
+    return buffer.toString();
+  }
+
+  String _formatReminderTime(DateTime reminderTime) {
+    final now = DateTime.now();
+    final difference = reminderTime.difference(now);
+
+    if (difference.inDays > 0) {
+      return "${difference.inDays} day${difference.inDays == 1 ? '' : 's'} from now";
+    } else if (difference.inHours > 0) {
+      return "${difference.inHours} hour${difference.inHours == 1 ? '' : 's'} from now";
+    } else if (difference.inMinutes > 0) {
+      return "${difference.inMinutes} minute${difference.inMinutes == 1 ? '' : 's'} from now";
+    } else {
+      return "now";
     }
   }
 

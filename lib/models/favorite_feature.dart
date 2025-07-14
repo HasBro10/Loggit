@@ -86,6 +86,12 @@ class FavoriteFeature {
       icon: Icons.task_alt,
       order: 2,
     ),
+    const FavoriteFeature(
+      type: FeatureType.reminders,
+      title: 'Reminders',
+      icon: Icons.alarm,
+      order: 3,
+    ),
   ];
 
   static List<FavoriteFeature> get allAvailableFeatures => [

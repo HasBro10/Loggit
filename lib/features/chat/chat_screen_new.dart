@@ -11,7 +11,9 @@ import '../../models/log_entry.dart';
 import '../../services/log_parser_service.dart';
 import '../../shared/design/widgets/feature_card_button.dart';
 import '../../shared/utils/responsive.dart';
-import '../reminders/reminders_screen.dart';
+// Removed: import '../reminders/reminders_screen.dart';
+import '../../features/reminders/reminder_edit_modal.dart';
+import '../../services/reminders_service.dart';
 
 class ChatScreenNew extends StatefulWidget {
   final void Function(Expense)? onExpenseLogged;
@@ -20,6 +22,7 @@ class ChatScreenNew extends StatefulWidget {
   final void Function(Note)? onNoteLogged;
   final void Function(GymLog)? onGymLogLogged;
   final void Function()? onShowTasks;
+  final void Function()? onShowReminders;
   final VoidCallback? onThemeToggle;
   final ThemeMode currentThemeMode;
 
@@ -31,6 +34,7 @@ class ChatScreenNew extends StatefulWidget {
     this.onNoteLogged,
     this.onGymLogLogged,
     this.onShowTasks,
+    this.onShowReminders,
     this.onThemeToggle,
     required this.currentThemeMode,
   });
@@ -120,6 +124,26 @@ class _ChatScreenNewState extends State<ChatScreenNew>
     });
   }
 
+  String _formatDateTime(DateTime dateTime) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(Duration(days: 1));
+    final reminderDate = DateTime(dateTime.year, dateTime.month, dateTime.day);
+
+    String dateStr;
+    if (reminderDate == today) {
+      dateStr = 'Today';
+    } else if (reminderDate == tomorrow) {
+      dateStr = 'Tomorrow';
+    } else {
+      dateStr = '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+    }
+
+    final timeStr =
+        '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+    return '$dateStr at $timeStr';
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _messages.isNotEmpty && _scrollController.hasClients) {
@@ -132,42 +156,162 @@ class _ChatScreenNewState extends State<ChatScreenNew>
     });
   }
 
-  void _sendMessage() {
+  void _sendMessage() async {
     final message = _messageController.text.trim();
     if (message.isNotEmpty) {
       setState(() {
         _messages.add(
           _ChatMessage(text: message, isUser: true, timestamp: DateTime.now()),
         );
-        final logEntry = LogParserService.parseMessage(message);
-        if (logEntry != null) {
-          _pendingLog = logEntry;
-          final confirmationMessage = _getConfirmationMessage(logEntry);
-          _messages.add(
-            _ChatMessage(
-              text: confirmationMessage,
-              isUser: false,
-              timestamp: DateTime.now(),
-              isConfirmation: true,
-              onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
-                  _handleLogConfirmation(confirmed, updatedLogEntry),
-              pendingLogEntry: logEntry,
-            ),
-          );
-        } else {
-          _messages.add(
-            _ChatMessage(
-              text:
-                  "I didn't understand that. Try:\n• Coffee £3.50\n• Task: Call client\n• Remind me to buy milk\n• Note: Client prefers calls\n• Squats 3 sets x 10 reps",
-              isUser: false,
-              timestamp: DateTime.now(),
-            ),
-          );
-        }
       });
+
+      // Use AI-powered parsing (async)
+      print('DEBUG: Sending message to AI server: $message');
+      final aiResponse = await LogParserService.parseMessage(message);
+      print('DEBUG: AI server response: $aiResponse');
+
+      dynamic parsed;
+      final aiIntent = aiResponse is Map
+          ? aiResponse['intent']?.toString()
+          : null;
+      if (aiIntent == null || aiIntent == 'unknown') {
+        print('DEBUG: Falling back to regex parser');
+        parsed = LogParserService.parseLocally(message);
+      } else {
+        print('DEBUG: Using AI response');
+        parsed = aiResponse;
+      }
+
+      print('DEBUG: Final parser returned: $parsed');
+
+      // Convert AI/parsed result to LogEntry/Reminder/Task/Note/GymLog if possible
+      LogEntry? logEntry;
+      if (parsed is Map) {
+        switch (parsed['intent']) {
+          case 'create_reminder':
+          case 'reminder':
+            logEntry = _mapToReminder(parsed);
+            break;
+          case 'task':
+            logEntry = _mapToTask(parsed);
+            break;
+          case 'expense':
+            logEntry = _mapToExpense(parsed);
+            break;
+          case 'note':
+            logEntry = _mapToNote(parsed);
+            break;
+          case 'gym_log':
+            logEntry = _mapToGymLog(parsed);
+            break;
+          default:
+            logEntry = null;
+        }
+      } else if (parsed is LogEntry) {
+        logEntry = parsed;
+      }
+
+      // ... existing code for handling logEntry, reminders, etc. ...
+      if (logEntry != null) {
+        _pendingLog = logEntry;
+        final confirmationMessage = _getConfirmationMessage(logEntry);
+        _messages.add(
+          _ChatMessage(
+            text: confirmationMessage,
+            isUser: false,
+            timestamp: DateTime.now(),
+            isConfirmation: true,
+            onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
+                _handleLogConfirmation(confirmed, updatedLogEntry),
+            pendingLogEntry: logEntry,
+          ),
+        );
+      } else {
+        _messages.add(
+          _ChatMessage(
+            text:
+                "I didn't understand that. Try:\n• Coffee £3.50\n• Task: Call client\n• Remind me to buy milk\n• Note: Client prefers calls\n• Squats 3 sets x 10 reps",
+            isUser: false,
+            timestamp: DateTime.now(),
+          ),
+        );
+      }
       _messageController.clear();
       _scrollToBottom();
     }
+  }
+
+  // Helper methods to convert AI response Map to app models
+  Reminder? _mapToReminder(Map data) {
+    final title = data['title'] ?? '';
+    final dateStr = data['date'] ?? '';
+    final timeStr = data['time'] ?? '';
+    DateTime reminderTime = DateTime.now();
+    // Parse date and time if possible
+    // (Add more robust parsing as needed)
+    if (dateStr.isNotEmpty || timeStr.isNotEmpty) {
+      // Simple parsing: try to combine date and time
+      final now = DateTime.now();
+      DateTime? date;
+      if (dateStr.toLowerCase() == 'tomorrow') {
+        date = now.add(Duration(days: 1));
+      } else if (dateStr.toLowerCase() == 'today') {
+        date = now;
+      }
+      // Add more date parsing as needed
+      int hour = 0;
+      int minute = 0;
+      if (timeStr.isNotEmpty) {
+        final timeMatch = RegExp(
+          r'^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?',
+          caseSensitive: false,
+        ).firstMatch(timeStr);
+        if (timeMatch != null) {
+          hour = int.parse(timeMatch.group(1)!);
+          minute = timeMatch.group(2) != null
+              ? int.parse(timeMatch.group(2)!)
+              : 0;
+          final ampm = timeMatch.group(3)?.toLowerCase();
+          if (ampm == 'pm' && hour < 12) hour += 12;
+          if (ampm == 'am' && hour == 12) hour = 0;
+        }
+      }
+      if (date != null) {
+        reminderTime = DateTime(date.year, date.month, date.day, hour, minute);
+      } else {
+        reminderTime = DateTime(now.year, now.month, now.day, hour, minute);
+      }
+    }
+    return Reminder(
+      title: title,
+      reminderTime: reminderTime,
+      timestamp: DateTime.now(),
+    );
+  }
+
+  Task? _mapToTask(Map data) {
+    final title = data['title'] ?? '';
+    return Task(title: title, timestamp: DateTime.now());
+  }
+
+  Expense? _mapToExpense(Map data) {
+    final title = data['title'] ?? '';
+    // You may want to parse amount from title or add an 'amount' field to the AI prompt
+    return Expense(category: title, amount: 0, timestamp: DateTime.now());
+  }
+
+  Note? _mapToNote(Map data) {
+    final title = data['title'] ?? '';
+    return Note(title: title, content: title, timestamp: DateTime.now());
+  }
+
+  GymLog? _mapToGymLog(Map data) {
+    final title = data['title'] ?? '';
+    return GymLog(
+      workoutName: title,
+      exercises: [Exercise(name: title, sets: 0, reps: 0)],
+      timestamp: DateTime.now(),
+    );
   }
 
   String _getConfirmationMessage(LogEntry logEntry) {
@@ -180,8 +324,14 @@ class _ChatScreenNewState extends State<ChatScreenNew>
         return "Create task: ${task.title}?";
       case 'reminder':
         final reminder = logEntry as Reminder;
-        final timeString = _formatTime(reminder.reminderTime);
-        return "Set reminder: ${reminder.title} at $timeString?";
+        // Only show (no time set yet) if time is 00:00
+        if (reminder.reminderTime.hour == 0 &&
+            reminder.reminderTime.minute == 0) {
+          return "Set reminder: ${reminder.title} (no time set yet)";
+        }
+        final timeString = _formatReminderTime(reminder.reminderTime);
+        // Return a special marker for bolding in the chat bubble
+        return "Set reminder: ${reminder.title} for <b>$timeString</b>?";
       case 'note':
         final note = logEntry as Note;
         return "Save note: ${note.content}?";
@@ -209,27 +359,195 @@ class _ChatScreenNewState extends State<ChatScreenNew>
     }
   }
 
+  String _formatReminderTime(DateTime time) {
+    // UK format: Wed, 17 Jul at 18:00
+    const List<String> weekdays = [
+      'Mon',
+      'Tue',
+      'Wed',
+      'Thu',
+      'Fri',
+      'Sat',
+      'Sun',
+    ];
+    const List<String> months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final weekday = weekdays[time.weekday - 1];
+    final day = time.day.toString().padLeft(2, '0');
+    final month = months[time.month - 1];
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+    final timeString = '$hour:$minute';
+    return "$weekday, $day $month at $timeString";
+  }
+
+  String _formatReminderDate(DateTime time) {
+    // UK format: Mon, 22 Jul
+    const List<String> weekdays = [
+      'Mon',
+      'Tue',
+      'Wed',
+      'Thu',
+      'Fri',
+      'Sat',
+      'Sun',
+    ];
+    const List<String> months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final weekday = weekdays[time.weekday - 1];
+    final day = time.day.toString().padLeft(2, '0');
+    final month = months[time.month - 1];
+    return '$weekday, $day $month';
+  }
+
+  void _handleEditReminder(BuildContext context, LogEntry? logEntry) async {
+    if (logEntry == null || logEntry.logType != 'reminder') return;
+    final updated = await showReminderEditModal(
+      context,
+      initial: logEntry as Reminder,
+    );
+    if (updated is Reminder) {
+      setState(() {
+        // Remove any previous confirmation bubbles for this reminder
+        _messages.removeWhere(
+          (m) => m.isConfirmation && m.pendingLogEntry?.logType == 'reminder',
+        );
+        _messages.add(
+          _ChatMessage(
+            text: _getConfirmationMessage(updated),
+            isUser: false,
+            timestamp: DateTime.now(),
+            isConfirmation: true,
+            onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
+                _handleLogConfirmation(confirmed, updatedLogEntry ?? updated),
+            pendingLogEntry: updated,
+          ),
+        );
+      });
+      _scrollToBottom();
+    }
+  }
+
   void _handleLogConfirmation(bool confirmed, [LogEntry? updatedLogEntry]) {
     final logEntry = updatedLogEntry ?? _pendingLog;
+    print(
+      'DEBUG: _handleLogConfirmation called with confirmed=$confirmed, logEntry=$logEntry',
+    );
     if (confirmed && logEntry != null) {
+      // Special handling for reminders: require a time and check for past time
+      if (logEntry.logType == 'reminder') {
+        final reminder = logEntry as Reminder;
+        final now = DateTime.now();
+        // If the time is midnight (00:00), treat as unset (user must set a time)
+        if (reminder.reminderTime.hour == 0 &&
+            reminder.reminderTime.minute == 0) {
+          setState(() {
+            _messages.removeWhere(
+              (m) =>
+                  m.isConfirmation && m.pendingLogEntry?.logType == 'reminder',
+            );
+            _messages.add(
+              _ChatMessage(
+                text:
+                    "⏰ Please set a time for your reminder. Tap [Edit] to choose a time, or type something like 'at 18:00' or 'tomorrow at 9am'.",
+                isUser: false,
+                timestamp: DateTime.now(),
+                isConfirmation: true,
+                onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
+                    _handleLogConfirmation(
+                      confirmed,
+                      updatedLogEntry ?? reminder,
+                    ),
+                pendingLogEntry: reminder,
+              ),
+            );
+          });
+          _scrollToBottom();
+          return;
+        }
+        // If the time is in the past, prompt the user to pick a future time
+        if (reminder.reminderTime.isBefore(now)) {
+          setState(() {
+            _messages.removeWhere(
+              (m) =>
+                  m.isConfirmation && m.pendingLogEntry?.logType == 'reminder',
+            );
+            _messages.add(
+              _ChatMessage(
+                text:
+                    "⏰ That time has already passed. Please pick a future time. Tap [Edit] to choose a new time, or type something like 'at 18:00' or 'tomorrow at 9am'.",
+                isUser: false,
+                timestamp: DateTime.now(),
+                isConfirmation: true,
+                onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
+                    _handleLogConfirmation(
+                      confirmed,
+                      updatedLogEntry ?? reminder,
+                    ),
+                pendingLogEntry: reminder,
+              ),
+            );
+          });
+          _scrollToBottom();
+          return;
+        }
+      }
+      print('DEBUG: LogEntry type: ${logEntry.logType}');
       switch (logEntry.logType) {
         case 'expense':
+          print('DEBUG: Calling onExpenseLogged');
           widget.onExpenseLogged?.call(logEntry as Expense);
           break;
         case 'task':
+          print('DEBUG: Calling onTaskLogged');
           widget.onTaskLogged?.call(logEntry as Task);
           break;
         case 'reminder':
+          print(
+            'DEBUG: Calling onReminderLogged with reminder: ${logEntry as Reminder}',
+          );
           widget.onReminderLogged?.call(logEntry as Reminder);
           break;
         case 'note':
+          print('DEBUG: Calling onNoteLogged');
           widget.onNoteLogged?.call(logEntry as Note);
           break;
         case 'gym':
+          print('DEBUG: Calling onGymLogLogged');
           widget.onGymLogLogged?.call(logEntry as GymLog);
           break;
       }
       setState(() {
+        // Remove all confirmation bubbles for this log type
+        _messages.removeWhere(
+          (m) =>
+              m.isConfirmation &&
+              m.pendingLogEntry?.logType == logEntry.logType,
+        );
         _messages.add(
           _ChatMessage(
             text: "✅ ${_getSuccessMessage(logEntry)}",
@@ -240,6 +558,12 @@ class _ChatScreenNewState extends State<ChatScreenNew>
       });
     } else {
       setState(() {
+        // Remove all confirmation bubbles for this log type
+        _messages.removeWhere(
+          (m) =>
+              m.isConfirmation &&
+              m.pendingLogEntry?.logType == _pendingLog?.logType,
+        );
         _messages.add(
           _ChatMessage(
             text: "❌ ${_getCancelledMessage(_pendingLog)}",
@@ -262,7 +586,8 @@ class _ChatScreenNewState extends State<ChatScreenNew>
         return "Task created: ${task.title}";
       case 'reminder':
         final reminder = logEntry as Reminder;
-        return "Reminder set: ${reminder.title}";
+        final dateTimeString = _formatReminderTime(reminder.reminderTime);
+        return "Reminder set: ${reminder.title} on <b>$dateTimeString</b>";
       case 'note':
         final note = logEntry as Note;
         return "Note saved: ${note.content}";
@@ -290,6 +615,47 @@ class _ChatScreenNewState extends State<ChatScreenNew>
         return "Workout cancelled";
       default:
         return "Entry cancelled";
+    }
+  }
+
+  String _getNoRemindersMessage(String filter, int? day) {
+    switch (filter) {
+      case 'today':
+        return "You don't have any reminders for today.";
+      case 'week':
+        return "You don't have any reminders for this week.";
+      case 'day':
+        return "You don't have any reminders for the ${day}${_getDaySuffix(day)}.";
+      default:
+        return "You don't have any reminders.";
+    }
+  }
+
+  String _getRemindersListMessage(String filter, int? day) {
+    switch (filter) {
+      case 'today':
+        return "Here are your reminders for today:";
+      case 'week':
+        return "Here are your reminders for this week:";
+      case 'day':
+        return "Here are your reminders for the ${day}${_getDaySuffix(day)}:";
+      default:
+        return "Here are all your reminders:";
+    }
+  }
+
+  String _getDaySuffix(int? day) {
+    if (day == null) return '';
+    if (day >= 11 && day <= 13) return 'th';
+    switch (day % 10) {
+      case 1:
+        return 'st';
+      case 2:
+        return 'nd';
+      case 3:
+        return 'rd';
+      default:
+        return 'th';
     }
   }
 
@@ -507,35 +873,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                   onProfileTap: () => _showProfileSheet(context),
                   isDark: isDark,
                 ),
-                Positioned(
-                  right: 24,
-                  bottom: 8,
-                  child: PhysicalModel(
-                    color: isDark ? LoggitColors.darkCard : Colors.white,
-                    elevation: 8,
-                    borderRadius: BorderRadius.circular(32),
-                    shadowColor: Colors.black.withOpacity(0.18),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(32),
-                      onTap: () => _showLogOptionsSheet(context),
-                      child: Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: isDark ? LoggitColors.darkCard : Colors.white,
-                          borderRadius: BorderRadius.circular(32),
-                        ),
-                        child: Icon(
-                          Icons.menu,
-                          color: isDark
-                              ? LoggitColors.darkText
-                              : LoggitColors.darkGrayText,
-                          size: 32,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+                // Removed floating hamburger menu button here
               ],
             ),
           ],
@@ -579,15 +917,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             icon: Icons.alarm,
             label: 'Reminders',
             color: isDark ? LoggitColors.darkAccent : Colors.deepPurple,
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => RemindersScreen(
-                    onBack: () => Navigator.of(context).pop(),
-                  ),
-                ),
-              );
-            },
+            onTap: widget.onShowReminders,
           ),
           _LogOption(
             icon: Icons.check_circle,
@@ -976,8 +1306,260 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                   color: isDark ? LoggitColors.darkBorder : Color(0xFFF3F4F6),
                 ),
         ),
-        child: Text(
-          msg.text,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildChatText(msg.text, isUser, isDark),
+            if (msg.isConfirmation && msg.onConfirmationResponse != null) ...[
+              SizedBox(height: 8),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ElevatedButton(
+                    onPressed: () =>
+                        msg.onConfirmationResponse!(true, msg.pendingLogEntry),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: LoggitColors.tealDark,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(
+                      'Yes',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () =>
+                        msg.onConfirmationResponse!(false, msg.pendingLogEntry),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isDark
+                          ? LoggitColors.darkBorder
+                          : Colors.grey[300],
+                      foregroundColor: isDark ? Colors.white : Colors.black,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(
+                      'No',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (msg.pendingLogEntry != null &&
+                      msg.pendingLogEntry!.logType == 'reminder') ...[
+                    SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: () =>
+                          _handleEditReminder(context, msg.pendingLogEntry),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.amber[800],
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Text(
+                        'Edit',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+            if (msg.isReminderList && msg.reminderList != null) ...[
+              SizedBox(height: 12),
+              ...msg.reminderList!.map(
+                (reminder) =>
+                    _buildReminderListItem(reminder, isDark, msg.isDeleteMode),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReminderListItem(
+    Reminder reminder,
+    bool isDark,
+    bool isDeleteMode,
+  ) {
+    return Container(
+      margin: EdgeInsets.only(bottom: 8),
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? LoggitColors.darkBorder : Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isDark ? LoggitColors.darkBorder : Color(0xFFE2E8F0),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  reminder.title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  _formatReminderTime(reminder.reminderTime),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark
+                        ? LoggitColors.darkSubtext
+                        : LoggitColors.lighterGraySubtext,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                onPressed: () => _handleEditReminder(context, reminder),
+                icon: Icon(Icons.edit, size: 16, color: LoggitColors.tealDark),
+                padding: EdgeInsets.all(4),
+                constraints: BoxConstraints(minWidth: 32, minHeight: 32),
+              ),
+              IconButton(
+                onPressed: () => _handleDeleteReminder(reminder),
+                icon: Icon(Icons.delete, size: 16, color: Colors.red[600]),
+                padding: EdgeInsets.all(4),
+                constraints: BoxConstraints(minWidth: 32, minHeight: 32),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleDeleteReminder(Reminder reminder) {
+    setState(() {
+      _messages.add(
+        _ChatMessage(
+          text:
+              'Are you sure you want to delete the reminder "${reminder.title}" for <b>${_formatReminderTime(reminder.reminderTime)}</b>?',
+          isUser: false,
+          timestamp: DateTime.now(),
+          isConfirmation: true,
+          onConfirmationResponse: (confirmed, [updatedLogEntry]) async {
+            if (confirmed) {
+              await RemindersService.deleteReminder(reminder);
+              setState(() {
+                _messages.add(
+                  _ChatMessage(
+                    text: '✅ Reminder deleted.',
+                    isUser: false,
+                    timestamp: DateTime.now(),
+                  ),
+                );
+              });
+            } else {
+              setState(() {
+                _messages.add(
+                  _ChatMessage(
+                    text: '❌ Deletion cancelled.',
+                    isUser: false,
+                    timestamp: DateTime.now(),
+                  ),
+                );
+              });
+            }
+            _scrollToBottom();
+          },
+          pendingLogEntry: reminder,
+        ),
+      );
+    });
+    _scrollToBottom();
+  }
+
+  Widget _buildChatText(String text, bool isUser, bool isDark) {
+    // Look for <b>...</b> markers and render bold
+    final regex = RegExp(r'<b>(.*?)</b>');
+    final matches = regex.allMatches(text);
+    if (matches.isEmpty) {
+      return Text(
+        text,
+        style: TextStyle(
+          color: isUser ? Colors.white : (isDark ? Colors.white : Colors.black),
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+        ),
+        softWrap: true,
+        overflow: TextOverflow.visible,
+      );
+    }
+    final spans = <TextSpan>[];
+    int last = 0;
+    for (final match in matches) {
+      if (match.start > last) {
+        spans.add(
+          TextSpan(
+            text: text.substring(last, match.start),
+            style: TextStyle(
+              color: isUser
+                  ? Colors.white
+                  : (isDark ? Colors.white : Colors.black),
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        );
+      }
+      spans.add(
+        TextSpan(
+          text: match.group(1),
+          style: TextStyle(
+            color: isUser
+                ? Colors.white
+                : (isDark ? Colors.white : Colors.black),
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      );
+      last = match.end;
+    }
+    if (last < text.length) {
+      spans.add(
+        TextSpan(
+          text: text.substring(last),
           style: TextStyle(
             color: isUser
                 ? Colors.white
@@ -985,10 +1567,13 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             fontSize: 15,
             fontWeight: FontWeight.w500,
           ),
-          softWrap: true,
-          overflow: TextOverflow.visible,
         ),
-      ),
+      );
+    }
+    return Text.rich(
+      TextSpan(children: spans),
+      softWrap: true,
+      overflow: TextOverflow.visible,
     );
   }
 }
@@ -1216,6 +1801,10 @@ class _ChatMessage {
   final bool isConfirmation;
   final Function(bool, [LogEntry?])? onConfirmationResponse;
   final LogEntry? pendingLogEntry;
+  final bool isReminderList;
+  final List<Reminder>? reminderList;
+  final bool isDeleteMode;
+  final String? originalSearchTerm;
   const _ChatMessage({
     required this.text,
     required this.isUser,
@@ -1223,6 +1812,10 @@ class _ChatMessage {
     this.isConfirmation = false,
     this.onConfirmationResponse,
     this.pendingLogEntry,
+    this.isReminderList = false,
+    this.reminderList,
+    this.isDeleteMode = false,
+    this.originalSearchTerm,
   });
 }
 

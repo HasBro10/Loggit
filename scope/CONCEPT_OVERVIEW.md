@@ -93,7 +93,6 @@ Bench press 80kg x 5 reps
 
 **Future Features**:
 - Tags
-- AI summaries
 
 **Example Input**: `Note: Check out new supplier for coffee beans.`
 
@@ -128,23 +127,7 @@ Bench press 80kg x 5 reps
 
 ---
 
-## 5. AI & Smart Features (Future Phase)
-
-### Smart Categorization:
-- "Lunch £15" → Dining
-
-### Conversational Analytics:
-- "How much did I spend on dining last month?"
-
-### Intelligent Insights:
-- Reminders and task insights
-- Suggest prioritizing overdue tasks
-- Predictive spending insights
-- Forecasting trends
-
----
-
-## 6. Technical & Platform Details
+## 5. Technical & Platform Details
 
 ### Platform:
 - **Flutter mobile app**
@@ -200,7 +183,6 @@ Loggit aims to:
 ✅ **Reduce friction** — no forms or complicated inputs
 ✅ **Be a single app for multiple log types**
 ✅ **Cater to individuals and small businesses**
-✅ **Use conversational AI** for intelligent suggestions and analysis
 ✅ **Help users keep their life and business organized** without mental clutter
 
 ---

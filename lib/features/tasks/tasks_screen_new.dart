@@ -54,9 +54,9 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
   );
 
   // Drag tracking variables for swipe gestures
-  bool _isDragging = false;
-  double _dragStartX = 0;
-  double _dragDistance = 0;
+  final bool _isDragging = false;
+  final double _dragStartX = 0;
+  final double _dragDistance = 0;
 
   @override
   void initState() {
@@ -4944,7 +4944,7 @@ class OverlayDeleteTaskCard extends StatefulWidget {
   final VoidCallback onDelete;
   final ValueNotifier<String?> openDeleteTaskTitle;
   final VoidCallback? onTap;
-  const OverlayDeleteTaskCard({
+  const OverlayDeleteTaskCard({super.key, 
     required this.child,
     required this.task,
     required this.isDark,
