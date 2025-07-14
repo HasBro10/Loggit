@@ -173,208 +173,59 @@ class _ChatScreenNewState extends State<ChatScreenNew>
       print('DEBUG: Parsed action: ${parsed.action}');
 
       LogEntry? logEntry;
-      // --- New: Handle pending reminder for partial info ---
+
+      // SIMPLE APPROACH: Handle reminders cleanly
       if (parsed.type == LogType.reminder) {
         DateTime? date = parsed.dateTime;
         bool hasTime = parsed.hasTime;
         String title = parsed.action ?? '';
 
-        // Check if this is a standalone time input (like "6 pm")
-        bool isStandaloneTime =
-            title.isEmpty &&
-            parsed.raw != null &&
-            RegExp(
-              r'^(at\s+)?(\d{1,2})(:(\d{2}))?\s*(am|pm)?$',
-              caseSensitive: false,
-            ).hasMatch(parsed.raw!.toLowerCase());
+        // If we have a pending reminder, try to combine with new input
+        if (_pendingLog is Reminder) {
+          final pending = _pendingLog as Reminder;
 
-        if (isStandaloneTime && _pendingLog is Reminder) {
-          // Parse the standalone time and combine with pending reminder
-          final timeMatch = RegExp(
-            r'^(at\s+)?(\d{1,2})(:(\d{2}))?\s*(am|pm)?$',
-            caseSensitive: false,
-          ).firstMatch(parsed.raw!.toLowerCase());
-          if (timeMatch != null) {
-            final pending = _pendingLog as Reminder;
-            int hour = int.parse(timeMatch.group(2)!);
-            int minute = timeMatch.group(4) != null
-                ? int.parse(timeMatch.group(4)!)
-                : 0;
-            final ampm = timeMatch.group(5);
-            if (ampm == 'pm' && hour < 12) hour += 12;
-            if (ampm == 'am' && hour == 12) hour = 0;
-
-            // Create complete reminder with pending date and new time
+          // If new input has date/time but no title, use pending title
+          if (date != null && hasTime && title.isEmpty) {
             logEntry = Reminder(
               title: pending.title,
-              reminderTime: DateTime(
-                pending.reminderTime.year,
-                pending.reminderTime.month,
-                pending.reminderTime.day,
-                hour,
-                minute,
-              ),
+              reminderTime: date,
               timestamp: DateTime.now(),
             );
-            print(
-              'DEBUG: Created reminder with date: ${(logEntry as Reminder).reminderTime}',
-            );
-            print('DEBUG: Pending reminder date was: ${pending.reminderTime}');
             _pendingLog = null;
           }
-        } else {
-          // If there is a pending reminder waiting for date/time, merge info
-          if (_pendingLog is Reminder) {
-            final pending = _pendingLog as Reminder;
-            // If user only provided a time, use previous date
-            if (date != null && !hasTime && pending.reminderTime != null) {
-              date = DateTime(
-                pending.reminderTime.year,
-                pending.reminderTime.month,
-                pending.reminderTime.day,
-                0,
-                0,
-              );
-            }
-            // If user only provided a date, use previous time
-            if (date == null && hasTime && pending.reminderTime != null) {
-              date = DateTime(
-                pending.reminderTime.year,
-                pending.reminderTime.month,
-                pending.reminderTime.day,
-                pending.reminderTime.hour,
-                pending.reminderTime.minute,
-              );
-            }
-            // If user provided both, use as is
-            if (date == null && pending.reminderTime != null) {
-              date = pending.reminderTime;
-            }
-            if (title.isEmpty) title = pending.title;
-          }
-
-          // If we have both date and time, create the reminder
-          if (date != null && hasTime) {
-            print('DEBUG: Creating reminder with date: $date');
+          // If new input has title but no date/time, use pending date/time
+          else if (date == null && title.isNotEmpty) {
             logEntry = Reminder(
               title: title,
-              reminderTime: date!,
+              reminderTime: pending.reminderTime,
               timestamp: DateTime.now(),
             );
             _pendingLog = null;
-          } else if (date == null) {
-            // Missing date, prompt for it
-            setState(() {
-              _pendingLog = Reminder(
-                title: title,
-                reminderTime: DateTime.now(),
-                timestamp: DateTime.now(),
-              );
-              _messages.add(
-                _ChatMessage(
-                  text:
-                      'Please press the edit button to add your time and day.',
-                  isUser: false,
-                  timestamp: DateTime.now(),
-                  isConfirmation: true,
-                  onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
-                      _handleLogConfirmation(confirmed, updatedLogEntry),
-                  pendingLogEntry: _pendingLog,
-                ),
-              );
-            });
-            _messageController.clear();
-            _scrollToBottom();
-            return;
-          } else if (!hasTime) {
-            // Missing time, prompt for it
-            setState(() {
-              _pendingLog = Reminder(
-                title: title,
-                reminderTime: date!,
-                timestamp: DateTime.now(),
-              );
-              _messages.add(
-                _ChatMessage(
-                  text:
-                      'Please type in a time for "$title" or use the edit button to set the appointment time.',
-                  isUser: false,
-                  timestamp: DateTime.now(),
-                  isConfirmation: true,
-                  onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
-                      _handleLogConfirmation(confirmed, updatedLogEntry),
-                  pendingLogEntry: _pendingLog,
-                ),
-              );
-            });
-            _messageController.clear();
-            _scrollToBottom();
-            return;
           }
-        }
-      } else if (_pendingLog is Reminder) {
-        // If there's a pending reminder but the parser didn't recognize this as a reminder,
-        // try to parse it as a time, date, or combined input
-        final pending = _pendingLog as Reminder;
-
-        // Check if it's a standalone time
-        print('DEBUG: Checking for standalone time in: $message');
-        final timeMatch = RegExp(
-          r'^(at\s+)?(\d{1,2})(:(\d{2}))?\s*(am|pm)?$',
-          caseSensitive: false,
-        ).firstMatch(message.toLowerCase());
-        print('DEBUG: Time match result: $timeMatch');
-        if (timeMatch != null) {
-          int hour = int.parse(timeMatch.group(2)!);
-          int minute = timeMatch.group(4) != null
-              ? int.parse(timeMatch.group(4)!)
-              : 0;
-          final ampm = timeMatch.group(5);
-          if (ampm == 'pm' && hour < 12) hour += 12;
-          if (ampm == 'am' && hour == 12) hour = 0;
-
-          // --- FIX: Use the date from the pending reminder, not today ---
-          DateTime pendingDate = pending.reminderTime;
+          // If new input has both, use it and clear pending
+          else if (date != null && hasTime && title.isNotEmpty) {
+            logEntry = Reminder(
+              title: title,
+              reminderTime: date,
+              timestamp: DateTime.now(),
+            );
+            _pendingLog = null;
+          }
+          // Otherwise, create incomplete reminder for prompting
+          else {
+            logEntry = Reminder(
+              title: title,
+              reminderTime: date ?? DateTime.now(),
+              timestamp: DateTime.now(),
+            );
+          }
+        } else {
+          // No pending reminder - create new one
           logEntry = Reminder(
-            title: pending.title,
-            reminderTime: DateTime(
-              pendingDate.year,
-              pendingDate.month,
-              pendingDate.day,
-              hour,
-              minute,
-            ),
+            title: title,
+            reminderTime: date ?? DateTime.now(),
             timestamp: DateTime.now(),
           );
-          _pendingLog = null;
-        } else {
-          // Check if it's a date or combined time+date
-          final dtResult = LogParserService.parseSimpleDateTimeWithTimeFlag(
-            message,
-          );
-          if (dtResult.dateTime != null) {
-            logEntry = Reminder(
-              title: pending.title,
-              reminderTime: dtResult.dateTime!,
-              timestamp: DateTime.now(),
-            );
-            _pendingLog = null;
-          } else {
-            // Still don't understand the input
-            setState(() {
-              _messages.add(
-                _ChatMessage(
-                  text:
-                      'I didn\'t understand that. Please type a time (like "6 pm") or a date (like "15 July") for your reminder.',
-                  isUser: false,
-                  timestamp: DateTime.now(),
-                ),
-              );
-            });
-            _messageController.clear();
-            _scrollToBottom();
-            return;
-          }
         }
       } else {
         // Not a reminder, clear pending log
@@ -383,6 +234,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
           case LogType.task:
             logEntry = Task(
               title: parsed.action ?? '',
+              dueDate: parsed.dateTime,
               timestamp: DateTime.now(),
             );
             break;
@@ -410,18 +262,98 @@ class _ChatScreenNewState extends State<ChatScreenNew>
       if (logEntry != null) {
         _pendingLog = logEntry;
         String confirmationMessage;
+        bool canConfirm = true;
+        bool showEdit = false;
         if (parsed.type == LogType.reminder) {
+          // Context-aware prompt and button logic
+          final reminder = logEntry as Reminder;
+          print('DEBUG: Chat logic - parsed.dateTime: ${parsed.dateTime}');
+          print('DEBUG: Chat logic - parsed.hasTime: ${parsed.hasTime}');
+          print('DEBUG: Chat logic - reminder.title: "${reminder.title}"');
+          print(
+            'DEBUG: Chat logic - reminder.title.isEmpty: ${reminder.title.isEmpty}',
+          );
+
           if (parsed.dateTime == null) {
+            // Missing date/time - disable Yes button
+            print('DEBUG: Chat logic - Missing date/time');
             confirmationMessage =
-                'Please press the edit button to add your time and day.';
+                'When should I remind you? Please add a date and time.';
+            canConfirm = false;
+            showEdit = true;
           } else if (!parsed.hasTime) {
-            confirmationMessage =
-                'Please type in a time or add the time with the edit button.';
-          } else {
+            print('DEBUG: Chat logic - Missing time');
+            confirmationMessage = 'What time should I remind you?';
+            canConfirm = false;
+            showEdit = true;
+          } else if (reminder.title.isEmpty) {
+            // Have date/time but missing action - ask for action
+            print('DEBUG: Chat logic - Missing action');
+            confirmationMessage = 'What should I remind you about?';
+            canConfirm = false;
+            showEdit = true;
+          } else if (parsed.dateTime != null &&
+              parsed.hasTime &&
+              reminder.title.isNotEmpty) {
+            print('DEBUG: Chat logic - Complete reminder');
             confirmationMessage = _getConfirmationMessage(logEntry);
+            canConfirm = true;
+            showEdit = true;
+          } else {
+            print('DEBUG: Chat logic - Invalid date/time');
+            confirmationMessage =
+                'That doesn\'t look like a valid date/time. Please try again.';
+            canConfirm = false;
+            showEdit = true;
+          }
+        } else if (parsed.type == LogType.task) {
+          // Task-specific confirmation logic
+          final task = logEntry as Task;
+          print(
+            'DEBUG: [TASK] Chat logic - parsed.dateTime: ${parsed.dateTime}',
+          );
+          print('DEBUG: [TASK] Chat logic - parsed.hasTime: ${parsed.hasTime}');
+          print('DEBUG: [TASK] Chat logic - task.title: "${task.title}"');
+          print(
+            'DEBUG: [TASK] Chat logic - task.title.isEmpty: ${task.title.isEmpty}',
+          );
+
+          if (task.title.isEmpty) {
+            // Missing action - ask for action
+            print('DEBUG: [TASK] Chat logic - Missing action');
+            confirmationMessage = 'What task should I create?';
+            canConfirm = false;
+            showEdit = true;
+          } else if (parsed.dateTime == null) {
+            // Have action but missing date/time - ask for date/time
+            print('DEBUG: [TASK] Chat logic - Missing date/time');
+            confirmationMessage =
+                'When is this task due? Please add a date and time.';
+            canConfirm = false;
+            showEdit = true;
+          } else if (!parsed.hasTime) {
+            print('DEBUG: [TASK] Chat logic - Missing time');
+            confirmationMessage = 'What time is this task due?';
+            canConfirm = false;
+            showEdit = true;
+          } else if (parsed.dateTime != null &&
+              parsed.hasTime &&
+              task.title.isNotEmpty) {
+            print('DEBUG: [TASK] Chat logic - Complete task');
+            confirmationMessage = _getConfirmationMessage(logEntry);
+            canConfirm = true;
+            showEdit = true;
+          } else {
+            print('DEBUG: [TASK] Chat logic - Invalid date/time');
+            confirmationMessage =
+                'That doesn\'t look like a valid date/time. Please try again.';
+            canConfirm = false;
+            showEdit = true;
           }
         } else {
           confirmationMessage = _getConfirmationMessage(logEntry);
+          canConfirm = true;
+          showEdit = true; // Always show edit button for tasks and reminders
         }
         _messages.add(
           _ChatMessage(
@@ -432,6 +364,8 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
                 _handleLogConfirmation(confirmed, updatedLogEntry),
             pendingLogEntry: logEntry,
+            canConfirm: canConfirm,
+            showEdit: showEdit,
           ),
         );
       }
@@ -520,7 +454,27 @@ class _ChatScreenNewState extends State<ChatScreenNew>
         return "Log expense: £${expense.amount.toStringAsFixed(2)} for ${expense.category}?";
       case 'task':
         final task = logEntry as Task;
-        return "Create task: ${task.title}?";
+        if (task.dueDate != null) {
+          // If time is 00:00, treat as 'no time set' and only show date (if present)
+          if (task.dueDate!.hour == 0 && task.dueDate!.minute == 0) {
+            final date = task.dueDate!;
+            final now = DateTime.now();
+            // Only show date if it's not today
+            if (date.year != now.year ||
+                date.month != now.month ||
+                date.day != now.day) {
+              final dateString =
+                  "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}";
+              return "Create task: ${task.title} due $dateString (no time set yet)?";
+            } else {
+              return "Create task: ${task.title} (no time set yet)?";
+            }
+          }
+          final timeString = _formatReminderTime(task.dueDate!);
+          return "Create task: ${task.title} due <b>$timeString</b>?";
+        } else {
+          return "Create task: ${task.title}?";
+        }
       case 'reminder':
         final reminder = logEntry as Reminder;
         // If time is 00:00, treat as 'no time set' and only show date (if present)
@@ -1525,10 +1479,16 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   ElevatedButton(
-                    onPressed: () =>
-                        msg.onConfirmationResponse!(true, msg.pendingLogEntry),
+                    onPressed: msg.canConfirm
+                        ? () => msg.onConfirmationResponse!(
+                            true,
+                            msg.pendingLogEntry,
+                          )
+                        : null,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: LoggitColors.tealDark,
+                      backgroundColor: msg.canConfirm
+                          ? LoggitColors.tealDark
+                          : Colors.grey[400],
                       foregroundColor: Colors.white,
                       padding: EdgeInsets.symmetric(
                         horizontal: 16,
@@ -2014,6 +1974,8 @@ class _ChatMessage {
   final List<Reminder>? reminderList;
   final bool isDeleteMode;
   final String? originalSearchTerm;
+  final bool canConfirm;
+  final bool showEdit;
   const _ChatMessage({
     required this.text,
     required this.isUser,
@@ -2025,6 +1987,8 @@ class _ChatMessage {
     this.reminderList,
     this.isDeleteMode = false,
     this.originalSearchTerm,
+    this.canConfirm = true,
+    this.showEdit = false,
   });
 }
 

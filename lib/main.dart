@@ -424,6 +424,7 @@ class _LoggitHomeState extends State<LoggitHome> {
         return DashboardScreen(expenses: _expenses);
       case FeatureType.tasks:
         return TasksScreenNew(
+          tasks: _tasks,
           onBack: () {
             final chatIndex = _favorites.indexWhere(
               (f) => f.type == FeatureType.chat,

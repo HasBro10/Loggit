@@ -10,6 +10,8 @@ class ChatMessage extends StatelessWidget {
   final bool isConfirmation;
   final Function(bool, [LogEntry?])? onConfirmationResponse;
   final LogEntry? pendingLogEntry;
+  final bool canConfirm;
+  final bool showEdit;
 
   const ChatMessage({
     super.key,
@@ -19,6 +21,8 @@ class ChatMessage extends StatelessWidget {
     this.isConfirmation = false,
     this.onConfirmationResponse,
     this.pendingLogEntry,
+    this.canConfirm = true,
+    this.showEdit = false,
   });
 
   @override
@@ -97,7 +101,9 @@ class ChatMessage extends StatelessWidget {
                   elevation: 2,
                   shadowColor: Colors.black.withOpacity(0.10),
                 ),
-                onPressed: () => onConfirmationResponse!(true, pendingLogEntry),
+                onPressed: canConfirm
+                    ? () => onConfirmationResponse!(true, pendingLogEntry)
+                    : null,
               ),
               const SizedBox(width: 12),
               ElevatedButton.icon(
@@ -121,6 +127,37 @@ class ChatMessage extends StatelessWidget {
                 ),
                 onPressed: () => onConfirmationResponse!(false),
               ),
+              if (showEdit) ...[
+                const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.edit, size: 18),
+                  label: const Text('Edit'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isDark
+                        ? const Color(0xFF6366F1) // indigo
+                        : const Color(0xFF6366F1),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16.0,
+                      vertical: 8.0,
+                    ),
+                    minimumSize: const Size(80, 36),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 2,
+                    shadowColor: Colors.black.withOpacity(0.10),
+                  ),
+                  onPressed: () {
+                    // You can implement edit callback here or pass a callback from parent
+                    // For now, just call onConfirmationResponse with a special value
+                    onConfirmationResponse!(
+                      false,
+                      null,
+                    ); // Triggers edit mode in parent
+                  },
+                ),
+              ],
             ],
           ),
         ],

@@ -1,3 +1,10 @@
+import 'package:flutter/material.dart';
+import '../models/log_entry.dart';
+import '../features/expenses/expense_model.dart';
+import '../features/tasks/task_model.dart' as tasks;
+import '../features/reminders/reminder_model.dart' as reminders;
+import '../features/gym/gym_log_model.dart';
+
 typedef DeleteIntent = Map<String, dynamic>;
 
 enum LogType { reminder, task, gym, expense, unknown }
@@ -25,11 +32,82 @@ class ParsedLog {
 }
 
 class LogParserService {
+  static LogEntry? parseMessage(String input) {
+    final parsed = parseUserInput(input);
+
+    if (parsed.type == LogType.unknown) {
+      return null;
+    }
+
+    switch (parsed.type) {
+      case LogType.reminder:
+        if (parsed.dateTime != null) {
+          return reminders.Reminder(
+            title: parsed.action ?? 'Reminder',
+            reminderTime: parsed.dateTime!,
+            timestamp: DateTime.now(),
+          );
+        }
+        break;
+      case LogType.task:
+        return tasks.Task(
+          title: parsed.action ?? 'Task',
+          description: null,
+          dueDate: parsed.dateTime,
+          timeOfDay: parsed.dateTime != null
+              ? TimeOfDay(
+                  hour: parsed.dateTime!.hour,
+                  minute: parsed.dateTime!.minute,
+                )
+              : null,
+          priority: tasks.TaskPriority.medium,
+          status: tasks.TaskStatus.notStarted,
+          reminder: tasks.ReminderType.none,
+          category: parsed.category,
+          timestamp: DateTime.now(),
+        );
+      case LogType.expense:
+        if (parsed.amount != null) {
+          return Expense(
+            category: parsed.category ?? 'Other',
+            amount: parsed.amount!,
+            timestamp: DateTime.now(),
+          );
+        }
+        break;
+      case LogType.gym:
+        if (parsed.action != null) {
+          return GymLog(
+            workoutName: parsed.action!,
+            exercises: [
+              Exercise(name: parsed.action!, sets: 1, reps: 10, weight: null),
+            ],
+            timestamp: DateTime.now(),
+          );
+        }
+        break;
+      case LogType.unknown:
+        return null;
+    }
+
+    return null;
+  }
+
   static ParsedLog parseUserInput(String input) {
     final normalized = input.trim().toLowerCase();
+    print('DEBUG: [parseUserInput] input: $input');
 
     // Patterns for each type (add more as you learn)
     final patterns = [
+      // Tasks - MUST COME FIRST to avoid conflicts with reminders
+      {
+        'type': LogType.task,
+        // (1) trigger, (2) optional "a", (3) task/todo/item, (4) optional to/for, (5) action, (6) date/time
+        'regex': RegExp(
+          r'^(add|create|set|new)\s+(a\s+)?(task|todo|item)(?:\s*(to|for))?\s+(.+?)\s*(tomorrow|at\s+\d{1,2}(:\d{2})?\s*(am|pm)?|on\s+\w+|\d{1,2}(st|nd|rd|th)?|next\s+\w+|\d{1,2}(:\d{2})?\s*(am|pm)?\s+\d{1,2}(st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)|\d{1,2}(:\d{2})?\s*(am|pm)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+\d{1,2}(st|nd|rd|th)?)?$',
+          caseSensitive: false,
+        ),
+      },
       // Reminders
       {
         'type': LogType.reminder,
@@ -79,15 +157,7 @@ class LogParserService {
           caseSensitive: false,
         ),
       },
-      // Tasks
-      {
-        'type': LogType.task,
-        // (1) trigger, (2) to/for, (3) action, (4) date/time
-        'regex': RegExp(
-          r'(add|create|set) (a )?task(?:\s*(to|for))?\s*(.+?)\s*(tomorrow|at\s+\d{1,2}(:\d{2})?\s*(am|pm)?|on\s+\w+|\d{1,2}(st|nd|rd|th)?|next\s+\w+)?$',
-          caseSensitive: false,
-        ),
-      },
+
       // Expenses
       {
         'type': LogType.expense,
@@ -112,6 +182,7 @@ class LogParserService {
       final regex = pattern['regex'] as RegExp;
       final match = regex.firstMatch(normalized);
       if (match != null) {
+        print('DEBUG: [parseUserInput] matched pattern: ${regex.pattern}');
         print('DEBUG: Full match: ${match.group(0)}');
         for (int i = 0; i <= match.groupCount; i++) {
           print('DEBUG: Group $i: ${match.group(i)}');
@@ -228,9 +299,85 @@ class LogParserService {
                 print(
                   'DEBUG: Successfully parsed combined time+date: ${dtResult.dateTime}, hasTime: ${dtResult.hasTime}',
                 );
+                // Extract action/title by removing trigger and date/time from input
+                String temp = input;
+                // Remove reminder trigger - improved pattern to catch all variations
+                temp = temp.replaceFirst(
+                  RegExp(
+                    r'^(remind me|set reminder|create reminder|reminder|set a reminder|create a reminder|add reminder|new reminder|set up reminder|put reminder|add a reminder|schedule a reminder|set up a reminder|remind me to|remind me about|remind me of)[,\s]*(to|for)?[,\s]*',
+                    caseSensitive: false,
+                  ),
+                  '',
+                );
+
+                // Remove task trigger - improved pattern to catch all variations
+                temp = temp.replaceFirst(
+                  RegExp(
+                    r'^(add|create|set|new)\s+(a\s+)?(task|todo|item)(?:\s*(to|for))?[,\s]*',
+                    caseSensitive: false,
+                  ),
+                  '',
+                );
+
+                // Remove all date/time patterns from the end
+                final dateTimePatterns = [
+                  // "7 pm, 15 July" format
+                  RegExp(
+                    r'(\d{1,2})(:(\d{2}))?\s*(am|pm)?\s*,\s*(\d{1,2})(st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)',
+                    caseSensitive: false,
+                  ),
+                  // "15 July, 7 pm" format
+                  RegExp(
+                    r'(\d{1,2})(st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s*,\s*(\d{1,2})(:(\d{2}))?\s*(am|pm)?',
+                    caseSensitive: false,
+                  ),
+                  // "7 pm 15 July" format
+                  RegExp(
+                    r'(\d{1,2})(:(\d{2}))?\s*(am|pm)?\s+(\d{1,2})(st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)',
+                    caseSensitive: false,
+                  ),
+                  // "15 July 7 pm" format
+                  RegExp(
+                    r'(\d{1,2})(st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+(\d{1,2})(:(\d{2}))?\s*(am|pm)?',
+                    caseSensitive: false,
+                  ),
+                ];
+
+                bool patternRemoved = false;
+                for (final pattern in dateTimePatterns) {
+                  if (pattern.hasMatch(temp)) {
+                    temp = temp.replaceFirst(pattern, '').trim();
+                    patternRemoved = true;
+                    break;
+                  }
+                }
+
+                // Clean up any trailing commas, punctuation, or leading/trailing whitespace
+                temp = temp.replaceAll(RegExp(r'[,\s]+$'), '').trim();
+                temp = temp.replaceAll(RegExp(r'^[,\s]+'), '').trim();
+
+                // Remove any remaining "to" or "for" at the beginning
+                temp = temp.replaceFirst(
+                  RegExp(r'^(to|for)\s+', caseSensitive: false),
+                  '',
+                );
+
+                // Capitalize the action (title case)
+                if (temp.isNotEmpty) {
+                  temp = temp
+                      .split(' ')
+                      .map((word) {
+                        if (word.isEmpty) return word;
+                        return word[0].toUpperCase() +
+                            word.substring(1).toLowerCase();
+                      })
+                      .join(' ');
+                }
+
+                print('DEBUG: [combined time+date] extracted action: "$temp"');
                 return ParsedLog(
-                  type: LogType.reminder,
-                  action: null,
+                  type: type,
+                  action: temp.isNotEmpty ? temp : null,
                   dateTime: dtResult.dateTime,
                   hasTime: dtResult.hasTime,
                   raw: input,
@@ -242,6 +389,80 @@ class LogParserService {
             dateTimeStr = match.group(4) != null
                 ? match.group(4)!.trim()
                 : null;
+            // If action is present and dateTimeStr is present at the end of action, remove it
+            if (action != null &&
+                dateTimeStr != null &&
+                action.toLowerCase().endsWith(dateTimeStr.toLowerCase())) {
+              action = action
+                  .substring(0, action.length - dateTimeStr.length)
+                  .trim();
+            }
+            // If action is just a comma or empty, try to extract from the input minus the trigger and date/time
+            if (action == null ||
+                action.isEmpty ||
+                action == ',' ||
+                action == ',') {
+              // Remove trigger and date/time from input
+              String temp = input;
+              // Remove trigger
+              temp = temp.replaceFirst(
+                RegExp(
+                  r'^(remind me|set reminder|create reminder|reminder|set a reminder|create a reminder|add reminder|new reminder|set up reminder|put reminder|add a reminder|schedule a reminder|set up a reminder|remind me to|remind me about|remind me of)[,\s]*',
+                  caseSensitive: false,
+                ),
+                '',
+              );
+              // Remove date/time at the end
+              if (dateTimeStr != null &&
+                  temp.toLowerCase().endsWith(dateTimeStr.toLowerCase())) {
+                temp = temp
+                    .substring(0, temp.length - dateTimeStr.length)
+                    .trim();
+              }
+              action = temp.trim();
+            }
+
+            // Clean up action by removing trigger phrases and common fillers
+            if (action != null) {
+              // Remove trigger phrases from the beginning
+              action = action.replaceFirst(
+                RegExp(
+                  r'^(add|set|create|new|schedule|put|set up|add a|create a|set up a)\s+(reminder|a reminder)?\s*',
+                  caseSensitive: false,
+                ),
+                '',
+              );
+
+              // Remove "reminder" word if it appears
+              action = action.replaceAll(
+                RegExp(r'\breminder\b', caseSensitive: false),
+                '',
+              );
+
+              // Remove task-specific trigger phrases
+              action = action.replaceFirst(
+                RegExp(
+                  r'^(add|set|create|new|schedule|put|set up|add a|create a|set up a)\s+(task|todo|item|a task|a todo|an item)?\s*',
+                  caseSensitive: false,
+                ),
+                '',
+              );
+
+              // Remove "task", "todo", "item" words if they appear
+              action = action.replaceAll(
+                RegExp(r'\b(task|todo|item)\b', caseSensitive: false),
+                '',
+              );
+
+              // Remove leading "a" or "an" if it's followed by a space
+              action = action.replaceFirst(
+                RegExp(r'^(a|an)\s+', caseSensitive: false),
+                '',
+              );
+
+              // Clean up extra whitespace and punctuation
+              action = action.trim().replaceAll(RegExp(r'\s+'), ' ');
+            }
             print('DEBUG: Extracted action: $action');
             print('DEBUG: Extracted dateTimeStr: $dateTimeStr');
             // If 'tomorrow' is present anywhere in the input, ensure dateTimeStr includes it
@@ -525,6 +746,159 @@ class LogParserService {
               }
             }
             break;
+          case LogType.task:
+            // Task-specific parsing logic
+            action = match.group(5) != null ? match.group(5)!.trim() : null;
+            dateTimeStr = match.group(6) != null
+                ? match.group(6)!.trim()
+                : null;
+
+            // If action is present and dateTimeStr is present at the end of action, remove it
+            if (action != null &&
+                dateTimeStr != null &&
+                action.toLowerCase().endsWith(dateTimeStr.toLowerCase())) {
+              action = action
+                  .substring(0, action.length - dateTimeStr.length)
+                  .trim();
+            }
+
+            // If action is just a comma or empty, try to extract from the input minus the trigger and date/time
+            if (action == null ||
+                action.isEmpty ||
+                action == ',' ||
+                action == ',') {
+              // Remove trigger and date/time from input
+              String temp = input;
+              // Remove trigger
+              temp = temp.replaceFirst(
+                RegExp(
+                  r'^(add|create|set|new) (a )?(task|todo|item)(?:\s*(to|for))?[,\s]*',
+                  caseSensitive: false,
+                ),
+                '',
+              );
+              // Remove date/time at the end
+              if (dateTimeStr != null &&
+                  temp.toLowerCase().endsWith(dateTimeStr.toLowerCase())) {
+                temp = temp
+                    .substring(0, temp.length - dateTimeStr.length)
+                    .trim();
+              }
+              action = temp.trim();
+            }
+
+            // Clean up action by removing trigger phrases and common fillers
+            if (action != null) {
+              // Remove trigger phrases from the beginning
+              action = action.replaceFirst(
+                RegExp(
+                  r'^(add|set|create|new|schedule|put|set up|add a|create a|set up a)\s+(task|todo|item|a task|a todo|an item)?\s*',
+                  caseSensitive: false,
+                ),
+                '',
+              );
+
+              // Remove "task", "todo", "item" words if they appear
+              action = action.replaceAll(
+                RegExp(r'\b(task|todo|item)\b', caseSensitive: false),
+                '',
+              );
+
+              // Remove leading "a" or "an" if it's followed by a space
+              action = action.replaceFirst(
+                RegExp(r'^(a|an)\s+', caseSensitive: false),
+                '',
+              );
+
+              // Clean up extra whitespace and punctuation
+              action = action.trim().replaceAll(RegExp(r'\s+'), ' ');
+            }
+
+            print('DEBUG: [TASK] Extracted action: $action');
+            print('DEBUG: [TASK] Extracted dateTimeStr: $dateTimeStr');
+
+            // If 'tomorrow' is present anywhere in the input, ensure dateTimeStr includes it
+            if (input.toLowerCase().contains('tomorrow')) {
+              dateTimeStr =
+                  'tomorrow' +
+                  (dateTimeStr != null && dateTimeStr.isNotEmpty
+                      ? ' ' + dateTimeStr
+                      : '');
+              print(
+                'DEBUG: [TASK] Overriding dateTimeStr to include "tomorrow": $dateTimeStr',
+              );
+            }
+
+            // Post-process action for multi-sentence and filler removal
+            if (action != null) {
+              // 1. If input contains multiple sentences, use the last non-empty, non-date/time sentence as the action
+              final sentences = action.split(RegExp(r'[.!?]'));
+              String? candidateAction;
+              final dateTimeWords = [
+                'tomorrow',
+                'today',
+                'yesterday',
+                'tonight',
+                'morning',
+                'afternoon',
+                'evening',
+                'at',
+                'on',
+                'next',
+                'am',
+                'pm',
+              ];
+              for (var i = sentences.length - 1; i >= 0; i--) {
+                final s = sentences[i].trim();
+                // Skip empty or date/time-only sentences
+                if (s.isEmpty) continue;
+                final isDateTimeOnly = dateTimeWords.any(
+                  (w) =>
+                      RegExp(
+                        '^' + w + r'(\s|$)',
+                        caseSensitive: false,
+                      ).hasMatch(s) &&
+                      s
+                          .replaceAll(RegExp(w, caseSensitive: false), '')
+                          .trim()
+                          .isEmpty,
+                );
+                if (!isDateTimeOnly) {
+                  candidateAction = s;
+                  break;
+                }
+              }
+              if (candidateAction != null && candidateAction.isNotEmpty) {
+                action = candidateAction;
+              }
+
+              // 2. Remove leading filler phrases
+              action = action.replaceFirst(
+                RegExp(
+                  r'^(i need to|i have to|i must|please|can you|could you|would you|i want to|i should|i will|i am going to|i gotta|i got to|i ought to|i wish to|i plan to|i intend to|i would like to)\s+',
+                  caseSensitive: false,
+                ),
+                '',
+              );
+
+              // 3. Remove all standalone date/time words
+              action = action
+                  .replaceAll(
+                    RegExp(
+                      r'\b(tomorrow|today|yesterday|tonight|morning|afternoon|evening|at\s+\d{1,2}(:\d{2})?\s*(am|pm)?|on\s+\w+|\d{1,2}(st|nd|rd|th)?|next\s+\w+|am|pm)\b',
+                      caseSensitive: false,
+                    ),
+                    '',
+                  )
+                  .trim();
+
+              // 4. Remove any leading/trailing punctuation or whitespace
+              action = action.replaceAll(
+                RegExp(r'^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$'),
+                '',
+              );
+            }
+            break;
           case LogType.expense:
             amountStr = match.group(2)?.trim();
             category = match.group(3)?.trim();
@@ -547,6 +921,9 @@ class LogParserService {
           amount = double.tryParse(amountStr);
         }
 
+        print(
+          'DEBUG: [parseUserInput] returning ParsedLog: type=$type, action=$action, dateTime=$dateTime, hasTime=$hasTime',
+        );
         return ParsedLog(
           type: type,
           action: action,
@@ -560,6 +937,7 @@ class LogParserService {
     }
 
     // Fallback: unknown type
+    print('DEBUG: [parseUserInput] no pattern matched, returning unknown');
     return ParsedLog(type: LogType.unknown, raw: input);
   }
 
@@ -568,6 +946,232 @@ class LogParserService {
   static _DateTimeWithFlag parseSimpleDateTimeWithTimeFlag(String input) {
     final now = DateTime.now();
     final lower = input.toLowerCase().trim();
+
+    // Month name lists for all parsing logic
+    final monthNames = [
+      'january',
+      'february',
+      'march',
+      'april',
+      'may',
+      'june',
+      'july',
+      'august',
+      'september',
+      'october',
+      'november',
+      'december',
+    ];
+    final monthShort = [
+      'jan',
+      'feb',
+      'mar',
+      'apr',
+      'may',
+      'jun',
+      'jul',
+      'aug',
+      'sep',
+      'oct',
+      'nov',
+      'dec',
+    ];
+
+    // --- Robust combined date+time parsing ---
+    // Accepts: '6 pm 15th July', '15th July 6 pm', 'July 15 at 6 pm', etc.
+    final combinedPatterns = [
+      // NEW: "16 July 6pm" format (day month time) - MUST BE FIRST!
+      RegExp(
+        r'(\d{1,2})(st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+(\d{1,2})(:(\d{2}))?\s*(am|pm)?',
+        caseSensitive: false,
+      ),
+      // 6 pm 15th July
+      RegExp(
+        r'(\d{1,2})(:(\d{2}))?\s*(am|pm)?\s+(\d{1,2})(st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)',
+        caseSensitive: false,
+      ),
+      // 6 pm July 15
+      RegExp(
+        r'(\d{1,2})(:(\d{2}))?\s*(am|pm)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+(\d{1,2})(st|nd|rd|th)?',
+        caseSensitive: false,
+      ),
+      // 15th July 6 pm
+      RegExp(
+        r'(\d{1,2})(st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+(at\s+)?(\d{1,2})(:(\d{2}))?\s*(am|pm)?',
+        caseSensitive: false,
+      ),
+      // July 15 6 pm
+      RegExp(
+        r'(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+(\d{1,2})(st|nd|rd|th)?\s+(at\s+)?(\d{1,2})(:(\d{2}))?\s*(am|pm)?',
+        caseSensitive: false,
+      ),
+      // NEW: Comma-separated formats like "7 pm, 15 July" or "15 July, 7 pm"
+      RegExp(
+        r'(\d{1,2})(:(\d{2}))?\s*(am|pm)?\s*,\s*(\d{1,2})(st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)',
+        caseSensitive: false,
+      ),
+      RegExp(
+        r'(\d{1,2})(st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s*,\s*(\d{1,2})(:(\d{2}))?\s*(am|pm)?',
+        caseSensitive: false,
+      ),
+    ];
+    for (final pattern in combinedPatterns) {
+      final match = pattern.firstMatch(lower);
+      if (match != null) {
+        int day = 1;
+        int month = 1;
+        int year = now.year;
+        int hour = 0;
+        int minute = 0;
+        bool hasTime = false;
+
+        // Check if this is the "16 July 6pm" format (day month time) - FIRST PATTERN
+        if (pattern.pattern.startsWith(
+          '(\\d{1,2})(st|nd|rd|th)?\\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\s+(\\d{1,2})',
+        )) {
+          // "16 July 6pm" format
+          day = int.parse(match.group(1)!);
+          String monthStr = match.group(3)!.toLowerCase();
+          month = monthNames.indexOf(monthStr) + 1;
+          if (month == 0) month = monthShort.indexOf(monthStr) + 1;
+
+          // Validate month value
+          if (month == 0 || month < 1 || month > 12) {
+            print('DEBUG: Invalid month parsed: $monthStr -> $month');
+            return _DateTimeWithFlag(null, false);
+          }
+
+          hour = int.parse(match.group(4)!);
+          minute = match.group(6) != null ? int.parse(match.group(6)!) : 0;
+          final ampm = match.group(7);
+          if (ampm == 'pm' && hour < 12) hour += 12;
+          if (ampm == 'am' && hour == 12) hour = 0;
+          hasTime = true;
+        }
+        // Pattern 1: 6 pm 15th July
+        else if (pattern.pattern.startsWith('(\\d{1,2}')) {
+          hour = int.parse(match.group(1)!);
+          minute = match.group(3) != null ? int.parse(match.group(3)!) : 0;
+          final ampm = match.group(4);
+          if (ampm == 'pm' && hour < 12) hour += 12;
+          if (ampm == 'am' && hour == 12) hour = 0;
+          hasTime = true;
+          if (pattern.pattern.contains('january')) {
+            // 6 pm 15th July
+            day = int.parse(match.group(5)!);
+            String monthStr = match.group(7)!.toLowerCase();
+            month = monthNames.indexOf(monthStr) + 1;
+            if (month == 0) month = monthShort.indexOf(monthStr) + 1;
+
+            // Validate month value
+            if (month == 0 || month < 1 || month > 12) {
+              print('DEBUG: Invalid month parsed: $monthStr -> $month');
+              return _DateTimeWithFlag(null, false);
+            }
+          } else {
+            // 6 pm July 15
+            String monthStr = match.group(5)!.toLowerCase();
+            month = monthNames.indexOf(monthStr) + 1;
+            if (month == 0) month = monthShort.indexOf(monthStr) + 1;
+
+            // Validate month value
+            if (month == 0 || month < 1 || month > 12) {
+              print('DEBUG: Invalid month parsed: $monthStr -> $month');
+              return _DateTimeWithFlag(null, false);
+            }
+
+            day = int.parse(match.group(6)!);
+          }
+        } else if (pattern.pattern.contains(',\\s*(\\d{1,2})')) {
+          // NEW: Comma-separated patterns
+          if (pattern.pattern.startsWith('(\\d{1,2})(:') &&
+              pattern.pattern.contains('am|pm')) {
+            // "7 pm, 15 July" format
+            hour = int.parse(match.group(1)!);
+            minute = match.group(3) != null ? int.parse(match.group(3)!) : 0;
+            final ampm = match.group(4);
+            if (ampm == 'pm' && hour < 12) hour += 12;
+            if (ampm == 'am' && hour == 12) hour = 0;
+            hasTime = true;
+            day = int.parse(match.group(5)!);
+            String monthStr = match.group(7)!.toLowerCase();
+            month = monthNames.indexOf(monthStr) + 1;
+            if (month == 0) month = monthShort.indexOf(monthStr) + 1;
+
+            // Validate month value
+            if (month == 0 || month < 1 || month > 12) {
+              print('DEBUG: Invalid month parsed: $monthStr -> $month');
+              return _DateTimeWithFlag(null, false);
+            }
+          } else {
+            // "15 July, 7 pm" format
+            day = int.parse(match.group(1)!);
+            String monthStr = match.group(3)!.toLowerCase();
+            month = monthNames.indexOf(monthStr) + 1;
+            if (month == 0) month = monthShort.indexOf(monthStr) + 1;
+
+            // Validate month value
+            if (month == 0 || month < 1 || month > 12) {
+              print('DEBUG: Invalid month parsed: $monthStr -> $month');
+              return _DateTimeWithFlag(null, false);
+            }
+
+            hour = int.parse(match.group(4)!);
+            minute = match.group(6) != null ? int.parse(match.group(6)!) : 0;
+            final ampm = match.group(7);
+            if (ampm == 'pm' && hour < 12) hour += 12;
+            if (ampm == 'am' && hour == 12) hour = 0;
+            hasTime = true;
+          }
+        } else {
+          // Pattern 3/4: 15th July 6 pm or July 15 6 pm
+          if (pattern.pattern.startsWith('(\\d{1,2}')) {
+            // "15th July 6 pm" format
+            day = int.parse(match.group(1)!);
+            String monthStr = match.group(3)!.toLowerCase();
+            month = monthNames.indexOf(monthStr) + 1;
+            if (month == 0) month = monthShort.indexOf(monthStr) + 1;
+
+            // Validate month value
+            if (month == 0 || month < 1 || month > 12) {
+              print('DEBUG: Invalid month parsed: $monthStr -> $month');
+              return _DateTimeWithFlag(null, false);
+            }
+
+            hour = int.parse(match.group(5)!);
+            minute = match.group(7) != null ? int.parse(match.group(7)!) : 0;
+            final ampm = match.group(8);
+            if (ampm == 'pm' && hour < 12) hour += 12;
+            if (ampm == 'am' && hour == 12) hour = 0;
+            hasTime = true;
+          } else {
+            String monthStr = match.group(1)!.toLowerCase();
+            month = monthNames.indexOf(monthStr) + 1;
+            if (month == 0) month = monthShort.indexOf(monthStr) + 1;
+
+            // Validate month value
+            if (month == 0 || month < 1 || month > 12) {
+              print('DEBUG: Invalid month parsed: $monthStr -> $month');
+              return _DateTimeWithFlag(null, false);
+            }
+
+            day = int.parse(match.group(2)!);
+            hour = int.parse(match.group(5)!);
+            minute = match.group(7) != null ? int.parse(match.group(7)!) : 0;
+            final ampm = match.group(8);
+            if (ampm == 'pm' && hour < 12) hour += 12;
+            if (ampm == 'am' && hour == 12) hour = 0;
+            hasTime = true;
+          }
+        }
+        DateTime candidate = DateTime(year, month, day, hour, minute);
+        if (candidate.isBefore(now)) {
+          // If the date+time is in the past, roll over to next year
+          candidate = DateTime(year + 1, month, day, hour, minute);
+        }
+        return _DateTimeWithFlag(candidate, hasTime);
+      }
+    }
 
     // e.g. "tomorrow at 2pm"
     if (lower.contains('tomorrow')) {
@@ -602,35 +1206,6 @@ class LogParserService {
 
     // --- New: Month name date parsing ---
     // e.g. "14th July", "July 14", "14 July at 2pm"
-    final monthNames = [
-      'january',
-      'february',
-      'march',
-      'april',
-      'may',
-      'june',
-      'july',
-      'august',
-      'september',
-      'october',
-      'november',
-      'december',
-    ];
-    final monthShort = [
-      'jan',
-      'feb',
-      'mar',
-      'apr',
-      'may',
-      'jun',
-      'jul',
-      'aug',
-      'sep',
-      'oct',
-      'nov',
-      'dec',
-    ];
-    // Patterns: day month, month day
     final dayMonthPattern = RegExp(
       r'(\d{1,2})(st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)(?:\s+at\s+(\d{1,2})(:(\d{2}))?\s*(am|pm)?)?',
       caseSensitive: false,
@@ -645,6 +1220,13 @@ class LogParserService {
       String monthStr = match.group(3)!.toLowerCase();
       int month = monthNames.indexOf(monthStr) + 1;
       if (month == 0) month = monthShort.indexOf(monthStr) + 1;
+
+      // Validate month value
+      if (month == 0 || month < 1 || month > 12) {
+        print('DEBUG: Invalid month parsed: $monthStr -> $month');
+        return _DateTimeWithFlag(null, false);
+      }
+
       int year = now.year;
       // If this date has already passed, use next year
       DateTime candidate = DateTime(year, month, day);
@@ -673,6 +1255,13 @@ class LogParserService {
       String monthStr = match.group(1)!.toLowerCase();
       int month = monthNames.indexOf(monthStr) + 1;
       if (month == 0) month = monthShort.indexOf(monthStr) + 1;
+
+      // Validate month value
+      if (month == 0 || month < 1 || month > 12) {
+        print('DEBUG: Invalid month parsed: $monthStr -> $month');
+        return _DateTimeWithFlag(null, false);
+      }
+
       int day = int.parse(match.group(2)!);
       int year = now.year;
       DateTime candidate = DateTime(year, month, day);
@@ -705,6 +1294,11 @@ class LogParserService {
       r'(\d{1,2})(:(\d{2}))?\s*(am|pm)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+(\d{1,2})(st|nd|rd|th)?',
       caseSensitive: false,
     );
+    // NEW: Pattern for "16 july 6pm" format
+    final combinedTimeDatePattern3 = RegExp(
+      r'(\d{1,2})(st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+(\d{1,2})(:(\d{2}))?\s*(am|pm)?',
+      caseSensitive: false,
+    );
 
     match = combinedTimeDatePattern1.firstMatch(lower);
     if (match != null) {
@@ -718,6 +1312,13 @@ class LogParserService {
       String monthStr = match.group(7)!.toLowerCase();
       int month = monthNames.indexOf(monthStr) + 1;
       if (month == 0) month = monthShort.indexOf(monthStr) + 1;
+
+      // Validate month value
+      if (month == 0 || month < 1 || month > 12) {
+        print('DEBUG: Invalid month parsed: $monthStr -> $month');
+        return _DateTimeWithFlag(null, false);
+      }
+
       int year = now.year;
       DateTime candidate = DateTime(year, month, day);
       if (candidate.isBefore(now)) year++;
@@ -736,7 +1337,41 @@ class LogParserService {
       String monthStr = match.group(5)!.toLowerCase();
       int month = monthNames.indexOf(monthStr) + 1;
       if (month == 0) month = monthShort.indexOf(monthStr) + 1;
+
+      // Validate month value
+      if (month == 0 || month < 1 || month > 12) {
+        print('DEBUG: Invalid month parsed: $monthStr -> $month');
+        return _DateTimeWithFlag(null, false);
+      }
+
       int day = int.parse(match.group(6)!);
+      int year = now.year;
+      DateTime candidate = DateTime(year, month, day);
+      if (candidate.isBefore(now)) year++;
+
+      return _DateTimeWithFlag(DateTime(year, month, day, hour, minute), true);
+    }
+
+    // NEW: Handle "16 july 6pm" format
+    match = combinedTimeDatePattern3.firstMatch(lower);
+    if (match != null) {
+      int day = int.parse(match.group(1)!);
+      String monthStr = match.group(3)!.toLowerCase();
+      int month = monthNames.indexOf(monthStr) + 1;
+      if (month == 0) month = monthShort.indexOf(monthStr) + 1;
+
+      // Validate month value
+      if (month == 0 || month < 1 || month > 12) {
+        print('DEBUG: Invalid month parsed: $monthStr -> $month');
+        return _DateTimeWithFlag(null, false);
+      }
+
+      int hour = int.parse(match.group(4)!);
+      int minute = match.group(6) != null ? int.parse(match.group(6)!) : 0;
+      final ampm = match.group(7);
+      if (ampm == 'pm' && hour < 12) hour += 12;
+      if (ampm == 'am' && hour == 12) hour = 0;
+
       int year = now.year;
       DateTime candidate = DateTime(year, month, day);
       if (candidate.isBefore(now)) year++;

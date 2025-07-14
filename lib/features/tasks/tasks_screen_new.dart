@@ -9,7 +9,8 @@ enum TaskSortOption { dueDate, priority, category }
 
 class TasksScreenNew extends StatefulWidget {
   final VoidCallback onBack;
-  const TasksScreenNew({super.key, required this.onBack});
+  final List<Task> tasks;
+  const TasksScreenNew({super.key, required this.onBack, required this.tasks});
 
   @override
   State<TasksScreenNew> createState() => _TasksScreenNewState();
@@ -23,7 +24,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
     null,
   );
 
-  List<Task> tasks = [];
+  List<Task> get tasks => widget.tasks;
 
   String searchQuery = '';
   String statusFilter = 'All';
@@ -80,62 +81,6 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
 
     // Set selectedDayIndex to 0 to show today's tasks by default
     selectedDayIndex = 0;
-
-    // Generate dummy tasks for testing
-    _generateDummyTasks();
-  }
-
-  void _generateDummyTasks() {
-    tasks = [
-      Task(
-        title: 'Buy groceries',
-        description: 'Milk, eggs, bread, and fruit',
-        dueDate: DateTime.now(),
-        timestamp: DateTime.now(),
-        priority: TaskPriority.high,
-        status: TaskStatus.notStarted,
-        isCompleted: false,
-        category: 'Personal',
-        reminder: ReminderType.none,
-        recurrenceType: RecurrenceType.none,
-      ),
-      Task(
-        title: 'Team meeting',
-        description: 'Weekly sync with the project team',
-        dueDate: DateTime.now().add(Duration(days: 1)),
-        timestamp: DateTime.now().add(Duration(days: 1)),
-        priority: TaskPriority.medium,
-        status: TaskStatus.notStarted,
-        isCompleted: false,
-        category: 'Work',
-        reminder: ReminderType.none,
-        recurrenceType: RecurrenceType.none,
-      ),
-      Task(
-        title: 'Gym session',
-        description: 'Leg day workout at the gym',
-        dueDate: DateTime.now().add(Duration(days: 3)),
-        timestamp: DateTime.now().add(Duration(days: 3)),
-        priority: TaskPriority.low,
-        status: TaskStatus.notStarted,
-        isCompleted: false,
-        category: 'Personal',
-        reminder: ReminderType.none,
-        recurrenceType: RecurrenceType.none,
-      ),
-      Task(
-        title: 'Client call',
-        description: 'Call with client to discuss project requirements',
-        dueDate: DateTime.now().add(Duration(days: 4)),
-        timestamp: DateTime.now().add(Duration(days: 4)),
-        priority: TaskPriority.high,
-        status: TaskStatus.notStarted,
-        isCompleted: false,
-        category: 'Business',
-        reminder: ReminderType.none,
-        recurrenceType: RecurrenceType.none,
-      ),
-    ];
   }
 
   bool _isTaskForSelectedDate(Task task, int selectedIndex) {
