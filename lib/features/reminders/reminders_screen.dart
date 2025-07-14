@@ -396,8 +396,9 @@ class _RemindersScreenState extends State<RemindersScreen> {
                   r.reminderTime.day == selectedDate.day;
             }
             // If recurring, check if selectedDate is in recurrence
-            if (r.endDate != null && selectedDate.isAfter(r.endDate!))
+            if (r.endDate != null && selectedDate.isAfter(r.endDate!)) {
               return false;
+            }
             if (selectedDate.isBefore(r.reminderTime)) return false;
             switch (r.recurrenceType) {
               case RecurrenceType.daily:
@@ -1490,6 +1491,7 @@ class OverlayDeleteReminderCard extends StatefulWidget {
   final ValueNotifier<String?> openDeleteReminderTitle;
   final VoidCallback? onTap;
   const OverlayDeleteReminderCard({
+    super.key,
     required this.child,
     required this.reminder,
     required this.onDelete,

@@ -1,15 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../shared/design/color_guide.dart';
 import '../../shared/design/spacing.dart';
-import '../../shared/design/widgets/status_card.dart';
-import '../../shared/design/widgets/header.dart';
-import '../../shared/design/widgets/feature_card_button.dart';
 import 'task_model.dart';
 import '../../shared/utils/responsive.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 
 enum TaskSortOption { dueDate, priority, category }
 
@@ -4944,7 +4938,8 @@ class OverlayDeleteTaskCard extends StatefulWidget {
   final VoidCallback onDelete;
   final ValueNotifier<String?> openDeleteTaskTitle;
   final VoidCallback? onTap;
-  const OverlayDeleteTaskCard({super.key, 
+  const OverlayDeleteTaskCard({
+    super.key,
     required this.child,
     required this.task,
     required this.isDark,
