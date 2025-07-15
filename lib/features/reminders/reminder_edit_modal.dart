@@ -1268,7 +1268,7 @@ Future<void> _showTimePicker(
                                 child: Text(
                                   i.toString().padLeft(2, '0'),
                                   style: TextStyle(
-                                    fontSize: 16,
+                                    fontSize: 22,
                                     fontWeight: FontWeight.w500,
                                     color: isDark ? Colors.white : Colors.black,
                                   ),
@@ -1308,7 +1308,7 @@ Future<void> _showTimePicker(
                                 child: Text(
                                   i.toString().padLeft(2, '0'),
                                   style: TextStyle(
-                                    fontSize: 16,
+                                    fontSize: 22,
                                     fontWeight: FontWeight.w500,
                                     color: isDark ? Colors.white : Colors.black,
                                   ),

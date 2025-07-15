@@ -73,6 +73,9 @@ class _ChatScreenNewState extends State<ChatScreenNew>
   final FocusNode _focusNode = FocusNode();
   bool _isInputFocused = false;
 
+  // Add a variable to hold the current editing/creating task's timestamp
+  DateTime? _currentTaskTimestamp;
+
   @override
   void initState() {
     super.initState();
@@ -210,8 +213,8 @@ class _ChatScreenNewState extends State<ChatScreenNew>
           parsed.dateTime != null &&
           !parsed.hasTime) {
         final pending = _pendingLog as Task;
-        // Merge the date from reminder into the pending task
         logEntry = Task(
+          id: pending.id,
           title: pending.title,
           dueDate: DateTime(
             parsed.dateTime!.year,
@@ -232,8 +235,6 @@ class _ChatScreenNewState extends State<ChatScreenNew>
         // If we have a pending reminder, try to combine with new input
         if (_pendingLog is Reminder) {
           final pending = _pendingLog as Reminder;
-
-          // If new input has date/time but no title, use pending title
           if (date != null && hasTime && title.isEmpty) {
             logEntry = Reminder(
               title: pending.title,
@@ -241,27 +242,21 @@ class _ChatScreenNewState extends State<ChatScreenNew>
               timestamp: DateTime.now(),
             );
             _pendingLog = null;
-          }
-          // If new input has title but no date/time, use pending date/time
-          else if (date == null && title.isNotEmpty) {
+          } else if (date == null && title.isNotEmpty) {
             logEntry = Reminder(
               title: title,
               reminderTime: pending.reminderTime,
               timestamp: DateTime.now(),
             );
             _pendingLog = null;
-          }
-          // If new input has both, use it and clear pending
-          else if (date != null && hasTime && title.isNotEmpty) {
+          } else if (date != null && hasTime && title.isNotEmpty) {
             logEntry = Reminder(
               title: title,
               reminderTime: date,
               timestamp: DateTime.now(),
             );
             _pendingLog = null;
-          }
-          // Otherwise, create incomplete reminder for prompting
-          else {
+          } else {
             logEntry = Reminder(
               title: title,
               reminderTime: date ?? DateTime.now(),
@@ -269,7 +264,6 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             );
           }
         } else {
-          // No pending reminder - create new one
           logEntry = Reminder(
             title: title,
             reminderTime: date ?? DateTime.now(),
@@ -282,15 +276,13 @@ class _ChatScreenNewState extends State<ChatScreenNew>
           DateTime? date = parsed.dateTime;
           bool hasTime = parsed.hasTime;
           String title = parsed.action ?? '';
-
-          // If we have a pending task, try to merge info
           if (_pendingLog is Task) {
             final pending = _pendingLog as Task;
-            // If new input has date but no time, merge with pending time
             if (date != null &&
                 (date.hour == 0 && date.minute == 0) &&
                 pending.timeOfDay != null) {
               logEntry = Task(
+                id: pending.id,
                 title: pending.title.isNotEmpty ? pending.title : title,
                 dueDate: DateTime(
                   date.year,
@@ -303,12 +295,11 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                 timestamp: DateTime.now(),
               );
               _pendingLog = null;
-            }
-            // If new input has time but no date, merge with pending date
-            else if (date == null &&
+            } else if (date == null &&
                 parsedTimeOfDay != null &&
                 pending.dueDate != null) {
               logEntry = Task(
+                id: pending.id,
                 title: pending.title.isNotEmpty ? pending.title : title,
                 dueDate: DateTime(
                   pending.dueDate!.year,
@@ -321,40 +312,36 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                 timestamp: DateTime.now(),
               );
               _pendingLog = null;
-            }
-            // If new input has only time (no date), keep timeOfDay and leave dueDate null
-            else if (date == null && parsedTimeOfDay != null) {
+            } else if (date == null && parsedTimeOfDay != null) {
               logEntry = Task(
+                id: pending.id,
                 title: title.isNotEmpty ? title : pending.title,
                 dueDate: null,
                 timeOfDay: parsedTimeOfDay,
                 timestamp: DateTime.now(),
               );
-            }
-            // If new input has only date (no time), keep dueDate and leave timeOfDay null
-            else if (date != null &&
+            } else if (date != null &&
                 (date.hour == 0 && date.minute == 0) &&
                 (pending.timeOfDay == null)) {
               logEntry = Task(
+                id: pending.id,
                 title: title.isNotEmpty ? title : pending.title,
                 dueDate: date,
                 timeOfDay: null,
                 timestamp: DateTime.now(),
               );
-            }
-            // If new input has both, use it and clear pending
-            else if (date != null && hasTime && title.isNotEmpty) {
+            } else if (date != null && hasTime && title.isNotEmpty) {
               logEntry = Task(
+                id: pending.id,
                 title: title,
                 dueDate: date,
                 timeOfDay: parsedTimeOfDay,
                 timestamp: DateTime.now(),
               );
               _pendingLog = null;
-            }
-            // Otherwise, create incomplete task for prompting
-            else {
+            } else {
               logEntry = Task(
+                id: pending.id,
                 title: title.isNotEmpty ? title : pending.title,
                 dueDate: date ?? pending.dueDate,
                 timeOfDay: parsedTimeOfDay ?? pending.timeOfDay,
@@ -362,8 +349,6 @@ class _ChatScreenNewState extends State<ChatScreenNew>
               );
             }
           } else {
-            // No pending task - create new one
-            // If only time is present (dateTime == null, hasTime == true), set timeOfDay and leave dueDate null
             if (date == null && parsedTimeOfDay != null) {
               logEntry = Task(
                 title: title,
@@ -390,7 +375,6 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             }
           }
         } else {
-          // Not a task, clear pending log
           _pendingLog = null;
           switch (parsed.type) {
             case LogType.expense:

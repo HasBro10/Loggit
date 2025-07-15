@@ -1,5 +1,6 @@
 import '../../models/log_entry.dart';
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 
 enum RecurrenceType {
   none,
@@ -19,6 +20,7 @@ enum TaskStatus { notStarted, inProgress, completed }
 enum ReminderType { none, fifteenMinutes, oneHour, oneDay }
 
 class Task implements LogEntry {
+  final String id;
   final String title;
   final String? description;
   final DateTime? dueDate;
@@ -36,6 +38,7 @@ class Task implements LogEntry {
   final ReminderType reminder;
 
   Task({
+    String? id,
     required this.title,
     this.description,
     this.dueDate,
@@ -49,9 +52,10 @@ class Task implements LogEntry {
     this.priority = TaskPriority.medium,
     this.status = TaskStatus.notStarted,
     this.reminder = ReminderType.none,
-  });
+  }) : id = id ?? Uuid().v4();
 
   Task copyWith({
+    String? id,
     String? title,
     String? description,
     DateTime? dueDate,
@@ -67,6 +71,7 @@ class Task implements LogEntry {
     ReminderType? reminder,
   }) {
     return Task(
+      id: id ?? this.id,
       title: title ?? this.title,
       description: description ?? this.description,
       dueDate: dueDate ?? this.dueDate,
@@ -86,6 +91,7 @@ class Task implements LogEntry {
   @override
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'title': title,
       'description': description,
       'dueDate': dueDate?.toIso8601String(),
@@ -142,6 +148,7 @@ class Task implements LogEntry {
       }
     }
     return Task(
+      id: json['id'],
       title: json['title'],
       description: json['description'],
       dueDate: json['dueDate'] != null ? DateTime.parse(json['dueDate']) : null,
@@ -170,6 +177,7 @@ class Task implements LogEntry {
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
     return other is Task &&
+        other.id == id &&
         other.title == title &&
         other.description == description &&
         other.dueDate == dueDate &&
@@ -188,6 +196,7 @@ class Task implements LogEntry {
   @override
   int get hashCode {
     return Object.hash(
+      id,
       title,
       description,
       dueDate,

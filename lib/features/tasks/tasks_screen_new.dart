@@ -5,12 +5,23 @@ import 'task_model.dart';
 import '../../shared/utils/responsive.dart';
 import 'package:flutter/cupertino.dart';
 
+String weekdayString(int weekday) {
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  return days[(weekday - 1) % 7];
+}
+
 enum TaskSortOption { dueDate, priority, category }
 
 class TasksScreenNew extends StatefulWidget {
   final VoidCallback onBack;
   final List<Task> tasks;
-  const TasksScreenNew({super.key, required this.onBack, required this.tasks});
+  final void Function(Task task, {bool isDelete}) onUpdateOrDeleteTask;
+  const TasksScreenNew({
+    super.key,
+    required this.onBack,
+    required this.tasks,
+    required this.onUpdateOrDeleteTask,
+  });
 
   @override
   State<TasksScreenNew> createState() => _TasksScreenNewState();
@@ -166,6 +177,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
 
   @override
   Widget build(BuildContext context) {
+    final topLevelContext = context;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final now = DateTime.now();
 
@@ -489,7 +501,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                                 ),
                               ),
                               SizedBox(height: 12),
-                              _buildAllTasksView(isDark),
+                              _buildAllTasksView(topLevelContext, isDark),
                             ],
                           ),
                         SizedBox(height: LoggitSpacing.lg),
@@ -574,7 +586,36 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                               (task) => _buildTaskCard(
                                 task,
                                 isDark,
-                                onTap: () => showTaskModal(context, task: task),
+                                topLevelContext,
+                                onTap: () async {
+                                  final editedTask = await showTaskModal(
+                                    topLevelContext,
+                                    task: task,
+                                  );
+                                  print(
+                                    '[DEBUG] Modal returned editedTask: ' +
+                                        (editedTask?.toJson().toString() ??
+                                            'null'),
+                                  );
+                                  if (editedTask != null) {
+                                    final index = tasks.indexWhere(
+                                      (t) => t.id == task.id,
+                                    );
+                                    if (index != -1) {
+                                      setState(() {
+                                        tasks[index] = editedTask;
+                                      });
+                                      print(
+                                        '[DEBUG] Calling onUpdateOrDeleteTask for editedTask: ' +
+                                            editedTask.toJson().toString(),
+                                      );
+                                      widget.onUpdateOrDeleteTask(
+                                        editedTask,
+                                        isDelete: false,
+                                      );
+                                    }
+                                  }
+                                },
                               ),
                             )
                           else
@@ -585,7 +626,36 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                               (task) => _buildTaskCard(
                                 task,
                                 isDark,
-                                onTap: () => showTaskModal(context, task: task),
+                                topLevelContext,
+                                onTap: () async {
+                                  final editedTask = await showTaskModal(
+                                    topLevelContext,
+                                    task: task,
+                                  );
+                                  print(
+                                    '[DEBUG] Modal returned editedTask: ' +
+                                        (editedTask?.toJson().toString() ??
+                                            'null'),
+                                  );
+                                  if (editedTask != null) {
+                                    final index = tasks.indexWhere(
+                                      (t) => t.id == task.id,
+                                    );
+                                    if (index != -1) {
+                                      setState(() {
+                                        tasks[index] = editedTask;
+                                      });
+                                      print(
+                                        '[DEBUG] Calling onUpdateOrDeleteTask for editedTask: ' +
+                                            editedTask.toJson().toString(),
+                                      );
+                                      widget.onUpdateOrDeleteTask(
+                                        editedTask,
+                                        isDelete: false,
+                                      );
+                                    }
+                                  }
+                                },
                               ),
                             )
                           else
@@ -602,10 +672,24 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
         ),
         floatingActionButton: FloatingActionButton(
           backgroundColor: LoggitColors.teal,
-          onPressed: () {
-            // Close any open delete button first
+          onPressed: () async {
+            print('[DEBUG] FloatingActionButton pressed');
             _openDeleteTaskTitle.value = null;
-            showTaskModal(context);
+            final newTask = await showTaskModal(topLevelContext);
+            print(
+              '[DEBUG] Modal returned newTask: ' +
+                  (newTask?.toJson().toString() ?? 'null'),
+            );
+            if (newTask != null) {
+              setState(() {
+                tasks.add(newTask);
+              });
+              print(
+                '[DEBUG] Calling onUpdateOrDeleteTask for newTask: ' +
+                    newTask.toJson().toString(),
+              );
+              widget.onUpdateOrDeleteTask(newTask, isDelete: false);
+            }
           },
           child: Icon(Icons.add, color: Colors.white, size: 24),
         ),
@@ -2192,7 +2276,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                                                     12,
                                                     (i) => Center(
                                                       child: Text(
-                                                        _getMonthName(i + 1),
+                                                        getMonthName(i + 1),
                                                         style: TextStyle(
                                                           fontSize: 16,
                                                           fontWeight:
@@ -2395,7 +2479,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        '${_getMonthName(_displayedMonth.month)} ${_displayedMonth.year}',
+                        '${getMonthName(_displayedMonth.month)} ${_displayedMonth.year}',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -2603,24 +2687,6 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
     }
   }
 
-  String _getMonthName(int month) {
-    const months = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-    return months[month - 1];
-  }
-
   bool _hasTasksOnDate(DateTime date) {
     return tasks.any(
       (task) =>
@@ -2631,7 +2697,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
     );
   }
 
-  Widget _buildAllTasksView(bool isDark) {
+  Widget _buildAllTasksView(BuildContext context, bool isDark) {
     final filteredTasks = _getFilteredTasksForAllView();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2641,7 +2707,23 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
             (task) => _buildTaskCard(
               task,
               isDark,
-              onTap: () => showTaskModal(context, task: task),
+              context,
+              onTap: () async {
+                final editedTask = await showTaskModal(context, task: task);
+                if (editedTask != null) {
+                  final index = tasks.indexWhere((t) => t.id == task.id);
+                  if (index != -1) {
+                    setState(() {
+                      tasks[index] = editedTask;
+                    });
+                    print(
+                      '[DEBUG] Calling onUpdateOrDeleteTask for editedTask: ' +
+                          editedTask.toJson().toString(),
+                    );
+                    widget.onUpdateOrDeleteTask(editedTask, isDelete: false);
+                  }
+                }
+              },
             ),
           )
         else
@@ -2687,21 +2769,34 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
     );
   }
 
-  Widget _buildTaskCard(Task task, bool isDark, {VoidCallback? onTap}) {
+  Widget _buildTaskCard(
+    Task task,
+    bool isDark,
+    BuildContext context, {
+    VoidCallback? onTap,
+  }) {
     return Stack(
       children: [
         OverlayDeleteTaskCard(
           task: task,
           isDark: isDark,
           onDelete: () {
-            setState(() {
-              tasks.remove(task);
-            });
+            widget.onUpdateOrDeleteTask(task, isDelete: true);
           },
-          onTap: onTap,
+          onTap: () async {
+            final editedTask = await showTaskModal(context, task: task);
+            if (editedTask != null) {
+              widget.onUpdateOrDeleteTask(editedTask, isDelete: false);
+            }
+          },
           openDeleteTaskTitle: _openDeleteTaskTitle,
           child: GestureDetector(
-            onTap: onTap,
+            onTap: () async {
+              final editedTask = await showTaskModal(context, task: task);
+              if (editedTask != null) {
+                widget.onUpdateOrDeleteTask(editedTask, isDelete: false);
+              }
+            },
             child: StatefulBuilder(
               builder: (context, setCardState) {
                 bool isPressed = false;
@@ -3298,7 +3393,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
   String _formatDateDayMonthYear(DateTime date) {
     // Example: 12 May 2024
     final day = date.day;
-    final month = _getMonthName(date.month).substring(0, 3); // Short month
+    final month = getMonthName(date.month).substring(0, 3); // Short month
     final year = date.year;
     return '$day $month $year';
   }
@@ -3420,360 +3515,6 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
     );
   }
 
-  Future<void> _showDatePicker(
-    BuildContext context, {
-    required DateTime? initialDate,
-    required ValueChanged<DateTime> onDateChanged,
-  }) async {
-    DateTime tempDate = initialDate ?? DateTime.now();
-    DateTime displayedMonth = DateTime(tempDate.year, tempDate.month);
-
-    await showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (context) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            // Local variables for drag tracking
-            bool isDragging = false;
-            double dragStartX = 0;
-            double dragDistance = 0;
-
-            return Dialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Container(
-                constraints: BoxConstraints(maxWidth: 700, minWidth: 500),
-                padding: EdgeInsets.zero,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.02),
-                      blurRadius: 2,
-                      offset: Offset(0, 1),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Month header with arrows
-                    Container(
-                      padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          IconButton(
-                            icon: Icon(
-                              Icons.chevron_left,
-                              color: Colors.grey[600],
-                            ),
-                            onPressed: () {
-                              setDialogState(() {
-                                displayedMonth = DateTime(
-                                  displayedMonth.year,
-                                  displayedMonth.month - 1,
-                                );
-                              });
-                            },
-                          ),
-                          Text(
-                            '${_getMonthName(displayedMonth.month)} ${displayedMonth.year}',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.white : Colors.black,
-                            ),
-                          ),
-                          IconButton(
-                            icon: Icon(
-                              Icons.chevron_right,
-                              color: Colors.grey[600],
-                            ),
-                            onPressed: () {
-                              setDialogState(() {
-                                displayedMonth = DateTime(
-                                  displayedMonth.year,
-                                  displayedMonth.month + 1,
-                                );
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Weekday headers
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        children:
-                            ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-                                .map(
-                                  (day) => Expanded(
-                                    child: Padding(
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: 2,
-                                      ),
-                                      child: Text(
-                                        day,
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    // Calendar grid with swipe gestures
-                    GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onHorizontalDragUpdate: (details) {
-                        // Track drag distance for swipe detection
-                        if (!isDragging) {
-                          isDragging = true;
-                          dragStartX = details.globalPosition.dx;
-                        }
-                        dragDistance = details.globalPosition.dx - dragStartX;
-                      },
-                      onHorizontalDragEnd: (details) {
-                        print(
-                          'Swipe detected: distance = $dragDistance, velocity = ${details.primaryVelocity}',
-                        );
-                        isDragging = false;
-
-                        // Use both distance and velocity for more reliable detection
-                        final distanceThreshold = 50.0;
-                        final velocityThreshold = 200.0;
-
-                        if (dragDistance > distanceThreshold ||
-                            details.primaryVelocity! > velocityThreshold) {
-                          print('Swiping right - going to previous month');
-                          // Swipe right - previous month
-                          setDialogState(() {
-                            displayedMonth = DateTime(
-                              displayedMonth.year,
-                              displayedMonth.month - 1,
-                            );
-                          });
-                        } else if (dragDistance < -distanceThreshold ||
-                            details.primaryVelocity! < -velocityThreshold) {
-                          print('Swiping left - going to next month');
-                          // Swipe left - next month
-                          setDialogState(() {
-                            displayedMonth = DateTime(
-                              displayedMonth.year,
-                              displayedMonth.month + 1,
-                            );
-                          });
-                        }
-
-                        // Reset drag tracking
-                        dragDistance = 0;
-                        dragStartX = 0;
-                      },
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
-                        child: _buildCalendarGrid(
-                          displayedMonth,
-                          tempDate,
-                          isDark,
-                          (selectedDate) {
-                            setDialogState(() {
-                              tempDate = selectedDate;
-                            });
-                          },
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 12),
-                    // Enhanced buttons
-                    SizedBox(height: 12),
-                    // Enhanced buttons
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Container(
-                              height: 40,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: LoggitColors.teal.withOpacity(0.3),
-                                  width: 1,
-                                ),
-                              ),
-                              child: TextButton(
-                                onPressed: () => Navigator.of(context).pop(),
-                                style: TextButton.styleFrom(
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                                child: Text(
-                                  'Cancel',
-                                  style: TextStyle(
-                                    color: Colors.black,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: Container(
-                              height: 40,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    LoggitColors.teal,
-                                    LoggitColors.teal.withOpacity(0.8),
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                borderRadius: BorderRadius.circular(10),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: LoggitColors.teal.withOpacity(0.3),
-                                    blurRadius: 6,
-                                    offset: Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: ElevatedButton(
-                                onPressed: () {
-                                  onDateChanged(tempDate);
-                                  Navigator.of(context).pop();
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.transparent,
-                                  shadowColor: Colors.transparent,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                                child: Text(
-                                  'OK',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildCalendarGrid(
-    DateTime displayedMonth,
-    DateTime selectedDate,
-    bool isDark,
-    ValueChanged<DateTime> onDateSelected,
-  ) {
-    final daysInMonth = DateTime(
-      displayedMonth.year,
-      displayedMonth.month + 1,
-      0,
-    ).day;
-    final firstDayOfMonth = DateTime(
-      displayedMonth.year,
-      displayedMonth.month,
-      1,
-    );
-    final firstWeekday = firstDayOfMonth.weekday % 7; // Sunday = 0
-    final today = DateTime.now();
-
-    return Column(
-      children: List.generate(6, (weekIndex) {
-        return Row(
-          children: List.generate(7, (dayIndex) {
-            final dayNumber = weekIndex * 7 + dayIndex - firstWeekday + 1;
-            final isValidDay = dayNumber > 0 && dayNumber <= daysInMonth;
-            final isToday =
-                dayNumber == today.day &&
-                displayedMonth.month == today.month &&
-                displayedMonth.year == today.year;
-            final isSelected =
-                dayNumber == selectedDate.day &&
-                displayedMonth.month == selectedDate.month &&
-                displayedMonth.year == selectedDate.year;
-
-            return Expanded(
-              child: GestureDetector(
-                onTap: isValidDay
-                    ? () {
-                        onDateSelected(
-                          DateTime(
-                            displayedMonth.year,
-                            displayedMonth.month,
-                            dayNumber,
-                          ),
-                        );
-                      }
-                    : null,
-                child: Container(
-                  height: 36,
-                  margin: EdgeInsets.symmetric(vertical: 0.5),
-                  decoration: BoxDecoration(
-                    color: isSelected ? LoggitColors.teal : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                    border: isToday
-                        ? Border.all(color: LoggitColors.teal, width: 2)
-                        : isSelected
-                        ? Border.all(color: LoggitColors.teal, width: 2)
-                        : null,
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        isValidDay ? dayNumber.toString() : '',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: isSelected
-                              ? Colors.white
-                              : isValidDay
-                              ? (isDark ? Colors.white : Colors.black)
-                              : Colors.transparent,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          }),
-        );
-      }),
-    );
-  }
-
   Widget _buildSimpleFilterChip(String label, String filterValue, bool isDark) {
     final isSelected = statusFilter == filterValue;
     return GestureDetector(
@@ -3809,6 +3550,315 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
         ),
       ),
     );
+  }
+
+  String getMonthName(int month) {
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return months[(month - 1) % 12];
+  }
+
+  Future<void> _showDatePicker(
+    BuildContext context, {
+    required DateTime initialDate,
+    required ValueChanged<DateTime> onDateChanged,
+  }) async {
+    final now = DateTime.now();
+    DateTime tempDate = initialDate;
+    DateTime displayedMonth = DateTime(tempDate.year, tempDate.month, 1);
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: 20 + MediaQuery.of(context).viewInsets.bottom,
+              ),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.black87 : Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 20,
+                    offset: Offset(0, -5),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Handle bar
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      margin: EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.grey[600] : Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    'Select Date',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  // Calendar header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          Icons.chevron_left,
+                          color: isDark ? Colors.white : Colors.black,
+                        ),
+                        onPressed: () {
+                          setModalState(() {
+                            displayedMonth = DateTime(
+                              displayedMonth.year,
+                              displayedMonth.month - 1,
+                              1,
+                            );
+                          });
+                        },
+                      ),
+                      Text(
+                        '${getMonthName(displayedMonth.month)} ${displayedMonth.year}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: isDark ? Colors.white : Colors.black,
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          Icons.chevron_right,
+                          color: isDark ? Colors.white : Colors.black,
+                        ),
+                        onPressed: () {
+                          setModalState(() {
+                            displayedMonth = DateTime(
+                              displayedMonth.year,
+                              displayedMonth.month + 1,
+                              1,
+                            );
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 16),
+                  // Calendar grid
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: LoggitColors.teal.withOpacity(0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        // Day headers
+                        Container(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color: LoggitColors.teal.withOpacity(0.1),
+                            borderRadius: BorderRadius.vertical(
+                              top: Radius.circular(16),
+                            ),
+                          ),
+                          child: Row(
+                            children: ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((
+                              day,
+                            ) {
+                              return Expanded(
+                                child: Center(
+                                  child: Text(
+                                    day,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                      color: LoggitColors.teal,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                        // Calendar days
+                        Container(
+                          padding: EdgeInsets.all(8),
+                          child: Column(
+                            children: _buildCalendarWeeks(
+                              displayedMonth,
+                              tempDate,
+                              isDark,
+                              (selectedDate) {
+                                setModalState(() {
+                                  tempDate = selectedDate;
+                                });
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: () {
+                      onDateChanged(tempDate);
+                      Navigator.of(context).pop();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: LoggitColors.teal,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      textStyle: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    child: Text('Set Date'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  List<Widget> _buildCalendarWeeks(
+    DateTime displayedMonth,
+    DateTime selectedDate,
+    bool isDark,
+    ValueChanged<DateTime> onDateSelected,
+  ) {
+    final firstDayOfMonth = DateTime(
+      displayedMonth.year,
+      displayedMonth.month,
+      1,
+    );
+    final daysInMonth = DateTime(
+      displayedMonth.year,
+      displayedMonth.month + 1,
+      0,
+    ).day;
+    final firstWeekday = firstDayOfMonth.weekday % 7; // Sunday = 0
+    List<Widget> weeks = [];
+    List<Widget> currentWeek = [];
+
+    // Fill initial empty days
+    for (int i = 0; i < firstWeekday; i++) {
+      currentWeek.add(Expanded(child: Container()));
+    }
+
+    for (int day = 1; day <= daysInMonth; day++) {
+      final date = DateTime(displayedMonth.year, displayedMonth.month, day);
+      final isSelected =
+          date.year == selectedDate.year &&
+          date.month == selectedDate.month &&
+          date.day == selectedDate.day;
+      final isToday =
+          date.year == DateTime.now().year &&
+          date.month == DateTime.now().month &&
+          date.day == DateTime.now().day;
+      currentWeek.add(
+        Expanded(
+          child: GestureDetector(
+            onTap: () => onDateSelected(date),
+            child: Container(
+              margin: EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? LoggitColors.teal
+                    : isToday
+                    ? LoggitColors.teal.withOpacity(0.15)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                border: isSelected
+                    ? Border.all(color: LoggitColors.teal, width: 2)
+                    : null,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    day.toString(),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: isSelected
+                          ? Colors.white
+                          : isToday
+                          ? LoggitColors.teal
+                          : isDark
+                          ? Colors.white
+                          : Colors.black,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Container(
+                    height: 6,
+                    width: 6,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isToday ? LoggitColors.teal : Colors.transparent,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      if (currentWeek.length == 7) {
+        weeks.add(Row(children: currentWeek));
+        currentWeek = [];
+      }
+    }
+
+    // Add remaining days to complete the last week
+    while (currentWeek.length < 7) {
+      currentWeek.add(Expanded(child: Container()));
+    }
+    if (currentWeek.isNotEmpty) {
+      weeks.add(Row(children: currentWeek));
+    }
+
+    return weeks;
   }
 }
 
@@ -4392,7 +4442,7 @@ Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
                                     ),
                                     child: GestureDetector(
                                       onTap: () async {
-                                        await showDatePickerModal(
+                                        await showDatePickerCustom(
                                           context,
                                           initialDate:
                                               dueDate ?? DateTime.now(),
@@ -4451,7 +4501,7 @@ Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
                                     ),
                                     child: GestureDetector(
                                       onTap: () async {
-                                        await showTimePickerModal(
+                                        await showTimePickerCustom(
                                           context,
                                           initialTime:
                                               timeOfDay ?? TimeOfDay.now(),
@@ -4873,6 +4923,22 @@ Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
                                 ),
                               ),
                               onPressed: () {
+                                print('[DEBUG] Save button pressed in modal');
+                                print(
+                                  '[DEBUG] title: ' +
+                                      titleController.text.trim(),
+                                );
+                                print(
+                                  '[DEBUG] category: ' + (category ?? 'null'),
+                                );
+                                print(
+                                  '[DEBUG] dueDate: ' +
+                                      (dueDate?.toString() ?? 'null'),
+                                );
+                                print(
+                                  '[DEBUG] timeOfDay: ' +
+                                      (timeOfDay?.format(context) ?? 'null'),
+                                );
                                 setModalState(() {
                                   showTitleError = titleController.text
                                       .trim()
@@ -4883,6 +4949,12 @@ Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
                                   showDateTimeError =
                                       dueDate == null || timeOfDay == null;
                                 });
+                                if (showTitleError)
+                                  print('[DEBUG] Title validation failed');
+                                if (showCategoryError)
+                                  print('[DEBUG] Category validation failed');
+                                if (showDateTimeError)
+                                  print('[DEBUG] Date/Time validation failed');
                                 if (showTitleError ||
                                     showCategoryError ||
                                     showDateTimeError) {
@@ -4916,7 +4988,9 @@ Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
                                   description: descController.text,
                                   dueDate: dueDate,
                                   isCompleted: status == TaskStatus.completed,
-                                  timestamp: DateTime.now(),
+                                  timestamp: isEditing
+                                      ? task!.timestamp
+                                      : DateTime.now(),
                                   category: category,
                                   recurrenceType: recurrenceType,
                                   timeOfDay: timeOfDay,
@@ -4924,7 +4998,15 @@ Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
                                   status: status,
                                   reminder: reminder,
                                 );
-                                Navigator.of(context).pop(newTask);
+                                // Before popping the modal with the new task:
+                                print(
+                                  '[DEBUG] About to pop modal with newTask: ' +
+                                      newTask.toJson().toString(),
+                                );
+                                Navigator.of(
+                                  context,
+                                  rootNavigator: true,
+                                ).pop(newTask);
                               },
                               child: Text(isEditing ? 'Save' : 'Add'),
                             ),
@@ -4952,43 +5034,6 @@ Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
   return result;
 }
 
-// At the bottom of the file, above showTaskModal, add:
-
-Future<void> showDatePickerModal(
-  BuildContext context, {
-  required DateTime initialDate,
-  required Function(DateTime) onDateChanged,
-}) async {
-  final DateTime? picked = await showDatePicker(
-    context: context,
-    initialDate: initialDate,
-    firstDate: DateTime(2000),
-    lastDate: DateTime(2101),
-  );
-  if (picked != null) {
-    onDateChanged(picked);
-  }
-}
-
-Future<void> showTimePickerModal(
-  BuildContext context, {
-  required TimeOfDay initialTime,
-  required Function(TimeOfDay) onTimeChanged,
-}) async {
-  final TimeOfDay? picked = await showTimePicker(
-    context: context,
-    initialTime: initialTime,
-  );
-  if (picked != null) {
-    onTimeChanged(picked);
-  }
-}
-
-String weekdayString(int weekday) {
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  return days[(weekday - 1) % 7];
-}
-
 String monthString(int month) {
   const months = [
     'Jan',
@@ -5005,4 +5050,497 @@ String monthString(int month) {
     'Dec',
   ];
   return months[(month - 1) % 12];
+}
+
+// After imports and utility functions, add:
+Future<void> showDatePickerCustom(
+  BuildContext context, {
+  required DateTime initialDate,
+  required ValueChanged<DateTime> onDateChanged,
+}) async {
+  final now = DateTime.now();
+  DateTime tempDate = initialDate;
+  DateTime displayedMonth = DateTime(tempDate.year, tempDate.month, 1);
+
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      return StatefulBuilder(
+        builder: (context, setModalState) {
+          return Container(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: 20 + MediaQuery.of(context).viewInsets.bottom,
+            ),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.black87 : Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 20,
+                  offset: Offset(0, -5),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Handle bar
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.grey[600] : Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Text(
+                  'Select Date',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+                SizedBox(height: 16),
+                // Calendar header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        Icons.chevron_left,
+                        color: isDark ? Colors.white : Colors.black,
+                      ),
+                      onPressed: () {
+                        setModalState(() {
+                          displayedMonth = DateTime(
+                            displayedMonth.year,
+                            displayedMonth.month - 1,
+                            1,
+                          );
+                        });
+                      },
+                    ),
+                    Text(
+                      '${getMonthName(displayedMonth.month)} ${displayedMonth.year}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: isDark ? Colors.white : Colors.black,
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.chevron_right,
+                        color: isDark ? Colors.white : Colors.black,
+                      ),
+                      onPressed: () {
+                        setModalState(() {
+                          displayedMonth = DateTime(
+                            displayedMonth.year,
+                            displayedMonth.month + 1,
+                            1,
+                          );
+                        });
+                      },
+                    ),
+                  ],
+                ),
+                SizedBox(height: 16),
+                // Calendar grid
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: LoggitColors.teal.withOpacity(0.2),
+                      width: 1,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      // Day headers
+                      Container(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: LoggitColors.teal.withOpacity(0.1),
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(16),
+                          ),
+                        ),
+                        child: Row(
+                          children: ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((
+                            day,
+                          ) {
+                            return Expanded(
+                              child: Center(
+                                child: Text(
+                                  day,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: LoggitColors.teal,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      // Calendar days
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        child: Column(
+                          children: _buildCalendarWeeks(
+                            displayedMonth,
+                            tempDate,
+                            isDark,
+                            (selectedDate) {
+                              setModalState(() {
+                                tempDate = selectedDate;
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () {
+                    onDateChanged(tempDate);
+                    Navigator.of(context).pop();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: LoggitColors.teal,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    textStyle: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  child: Text('Set Date'),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+List<Widget> _buildCalendarWeeks(
+  DateTime displayedMonth,
+  DateTime selectedDate,
+  bool isDark,
+  ValueChanged<DateTime> onDateSelected,
+) {
+  final firstDayOfMonth = DateTime(
+    displayedMonth.year,
+    displayedMonth.month,
+    1,
+  );
+  final daysInMonth = DateTime(
+    displayedMonth.year,
+    displayedMonth.month + 1,
+    0,
+  ).day;
+  final firstWeekday = firstDayOfMonth.weekday % 7; // Sunday = 0
+  List<Widget> weeks = [];
+  List<Widget> currentWeek = [];
+
+  // Fill initial empty days
+  for (int i = 0; i < firstWeekday; i++) {
+    currentWeek.add(Expanded(child: Container()));
+  }
+
+  for (int day = 1; day <= daysInMonth; day++) {
+    final date = DateTime(displayedMonth.year, displayedMonth.month, day);
+    final isSelected =
+        date.year == selectedDate.year &&
+        date.month == selectedDate.month &&
+        date.day == selectedDate.day;
+    final isToday =
+        date.year == DateTime.now().year &&
+        date.month == DateTime.now().month &&
+        date.day == DateTime.now().day;
+    currentWeek.add(
+      Expanded(
+        child: GestureDetector(
+          onTap: () => onDateSelected(date),
+          child: Container(
+            margin: EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? LoggitColors.teal
+                  : isToday
+                  ? LoggitColors.teal.withOpacity(0.15)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              border: isSelected
+                  ? Border.all(color: LoggitColors.teal, width: 2)
+                  : null,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  day.toString(),
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: isSelected
+                        ? Colors.white
+                        : isToday
+                        ? LoggitColors.teal
+                        : isDark
+                        ? Colors.white
+                        : Colors.black,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Container(
+                  height: 6,
+                  width: 6,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isToday ? LoggitColors.teal : Colors.transparent,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (currentWeek.length == 7) {
+      weeks.add(Row(children: currentWeek));
+      currentWeek = [];
+    }
+  }
+
+  // Add remaining days to complete the last week
+  while (currentWeek.length < 7) {
+    currentWeek.add(Expanded(child: Container()));
+  }
+  if (currentWeek.isNotEmpty) {
+    weeks.add(Row(children: currentWeek));
+  }
+
+  return weeks;
+}
+
+// Add after imports:
+String getMonthName(int month) {
+  const months = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  return months[(month - 1) % 12];
+}
+
+// Add after imports:
+Future<void> showTimePickerCustom(
+  BuildContext context, {
+  required TimeOfDay initialTime,
+  required ValueChanged<TimeOfDay> onTimeChanged,
+}) async {
+  TimeOfDay tempTime = initialTime;
+
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      return StatefulBuilder(
+        builder: (context, setModalState) {
+          return Container(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: 20 + MediaQuery.of(context).viewInsets.bottom,
+            ),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.black87 : Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 20,
+                  offset: Offset(0, -5),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Handle bar
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.grey[600] : Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Text(
+                  'Select Time',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+                SizedBox(height: 16),
+                // Time picker
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        isDark ? Colors.black87 : Colors.grey[50]!,
+                        isDark ? Colors.black87.withOpacity(0.8) : Colors.white,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: LoggitColors.teal.withOpacity(0.2),
+                      width: 1,
+                    ),
+                  ),
+                  padding: EdgeInsets.all(16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 120,
+                          child: CupertinoPicker(
+                            scrollController: FixedExtentScrollController(
+                              initialItem: tempTime.hour,
+                            ),
+                            itemExtent: 30,
+                            onSelectedItemChanged: (index) {
+                              setModalState(() {
+                                tempTime = TimeOfDay(
+                                  hour: index,
+                                  minute: tempTime.minute,
+                                );
+                              });
+                            },
+                            children: List.generate(
+                              24,
+                              (i) => Center(
+                                child: Text(
+                                  i.toString().padLeft(2, '0'),
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w500,
+                                    color: isDark ? Colors.white : Colors.black,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Text(
+                        ':',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.black,
+                        ),
+                      ),
+                      Expanded(
+                        child: SizedBox(
+                          height: 120,
+                          child: CupertinoPicker(
+                            scrollController: FixedExtentScrollController(
+                              initialItem: tempTime.minute,
+                            ),
+                            itemExtent: 30,
+                            onSelectedItemChanged: (index) {
+                              setModalState(() {
+                                tempTime = TimeOfDay(
+                                  hour: tempTime.hour,
+                                  minute: index,
+                                );
+                              });
+                            },
+                            children: List.generate(
+                              60,
+                              (i) => Center(
+                                child: Text(
+                                  i.toString().padLeft(2, '0'),
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w500,
+                                    color: isDark ? Colors.white : Colors.black,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () {
+                    onTimeChanged(tempTime);
+                    Navigator.of(context).pop();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: LoggitColors.teal,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    textStyle: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  child: Text('Set Time'),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    },
+  );
 }

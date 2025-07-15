@@ -435,6 +435,35 @@ class _LoggitHomeState extends State<LoggitHome> {
               });
             }
           },
+          onUpdateOrDeleteTask: (Task task, {bool isDelete = false}) async {
+            print(
+              '[DEBUG] onUpdateOrDeleteTask called. isDelete: ' +
+                  isDelete.toString() +
+                  ', task: ' +
+                  task.toJson().toString(),
+            );
+            print(
+              '[DEBUG] _tasks before: ' +
+                  _tasks.map((t) => t.toJson()).toList().toString(),
+            );
+            setState(() {
+              if (isDelete) {
+                _tasks.removeWhere((t) => t.id == task.id);
+              } else {
+                final index = _tasks.indexWhere((t) => t.id == task.id);
+                if (index != -1) {
+                  _tasks[index] = task;
+                } else {
+                  _tasks.add(task);
+                }
+              }
+            });
+            print(
+              '[DEBUG] _tasks after: ' +
+                  _tasks.map((t) => t.toJson()).toList().toString(),
+            );
+            await _saveTasks();
+          },
         );
       case FeatureType.reminders:
         return RemindersScreen(
