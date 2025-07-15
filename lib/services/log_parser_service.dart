@@ -99,7 +99,15 @@ class LogParserService {
 
     // Patterns for each type (add more as you learn)
     final patterns = [
-      // Tasks - MUST COME FIRST to avoid conflicts with reminders
+      // Time-only task input (e.g., 'add a task doctor's appointment 6:30 pm' or 'add a task doctor's appointment, 6:30 pm')
+      {
+        'type': LogType.task,
+        'regex': RegExp(
+          r'^(add|create|set|new)\s+(a\s+)?(task|todo|item)(?:\s*(to|for))?\s+(.+?)[,]?\s+(\d{1,2})(:(\d{2}))?\s*(am|pm)$',
+          caseSensitive: false,
+        ),
+      },
+      // Tasks - MUST COME AFTER the time-only pattern to avoid greedy match
       {
         'type': LogType.task,
         // (1) trigger, (2) optional "a", (3) task/todo/item, (4) optional to/for, (5) action, (6) date/time
@@ -193,6 +201,31 @@ class LogParserService {
         String? amountStr;
         String? category;
         bool hasTime = true;
+
+        // Handle time-only task pattern
+        if (type == LogType.task &&
+            match.groupCount >= 8 &&
+            match.group(5) != null &&
+            match.group(6) != null) {
+          // Example: add a task doctor's appointment 6:30 pm
+          action = match.group(5)!.trim();
+          int hour = int.parse(match.group(6)!);
+          int minute = match.group(8) != null ? int.parse(match.group(8)!) : 0;
+          final ampm = match.group(9)?.toLowerCase();
+          if (ampm == 'pm' && hour < 12) hour += 12;
+          if (ampm == 'am' && hour == 12) hour = 0;
+          // Instead of assigning a date, leave dateTime as null to prompt for date
+          print('DEBUG: [time-only task] extracted action: "$action"');
+          print('DEBUG: [time-only task] extracted time: $hour:$minute $ampm');
+          return ParsedLog(
+            type: type,
+            action: action,
+            dateTime: null, // No date assigned
+            hasTime: true,
+            raw: input,
+          );
+        }
+
         switch (type) {
           case LogType.reminder:
           case LogType.task:

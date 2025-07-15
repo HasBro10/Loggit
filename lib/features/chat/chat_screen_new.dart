@@ -174,8 +174,53 @@ class _ChatScreenNewState extends State<ChatScreenNew>
 
       LogEntry? logEntry;
 
-      // SIMPLE APPROACH: Handle reminders cleanly
-      if (parsed.type == LogType.reminder) {
+      // --- Extract timeOfDay even if dateTime is null but hasTime is true ---
+      TimeOfDay? parsedTimeOfDay;
+      if (parsed.hasTime && parsed.dateTime != null) {
+        parsedTimeOfDay = TimeOfDay(
+          hour: parsed.dateTime!.hour,
+          minute: parsed.dateTime!.minute,
+        );
+      } else if (parsed.hasTime && parsed.dateTime == null) {
+        // Try to extract time from the original input (e.g., '6:30 pm' or '6 pm')
+        final timeMatch = RegExp(
+          r'(\d{1,2})(:(\d{2}))?\s*(am|pm)',
+          caseSensitive: false,
+        ).firstMatch(message);
+        if (timeMatch != null) {
+          int hour = int.parse(timeMatch.group(1)!);
+          int minute = timeMatch.group(3) != null
+              ? int.parse(timeMatch.group(3)!)
+              : 0;
+          final ampm = timeMatch.group(4)?.toLowerCase();
+          if (ampm == 'pm' && hour < 12) hour += 12;
+          if (ampm == 'am' && hour == 12) hour = 0;
+          parsedTimeOfDay = TimeOfDay(hour: hour, minute: minute);
+        }
+      }
+      // --- End extract timeOfDay ---
+
+      // --- Special merging: If pending task and user provides date-only reminder, merge date into task ---
+      if (_pendingLog is Task &&
+          parsed.type == LogType.reminder &&
+          parsed.dateTime != null &&
+          !parsed.hasTime) {
+        final pending = _pendingLog as Task;
+        // Merge the date from reminder into the pending task
+        logEntry = Task(
+          title: pending.title,
+          dueDate: DateTime(
+            parsed.dateTime!.year,
+            parsed.dateTime!.month,
+            parsed.dateTime!.day,
+            pending.timeOfDay?.hour ?? 0,
+            pending.timeOfDay?.minute ?? 0,
+          ),
+          timeOfDay: pending.timeOfDay,
+          timestamp: DateTime.now(),
+        );
+        _pendingLog = null;
+      } else if (parsed.type == LogType.reminder) {
         DateTime? date = parsed.dateTime;
         bool hasTime = parsed.hasTime;
         String title = parsed.action ?? '';
@@ -228,34 +273,141 @@ class _ChatScreenNewState extends State<ChatScreenNew>
           );
         }
       } else {
-        // Not a reminder, clear pending log
-        _pendingLog = null;
-        switch (parsed.type) {
-          case LogType.task:
-            logEntry = Task(
-              title: parsed.action ?? '',
-              dueDate: parsed.dateTime,
-              timestamp: DateTime.now(),
-            );
-            break;
-          case LogType.expense:
-            logEntry = Expense(
-              category: parsed.category ?? '',
-              amount: parsed.amount ?? 0,
-              timestamp: DateTime.now(),
-            );
-            break;
-          case LogType.gym:
-            logEntry = GymLog(
-              workoutName: parsed.action ?? '',
-              exercises: [
-                Exercise(name: parsed.action ?? '', sets: 0, reps: 0),
-              ],
-              timestamp: DateTime.now(),
-            );
-            break;
-          default:
-            logEntry = null;
+        // Not a reminder, handle tasks with partial info merging
+        if (parsed.type == LogType.task) {
+          DateTime? date = parsed.dateTime;
+          bool hasTime = parsed.hasTime;
+          String title = parsed.action ?? '';
+
+          // If we have a pending task, try to merge info
+          if (_pendingLog is Task) {
+            final pending = _pendingLog as Task;
+            // If new input has date but no time, merge with pending time
+            if (date != null &&
+                (date.hour == 0 && date.minute == 0) &&
+                pending.timeOfDay != null) {
+              logEntry = Task(
+                title: pending.title.isNotEmpty ? pending.title : title,
+                dueDate: DateTime(
+                  date.year,
+                  date.month,
+                  date.day,
+                  pending.timeOfDay!.hour,
+                  pending.timeOfDay!.minute,
+                ),
+                timeOfDay: pending.timeOfDay,
+                timestamp: DateTime.now(),
+              );
+              _pendingLog = null;
+            }
+            // If new input has time but no date, merge with pending date
+            else if (date == null &&
+                parsedTimeOfDay != null &&
+                pending.dueDate != null) {
+              logEntry = Task(
+                title: pending.title.isNotEmpty ? pending.title : title,
+                dueDate: DateTime(
+                  pending.dueDate!.year,
+                  pending.dueDate!.month,
+                  pending.dueDate!.day,
+                  parsedTimeOfDay.hour,
+                  parsedTimeOfDay.minute,
+                ),
+                timeOfDay: parsedTimeOfDay,
+                timestamp: DateTime.now(),
+              );
+              _pendingLog = null;
+            }
+            // If new input has only time (no date), keep timeOfDay and leave dueDate null
+            else if (date == null && parsedTimeOfDay != null) {
+              logEntry = Task(
+                title: title.isNotEmpty ? title : pending.title,
+                dueDate: null,
+                timeOfDay: parsedTimeOfDay,
+                timestamp: DateTime.now(),
+              );
+            }
+            // If new input has only date (no time), keep dueDate and leave timeOfDay null
+            else if (date != null &&
+                (date.hour == 0 && date.minute == 0) &&
+                (pending.timeOfDay == null)) {
+              logEntry = Task(
+                title: title.isNotEmpty ? title : pending.title,
+                dueDate: date,
+                timeOfDay: null,
+                timestamp: DateTime.now(),
+              );
+            }
+            // If new input has both, use it and clear pending
+            else if (date != null && hasTime && title.isNotEmpty) {
+              logEntry = Task(
+                title: title,
+                dueDate: date,
+                timeOfDay: parsedTimeOfDay,
+                timestamp: DateTime.now(),
+              );
+              _pendingLog = null;
+            }
+            // Otherwise, create incomplete task for prompting
+            else {
+              logEntry = Task(
+                title: title.isNotEmpty ? title : pending.title,
+                dueDate: date ?? pending.dueDate,
+                timeOfDay: parsedTimeOfDay ?? pending.timeOfDay,
+                timestamp: DateTime.now(),
+              );
+            }
+          } else {
+            // No pending task - create new one
+            // If only time is present (dateTime == null, hasTime == true), set timeOfDay and leave dueDate null
+            if (date == null && parsedTimeOfDay != null) {
+              logEntry = Task(
+                title: title,
+                dueDate: null,
+                timeOfDay: parsedTimeOfDay,
+                timestamp: DateTime.now(),
+              );
+            } else if (date != null &&
+                (date.hour == 0 && date.minute == 0) &&
+                parsedTimeOfDay == null) {
+              logEntry = Task(
+                title: title,
+                dueDate: date,
+                timeOfDay: null,
+                timestamp: DateTime.now(),
+              );
+            } else {
+              logEntry = Task(
+                title: title,
+                dueDate: date,
+                timeOfDay: parsedTimeOfDay,
+                timestamp: DateTime.now(),
+              );
+            }
+          }
+        } else {
+          // Not a task, clear pending log
+          _pendingLog = null;
+          switch (parsed.type) {
+            case LogType.expense:
+              logEntry = Expense(
+                category: parsed.category ?? '',
+                amount: parsed.amount ?? 0,
+                timestamp: DateTime.now(),
+              );
+              break;
+            case LogType.gym:
+              logEntry = GymLog(
+                workoutName: parsed.action ?? '',
+                exercises: [
+                  Exercise(name: parsed.action ?? '', sets: 0, reps: 0),
+                ],
+                timestamp: DateTime.now(),
+              );
+              break;
+            default:
+              logEntry = null;
+          }
         }
       }
 
@@ -264,7 +416,64 @@ class _ChatScreenNewState extends State<ChatScreenNew>
         String confirmationMessage;
         bool canConfirm = true;
         bool showEdit = false;
-        if (parsed.type == LogType.reminder) {
+        // --- FIX: Use actual type of logEntry for confirmation logic ---
+        if (logEntry is Task) {
+          // Task-specific confirmation logic
+          final task = logEntry as Task;
+          print(
+            'DEBUG: [TASK] Chat logic - parsed.dateTime:  [33m [1m${parsed.dateTime} [0m',
+          );
+          print('DEBUG: [TASK] Chat logic - parsed.hasTime: ${parsed.hasTime}');
+          print('DEBUG: [TASK] Chat logic - task.title: "${task.title}"');
+          print(
+            'DEBUG: [TASK] Chat logic - task.title.isEmpty: ${task.title.isEmpty}',
+          );
+
+          // If missing date but have time, prompt for date
+          if (task.title.isEmpty) {
+            print('DEBUG: [TASK] Chat logic - Missing action');
+            confirmationMessage = 'What task should I create?';
+            canConfirm = false;
+            showEdit = true;
+          } else if (task.timeOfDay != null && (task.dueDate == null)) {
+            // Title and time present, date missing
+            print(
+              'DEBUG: [TASK] Chat logic - Missing date (time present, dueDate null)',
+            );
+            confirmationMessage = 'What date is this task due?';
+            canConfirm = false;
+            showEdit = true;
+          } else if (task.timeOfDay != null &&
+              (task.dueDate != null && task.dueDate!.year == 0)) {
+            // Title and time present, date missing (dueDate year 0)
+            print(
+              'DEBUG: [TASK] Chat logic - Missing date (time present, dueDate year 0)',
+            );
+            confirmationMessage = 'What date is this task due?';
+            canConfirm = false;
+            showEdit = true;
+          } else if ((task.dueDate != null &&
+                  (task.dueDate!.hour == 0 && task.dueDate!.minute == 0)) &&
+              (task.timeOfDay == null)) {
+            print('DEBUG: [TASK] Chat logic - Missing time');
+            confirmationMessage = 'What time is this task due?';
+            canConfirm = false;
+            showEdit = true;
+          } else if (task.dueDate != null &&
+              task.timeOfDay != null &&
+              task.title.isNotEmpty) {
+            print('DEBUG: [TASK] Chat logic - Complete task');
+            confirmationMessage = _getConfirmationMessage(logEntry);
+            canConfirm = true;
+            showEdit = true; // Always show edit button for tasks
+          } else {
+            print('DEBUG: [TASK] Chat logic - Invalid date/time');
+            confirmationMessage =
+                'That doesn\'t look like a valid date/time. Please try again.';
+            canConfirm = false;
+            showEdit = true;
+          }
+        } else if (logEntry is Reminder) {
           // Context-aware prompt and button logic
           final reminder = logEntry as Reminder;
           print('DEBUG: Chat logic - parsed.dateTime: ${parsed.dateTime}');
@@ -301,50 +510,6 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             showEdit = true;
           } else {
             print('DEBUG: Chat logic - Invalid date/time');
-            confirmationMessage =
-                'That doesn\'t look like a valid date/time. Please try again.';
-            canConfirm = false;
-            showEdit = true;
-          }
-        } else if (parsed.type == LogType.task) {
-          // Task-specific confirmation logic
-          final task = logEntry as Task;
-          print(
-            'DEBUG: [TASK] Chat logic - parsed.dateTime: ${parsed.dateTime}',
-          );
-          print('DEBUG: [TASK] Chat logic - parsed.hasTime: ${parsed.hasTime}');
-          print('DEBUG: [TASK] Chat logic - task.title: "${task.title}"');
-          print(
-            'DEBUG: [TASK] Chat logic - task.title.isEmpty: ${task.title.isEmpty}',
-          );
-
-          if (task.title.isEmpty) {
-            // Missing action - ask for action
-            print('DEBUG: [TASK] Chat logic - Missing action');
-            confirmationMessage = 'What task should I create?';
-            canConfirm = false;
-            showEdit = true;
-          } else if (parsed.dateTime == null) {
-            // Have action but missing date/time - ask for date/time
-            print('DEBUG: [TASK] Chat logic - Missing date/time');
-            confirmationMessage =
-                'When is this task due? Please add a date and time.';
-            canConfirm = false;
-            showEdit = true;
-          } else if (!parsed.hasTime) {
-            print('DEBUG: [TASK] Chat logic - Missing time');
-            confirmationMessage = 'What time is this task due?';
-            canConfirm = false;
-            showEdit = true;
-          } else if (parsed.dateTime != null &&
-              parsed.hasTime &&
-              task.title.isNotEmpty) {
-            print('DEBUG: [TASK] Chat logic - Complete task');
-            confirmationMessage = _getConfirmationMessage(logEntry);
-            canConfirm = true;
-            showEdit = true;
-          } else {
-            print('DEBUG: [TASK] Chat logic - Invalid date/time');
             confirmationMessage =
                 'That doesn\'t look like a valid date/time. Please try again.';
             canConfirm = false;

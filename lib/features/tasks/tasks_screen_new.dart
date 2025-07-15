@@ -574,8 +574,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                               (task) => _buildTaskCard(
                                 task,
                                 isDark,
-                                onTap: () =>
-                                    _showTaskModal(context, task: task),
+                                onTap: () => showTaskModal(context, task: task),
                               ),
                             )
                           else
@@ -586,8 +585,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                               (task) => _buildTaskCard(
                                 task,
                                 isDark,
-                                onTap: () =>
-                                    _showTaskModal(context, task: task),
+                                onTap: () => showTaskModal(context, task: task),
                               ),
                             )
                           else
@@ -607,7 +605,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
           onPressed: () {
             // Close any open delete button first
             _openDeleteTaskTitle.value = null;
-            _showTaskModal(context);
+            showTaskModal(context);
           },
           child: Icon(Icons.add, color: Colors.white, size: 24),
         ),
@@ -681,7 +679,8 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
     return 0;
   }
 
-  void _showTaskModal(BuildContext context, {Task? task}) async {
+  // Move this function to the top level (outside of any class)
+  Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
     final isEditing = task != null;
     final titleController = TextEditingController(text: task?.title ?? '');
     final descController = TextEditingController(text: task?.description ?? '');
@@ -692,15 +691,12 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
     TaskPriority priority = task?.priority ?? TaskPriority.medium;
     TaskStatus status = task?.status ?? TaskStatus.notStarted;
     ReminderType reminder = task?.reminder ?? ReminderType.none;
-
-    // In the modal's state, add these variables:
     bool showTitleError = false;
     bool showCategoryError = false;
     bool showDateTimeError = false;
-
-    // In the modal's state, add a variable for recurrence type:
     RecurrenceType recurrenceType = task?.recurrenceType ?? RecurrenceType.none;
 
+    Task? result;
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1525,6 +1521,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
         );
       },
     );
+    return result;
   }
 
   void _showFilterSheet() {
@@ -3489,7 +3486,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
             (task) => _buildTaskCard(
               task,
               isDark,
-              onTap: () => _showTaskModal(context, task: task),
+              onTap: () => showTaskModal(context, task: task),
             ),
           )
         else

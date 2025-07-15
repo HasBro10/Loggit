@@ -1,3 +1,20 @@
+# Latest Session Summary (June 2024)
+
+## What Was Attempted
+- Tried to move the `showTaskModal` function in `lib/features/tasks/tasks_screen_new.dart` to the very end of the file as a top-level function (outside any class), to fix the edit button for tasks.
+- Multiple automated attempts failed due to file size/complexity.
+- Provided clear manual instructions for the user to move the function.
+
+## Current Status
+- `showTaskModal` is still not a top-level function at the end of the file.
+- The edit button for tasks is still not working because the function is not accessible from other files.
+
+## What Needs to Be Done Next
+- Manually move the entire `showTaskModal` function (starting at `Future<Task?> showTaskModal...`) to the very bottom of `lib/features/tasks/tasks_screen_new.dart`, outside of any class or widget.
+- Save the file. This will make the edit button for tasks work as expected.
+
+---
+
 # Chat Session Notes - Log Parser & Chat Improvements
 
 ## Session Overview
