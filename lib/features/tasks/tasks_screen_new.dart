@@ -679,851 +679,6 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
     return 0;
   }
 
-  // Move this function to the top level (outside of any class)
-  Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
-    final isEditing = task != null;
-    final titleController = TextEditingController(text: task?.title ?? '');
-    final descController = TextEditingController(text: task?.description ?? '');
-    DateTime? dueDate = task?.dueDate;
-    TimeOfDay? timeOfDay = task?.timeOfDay;
-    String? category = task?.category;
-    bool isCompleted = task?.isCompleted ?? false;
-    TaskPriority priority = task?.priority ?? TaskPriority.medium;
-    TaskStatus status = task?.status ?? TaskStatus.notStarted;
-    ReminderType reminder = task?.reminder ?? ReminderType.none;
-    bool showTitleError = false;
-    bool showCategoryError = false;
-    bool showDateTimeError = false;
-    RecurrenceType recurrenceType = task?.recurrenceType ?? RecurrenceType.none;
-
-    Task? result;
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      barrierColor: Colors.black.withOpacity(0.4),
-      builder: (context) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            String? error;
-            return FractionallySizedBox(
-              heightFactor: 0.8,
-              child: SafeArea(
-                child: Column(
-                  children: [
-                    // Fixed handle and header at the top
-                    SizedBox(
-                      height: 48, // slightly taller to fit handle and title
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Container(
-                            width: 36,
-                            height: 4,
-                            margin: const EdgeInsets.only(top: 8, bottom: 8),
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? LoggitColors.darkBorder
-                                  : Colors.grey[300],
-                              borderRadius: BorderRadius.circular(3),
-                            ),
-                          ),
-                          Text(
-                            isEditing ? 'Edit Task' : 'Add Task',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 16,
-                              color: isDark ? Colors.white : Colors.black,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Scrollable content below
-                    Expanded(
-                      child: SingleChildScrollView(
-                        child: Padding(
-                          padding: const EdgeInsets.all(
-                            LoggitSpacing.screenPadding,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              SizedBox(height: 20),
-                              Text(
-                                'Title',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              SizedBox(height: 6),
-                              TextField(
-                                controller: titleController,
-                                decoration: InputDecoration(
-                                  filled: true,
-                                  fillColor: isDark
-                                      ? LoggitColors.darkCard
-                                      : Color(0xFFF1F5F9),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: showTitleError
-                                        ? BorderSide(
-                                            color: Colors.red,
-                                            width: 2,
-                                          )
-                                        : BorderSide.none,
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: showTitleError
-                                        ? BorderSide(
-                                            color: Colors.red,
-                                            width: 2,
-                                          )
-                                        : BorderSide(
-                                            color: LoggitColors.teal,
-                                            width: 2,
-                                          ),
-                                  ),
-                                  hintText: 'Enter title',
-                                ),
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.normal,
-                                ),
-                              ),
-                              if (showTitleError)
-                                Padding(
-                                  padding: const EdgeInsets.only(
-                                    top: 4,
-                                    left: 8,
-                                  ),
-                                  child: Text(
-                                    'Required',
-                                    style: TextStyle(
-                                      color: Colors.red,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ),
-                              SizedBox(height: 18),
-                              Text(
-                                'Description',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              SizedBox(height: 6),
-                              TextField(
-                                controller: descController,
-                                minLines: 1,
-                                maxLines: 5, // allow up to 5 lines
-                                decoration: InputDecoration(
-                                  filled: true,
-                                  fillColor: isDark
-                                      ? LoggitColors.darkCard
-                                      : Color(0xFFF1F5F9),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  hintText: 'Enter description',
-                                ),
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.normal,
-                                ),
-                              ),
-                              SizedBox(height: 18),
-                              Text(
-                                'Category',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              SizedBox(height: 6),
-                              DropdownButtonFormField<String>(
-                                value: category,
-                                items: ['Work', 'Personal', 'Business']
-                                    .map(
-                                      (c) => DropdownMenuItem(
-                                        value: c,
-                                        child: Text(
-                                          c,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.normal,
-                                            fontSize: 15,
-                                            color: isDark
-                                                ? Colors.white
-                                                : LoggitColors.darkGrayText,
-                                          ),
-                                        ),
-                                      ),
-                                    )
-                                    .toList(),
-                                onChanged: (val) =>
-                                    setModalState(() => category = val),
-                                decoration: InputDecoration(
-                                  filled: true,
-                                  fillColor: isDark
-                                      ? LoggitColors.darkCard
-                                      : Color(0xFFF1F5F9),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: showCategoryError
-                                        ? BorderSide(
-                                            color: Colors.red,
-                                            width: 2,
-                                          )
-                                        : BorderSide.none,
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: showCategoryError
-                                        ? BorderSide(
-                                            color: Colors.red,
-                                            width: 2,
-                                          )
-                                        : BorderSide(
-                                            color: LoggitColors.teal,
-                                            width: 2,
-                                          ),
-                                  ),
-                                  hintText: 'Select category',
-                                  // Remove errorText here
-                                ),
-                                style: TextStyle(
-                                  color: isDark
-                                      ? Colors.white
-                                      : LoggitColors.darkGrayText,
-                                  fontWeight: FontWeight.normal,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              if (showCategoryError)
-                                Padding(
-                                  padding: const EdgeInsets.only(
-                                    top: 4,
-                                    left: 8,
-                                  ),
-                                  child: Text(
-                                    'Required',
-                                    style: TextStyle(
-                                      color: Colors.red,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ),
-                              SizedBox(height: 18),
-                              // Date & Time buttons - separate pill buttons
-                              Row(
-                                children: [
-                                  // Date button
-                                  Flexible(
-                                    child: Container(
-                                      padding: EdgeInsets.symmetric(
-                                        vertical: 10,
-                                        horizontal: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(25),
-                                        border: Border.all(
-                                          color: showDateTimeError
-                                              ? Colors.red
-                                              : Colors.grey[300]!,
-                                          width: showDateTimeError ? 2 : 1,
-                                        ),
-                                        color: Color(0xFFF1F5F9),
-                                      ),
-                                      child: GestureDetector(
-                                        onTap: () async {
-                                          await _showDatePicker(
-                                            context,
-                                            initialDate:
-                                                dueDate ?? DateTime.now(),
-                                            onDateChanged: (date) {
-                                              setModalState(() {
-                                                dueDate = date;
-                                                showDateTimeError = false;
-                                              });
-                                            },
-                                          );
-                                        },
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.calendar_today,
-                                              size: 18,
-                                              color: LoggitColors.teal,
-                                            ),
-                                            SizedBox(width: 8),
-                                            Text(
-                                              dueDate == null
-                                                  ? 'Pick Date'
-                                                  : '${weekdayString(dueDate!.weekday)}, ${dueDate!.day} ${_monthString(dueDate!.month)}',
-                                              style: TextStyle(
-                                                color: isDark
-                                                    ? Colors.white
-                                                    : LoggitColors.darkGrayText,
-                                                fontWeight: FontWeight.w500,
-                                                fontSize: 14,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(width: 6),
-                                  // Time button
-                                  Flexible(
-                                    child: Container(
-                                      padding: EdgeInsets.symmetric(
-                                        vertical: 10,
-                                        horizontal: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(25),
-                                        border: Border.all(
-                                          color: showDateTimeError
-                                              ? Colors.red
-                                              : Colors.grey[300]!,
-                                          width: showDateTimeError ? 2 : 1,
-                                        ),
-                                        color: Color(0xFFF1F5F9),
-                                      ),
-                                      child: GestureDetector(
-                                        onTap: () async {
-                                          await _showTimePicker(
-                                            context,
-                                            initialTime:
-                                                timeOfDay ?? TimeOfDay.now(),
-                                            onTimeChanged: (time) {
-                                              setModalState(() {
-                                                timeOfDay = time;
-                                                showDateTimeError = false;
-                                              });
-                                            },
-                                          );
-                                        },
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.access_time,
-                                              size: 18,
-                                              color: LoggitColors.teal,
-                                            ),
-                                            SizedBox(width: 8),
-                                            Text(
-                                              timeOfDay == null
-                                                  ? 'Pick Time'
-                                                  : timeOfDay!.format(context),
-                                              style: TextStyle(
-                                                color: isDark
-                                                    ? Colors.white
-                                                    : LoggitColors.darkGrayText,
-                                                fontWeight: FontWeight.w500,
-                                                fontSize: 14,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (showDateTimeError)
-                                Padding(
-                                  padding: const EdgeInsets.only(
-                                    top: 4,
-                                    left: 8,
-                                  ),
-                                  child: Text(
-                                    'Required',
-                                    style: TextStyle(
-                                      color: Colors.red,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ),
-                              SizedBox(height: 18),
-                              // Remove the Completed checkbox row:
-                              // Row(
-                              //   children: [
-                              //     Checkbox(
-                              //       value: isCompleted,
-                              //       onChanged: (val) => setModalState(
-                              //         () => isCompleted = val ?? false,
-                              //       ),
-                              //       activeColor: LoggitColors.teal,
-                              //     ),
-                              //     Text(
-                              //       'Completed',
-                              //       style: TextStyle(fontSize: 15),
-                              //     ),
-                              //   ],
-                              // ),
-                              SizedBox(height: 18),
-
-                              // Priority
-                              Text(
-                                'Priority',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _PriorityChip(
-                                      label: 'Low',
-                                      color: Colors.green,
-                                      isSelected: priority == TaskPriority.low,
-                                      onTap: () => setModalState(
-                                        () => priority = TaskPriority.low,
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(width: 8),
-                                  Expanded(
-                                    child: _PriorityChip(
-                                      label: 'Medium',
-                                      color: Colors.orange,
-                                      isSelected:
-                                          priority == TaskPriority.medium,
-                                      onTap: () => setModalState(
-                                        () => priority = TaskPriority.medium,
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(width: 8),
-                                  Expanded(
-                                    child: _PriorityChip(
-                                      label: 'High',
-                                      color: Colors.red,
-                                      isSelected: priority == TaskPriority.high,
-                                      onTap: () => setModalState(
-                                        () => priority = TaskPriority.high,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              SizedBox(height: 18),
-
-                              // Status
-                              Text(
-                                'Status',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              SizedBox(height: 6),
-                              DropdownButtonFormField<TaskStatus>(
-                                value: status,
-                                items: TaskStatus.values
-                                    .map(
-                                      (s) => DropdownMenuItem(
-                                        value: s,
-                                        child: Text(
-                                          _getStatusText(s),
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.normal,
-                                            fontSize: 15,
-                                            color: isDark
-                                                ? Colors.white
-                                                : LoggitColors.darkGrayText,
-                                          ),
-                                        ),
-                                      ),
-                                    )
-                                    .toList(),
-                                selectedItemBuilder: (context) => TaskStatus
-                                    .values
-                                    .map(
-                                      (s) => Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: Text(
-                                          _getStatusText(s),
-                                          style: TextStyle(
-                                            color:
-                                                (s == TaskStatus.inProgress ||
-                                                    s == TaskStatus.completed)
-                                                ? Colors.white
-                                                : (isDark
-                                                      ? Colors.white
-                                                      : LoggitColors
-                                                            .darkGrayText),
-                                            fontWeight:
-                                                (s == TaskStatus.inProgress ||
-                                                    s == TaskStatus.completed)
-                                                ? FontWeight.bold
-                                                : FontWeight.normal,
-                                            fontSize: 15,
-                                          ),
-                                        ),
-                                      ),
-                                    )
-                                    .toList(),
-                                onChanged: (val) => setModalState(
-                                  () => status = val ?? TaskStatus.notStarted,
-                                ),
-                                decoration: InputDecoration(
-                                  filled: true,
-                                  fillColor: status == TaskStatus.inProgress
-                                      ? Colors.orange
-                                      : status == TaskStatus.completed
-                                      ? LoggitColors.teal
-                                      : (isDark
-                                            ? LoggitColors.darkCard
-                                            : Color(0xFFF1F5F9)),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  hintText: status == null
-                                      ? 'Select status'
-                                      : null,
-                                ),
-                                style: TextStyle(
-                                  color:
-                                      (status == TaskStatus.inProgress ||
-                                          status == TaskStatus.completed)
-                                      ? Colors.white
-                                      : (isDark
-                                            ? Colors.white
-                                            : LoggitColors.darkGrayText),
-                                  fontWeight:
-                                      (status == TaskStatus.inProgress ||
-                                          status == TaskStatus.completed)
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                  fontSize: 15,
-                                ),
-                                icon: Icon(
-                                  Icons.arrow_drop_down,
-                                  color:
-                                      (status == TaskStatus.inProgress ||
-                                          status == TaskStatus.completed)
-                                      ? Colors.white
-                                      : (isDark
-                                            ? Colors.white
-                                            : LoggitColors.darkGrayText),
-                                ),
-                              ),
-                              SizedBox(height: 18),
-
-                              // Reminder
-                              Text(
-                                'Set Reminder',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              SizedBox(height: 6),
-                              DropdownButtonFormField<ReminderType>(
-                                value: reminder,
-                                items: ReminderType.values
-                                    .map(
-                                      (r) => DropdownMenuItem(
-                                        value: r,
-                                        child: Text(
-                                          _getReminderText(r),
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.normal,
-                                            fontSize: 15,
-                                            color: isDark
-                                                ? Colors.white
-                                                : LoggitColors.darkGrayText,
-                                          ),
-                                        ),
-                                      ),
-                                    )
-                                    .toList(),
-                                onChanged: (val) => setModalState(
-                                  () => reminder = val ?? ReminderType.none,
-                                ),
-                                decoration: InputDecoration(
-                                  filled: true,
-                                  fillColor: isDark
-                                      ? LoggitColors.darkCard
-                                      : Color(0xFFF1F5F9),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  hintText: 'Select reminder',
-                                ),
-                              ),
-                              SizedBox(height: 18),
-
-                              // Recurring
-                              Text(
-                                'Repeat',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              SizedBox(height: 6),
-                              DropdownButtonFormField<RecurrenceType>(
-                                value: recurrenceType,
-                                items: [
-                                  DropdownMenuItem(
-                                    value: RecurrenceType.none,
-                                    child: Text(
-                                      'None',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.normal,
-                                        fontSize: 15,
-                                        color: isDark
-                                            ? Colors.white
-                                            : LoggitColors.darkGrayText,
-                                      ),
-                                    ),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: RecurrenceType.daily,
-                                    child: Text(
-                                      'Daily',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.normal,
-                                        fontSize: 15,
-                                        color: isDark
-                                            ? Colors.white
-                                            : LoggitColors.darkGrayText,
-                                      ),
-                                    ),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: RecurrenceType.weekly,
-                                    child: Text(
-                                      'Weekly',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.normal,
-                                        fontSize: 15,
-                                        color: isDark
-                                            ? Colors.white
-                                            : LoggitColors.darkGrayText,
-                                      ),
-                                    ),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: RecurrenceType.monthly,
-                                    child: Text(
-                                      'Monthly',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.normal,
-                                        fontSize: 15,
-                                        color: isDark
-                                            ? Colors.white
-                                            : LoggitColors.darkGrayText,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                                onChanged: (val) => setModalState(
-                                  () => recurrenceType =
-                                      val ?? RecurrenceType.none,
-                                ),
-                                decoration: InputDecoration(
-                                  filled: true,
-                                  fillColor: isDark
-                                      ? LoggitColors.darkCard
-                                      : Color(0xFFF1F5F9),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  hintText: 'Select repeat',
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: LoggitSpacing.screenPadding,
-                        vertical: 16,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: SizedBox(
-                              height: Responsive.responsiveFont(
-                                context,
-                                48,
-                                min: 44,
-                                max: 60,
-                              ),
-                              child: OutlinedButton(
-                                style: OutlinedButton.styleFrom(
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  side: BorderSide(
-                                    color: Colors.black26,
-                                    width: 1,
-                                  ),
-                                  textStyle: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: Responsive.responsiveFont(
-                                      context,
-                                      16,
-                                      min: 14,
-                                      max: 20,
-                                    ),
-                                  ),
-                                ),
-                                onPressed: () => Navigator.of(context).pop(),
-                                child: Text(
-                                  'Cancel',
-                                  style: TextStyle(color: Colors.black),
-                                ),
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: 16),
-                          Expanded(
-                            child: SizedBox(
-                              height: Responsive.responsiveFont(
-                                context,
-                                48,
-                                min: 44,
-                                max: 60,
-                              ),
-                              child: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: LoggitColors.teal,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  textStyle: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: Responsive.responsiveFont(
-                                      context,
-                                      16,
-                                      min: 14,
-                                      max: 20,
-                                    ),
-                                  ),
-                                ),
-                                onPressed: () {
-                                  setModalState(() {
-                                    showTitleError = titleController.text
-                                        .trim()
-                                        .isEmpty;
-                                    showCategoryError =
-                                        category == null ||
-                                        category?.trim().isEmpty == true;
-                                    showDateTimeError =
-                                        dueDate == null || timeOfDay == null;
-                                  });
-                                  if (showTitleError ||
-                                      showCategoryError ||
-                                      showDateTimeError) {
-                                    return;
-                                  }
-                                  // Validate mandatory fields
-                                  if (titleController.text.trim().isEmpty) {
-                                    setModalState(() {
-                                      error = 'Title is required.';
-                                    });
-                                    return;
-                                  }
-                                  if (category == null ||
-                                      category?.trim().isEmpty == true) {
-                                    setModalState(() {
-                                      error = 'Category is required.';
-                                    });
-                                    return;
-                                  }
-                                  if (dueDate == null || timeOfDay == null) {
-                                    setModalState(() {
-                                      error = 'Date & Time is required.';
-                                    });
-                                    return;
-                                  }
-                                  setModalState(() {
-                                    error = null;
-                                  });
-                                  final newTask = Task(
-                                    title: titleController.text,
-                                    description: descController.text,
-                                    dueDate: dueDate,
-                                    isCompleted: status == TaskStatus.completed,
-                                    timestamp: DateTime.now(),
-                                    category: category,
-                                    recurrenceType: recurrenceType,
-                                    timeOfDay: timeOfDay,
-                                    priority: priority,
-                                    status: status,
-                                    reminder: reminder,
-                                  );
-                                  setState(() {
-                                    if (isEditing) {
-                                      final idx = tasks.indexOf(task);
-                                      if (idx != -1) tasks[idx] = newTask;
-                                    } else {
-                                      tasks.add(newTask);
-                                    }
-                                  });
-                                  Navigator.of(context).pop();
-                                },
-                                child: Text(isEditing ? 'Save' : 'Add'),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (error != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Text(
-                          error!,
-                          style: TextStyle(color: Colors.red, fontSize: 14),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-    return result;
-  }
-
   void _showFilterSheet() {
     showModalBottomSheet(
       context: context,
@@ -4980,4 +4135,874 @@ class _OverlayDeleteTaskCardState extends State<OverlayDeleteTaskCard> {
       ],
     );
   }
+}
+
+// Move this function to the top level (outside of any class)
+Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
+  final isEditing = task != null;
+  final titleController = TextEditingController(text: task?.title ?? '');
+  final descController = TextEditingController(text: task?.description ?? '');
+  DateTime? dueDate = task?.dueDate;
+  TimeOfDay? timeOfDay = task?.timeOfDay;
+  String? category = task?.category;
+  bool isCompleted = task?.isCompleted ?? false;
+  TaskPriority priority = task?.priority ?? TaskPriority.medium;
+  TaskStatus status = task?.status ?? TaskStatus.notStarted;
+  ReminderType reminder = task?.reminder ?? ReminderType.none;
+  bool showTitleError = false;
+  bool showCategoryError = false;
+  bool showDateTimeError = false;
+  RecurrenceType recurrenceType = task?.recurrenceType ?? RecurrenceType.none;
+
+  Task? result;
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    barrierColor: Colors.black.withOpacity(0.4),
+    builder: (context) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      return StatefulBuilder(
+        builder: (context, setModalState) {
+          String? error;
+          return FractionallySizedBox(
+            heightFactor: 0.8,
+            child: SafeArea(
+              child: Column(
+                children: [
+                  // Fixed handle and header at the top
+                  SizedBox(
+                    height: 48, // slightly taller to fit handle and title
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 4,
+                          margin: const EdgeInsets.only(top: 8, bottom: 8),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? LoggitColors.darkBorder
+                                : Colors.grey[300],
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        ),
+                        Text(
+                          isEditing ? 'Edit Task' : 'Add Task',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                            color: isDark ? Colors.white : Colors.black,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Scrollable content below
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Padding(
+                        padding: const EdgeInsets.all(
+                          LoggitSpacing.screenPadding,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(height: 20),
+                            Text(
+                              'Title',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                              ),
+                            ),
+                            SizedBox(height: 6),
+                            TextField(
+                              controller: titleController,
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: isDark
+                                    ? LoggitColors.darkCard
+                                    : Color(0xFFF1F5F9),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide.none,
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: showTitleError
+                                      ? BorderSide(color: Colors.red, width: 2)
+                                      : BorderSide.none,
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: showTitleError
+                                      ? BorderSide(color: Colors.red, width: 2)
+                                      : BorderSide(
+                                          color: LoggitColors.teal,
+                                          width: 2,
+                                        ),
+                                ),
+                                hintText: 'Enter title',
+                              ),
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.normal,
+                              ),
+                            ),
+                            if (showTitleError)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4, left: 8),
+                                child: Text(
+                                  'Required',
+                                  style: TextStyle(
+                                    color: Colors.red,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            SizedBox(height: 18),
+                            Text(
+                              'Description',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                              ),
+                            ),
+                            SizedBox(height: 6),
+                            TextField(
+                              controller: descController,
+                              minLines: 1,
+                              maxLines: 5, // allow up to 5 lines
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: isDark
+                                    ? LoggitColors.darkCard
+                                    : Color(0xFFF1F5F9),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide.none,
+                                ),
+                                hintText: 'Enter description',
+                              ),
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.normal,
+                              ),
+                            ),
+                            SizedBox(height: 18),
+                            Text(
+                              'Category',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                              ),
+                            ),
+                            SizedBox(height: 6),
+                            DropdownButtonFormField<String>(
+                              value: category,
+                              items: ['Work', 'Personal', 'Business']
+                                  .map(
+                                    (c) => DropdownMenuItem(
+                                      value: c,
+                                      child: Text(
+                                        c,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.normal,
+                                          fontSize: 15,
+                                          color: isDark
+                                              ? Colors.white
+                                              : LoggitColors.darkGrayText,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (val) =>
+                                  setModalState(() => category = val),
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: isDark
+                                    ? LoggitColors.darkCard
+                                    : Color(0xFFF1F5F9),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide.none,
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: showCategoryError
+                                      ? BorderSide(color: Colors.red, width: 2)
+                                      : BorderSide.none,
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: showCategoryError
+                                      ? BorderSide(color: Colors.red, width: 2)
+                                      : BorderSide(
+                                          color: LoggitColors.teal,
+                                          width: 2,
+                                        ),
+                                ),
+                                hintText: 'Select category',
+                                // Remove errorText here
+                              ),
+                              style: TextStyle(
+                                color: isDark
+                                    ? Colors.white
+                                    : LoggitColors.darkGrayText,
+                                fontWeight: FontWeight.normal,
+                                fontSize: 15,
+                              ),
+                            ),
+                            if (showCategoryError)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4, left: 8),
+                                child: Text(
+                                  'Required',
+                                  style: TextStyle(
+                                    color: Colors.red,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            SizedBox(height: 18),
+                            // Date & Time buttons - separate pill buttons
+                            Row(
+                              children: [
+                                // Date button
+                                Flexible(
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(
+                                      vertical: 10,
+                                      horizontal: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(25),
+                                      border: Border.all(
+                                        color: showDateTimeError
+                                            ? Colors.red
+                                            : Colors.grey[300]!,
+                                        width: showDateTimeError ? 2 : 1,
+                                      ),
+                                      color: Color(0xFFF1F5F9),
+                                    ),
+                                    child: GestureDetector(
+                                      onTap: () async {
+                                        await showDatePickerModal(
+                                          context,
+                                          initialDate:
+                                              dueDate ?? DateTime.now(),
+                                          onDateChanged: (date) {
+                                            setModalState(() {
+                                              dueDate = date;
+                                              showDateTimeError = false;
+                                            });
+                                          },
+                                        );
+                                      },
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.calendar_today,
+                                            size: 18,
+                                            color: LoggitColors.teal,
+                                          ),
+                                          SizedBox(width: 8),
+                                          Text(
+                                            dueDate == null
+                                                ? 'Pick Date'
+                                                : '${weekdayString(dueDate!.weekday)}, ${dueDate!.day} ${monthString(dueDate!.month)}',
+                                            style: TextStyle(
+                                              color: isDark
+                                                  ? Colors.white
+                                                  : LoggitColors.darkGrayText,
+                                              fontWeight: FontWeight.w500,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: 6),
+                                // Time button
+                                Flexible(
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(
+                                      vertical: 10,
+                                      horizontal: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(25),
+                                      border: Border.all(
+                                        color: showDateTimeError
+                                            ? Colors.red
+                                            : Colors.grey[300]!,
+                                        width: showDateTimeError ? 2 : 1,
+                                      ),
+                                      color: Color(0xFFF1F5F9),
+                                    ),
+                                    child: GestureDetector(
+                                      onTap: () async {
+                                        await showTimePickerModal(
+                                          context,
+                                          initialTime:
+                                              timeOfDay ?? TimeOfDay.now(),
+                                          onTimeChanged: (time) {
+                                            setModalState(() {
+                                              timeOfDay = time;
+                                              showDateTimeError = false;
+                                            });
+                                          },
+                                        );
+                                      },
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.access_time,
+                                            size: 18,
+                                            color: LoggitColors.teal,
+                                          ),
+                                          SizedBox(width: 8),
+                                          Text(
+                                            timeOfDay == null
+                                                ? 'Pick Time'
+                                                : timeOfDay!.format(context),
+                                            style: TextStyle(
+                                              color: isDark
+                                                  ? Colors.white
+                                                  : LoggitColors.darkGrayText,
+                                              fontWeight: FontWeight.w500,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (showDateTimeError)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4, left: 8),
+                                child: Text(
+                                  'Required',
+                                  style: TextStyle(
+                                    color: Colors.red,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            SizedBox(height: 18),
+                            // Remove the Completed checkbox row:
+                            // Row(
+                            //   children: [
+                            //     Checkbox(
+                            //       value: isCompleted,
+                            //       onChanged: (val) => setModalState(
+                            //         () => isCompleted = val ?? false,
+                            //       ),
+                            //       activeColor: LoggitColors.teal,
+                            //     ),
+                            //     Text(
+                            //       'Completed',
+                            //       style: TextStyle(fontSize: 15),
+                            //     ),
+                            //   ],
+                            // ),
+                            SizedBox(height: 18),
+
+                            // Priority
+                            Text(
+                              'Priority',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                              ),
+                            ),
+                            SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _PriorityChip(
+                                    label: 'Low',
+                                    color: Colors.green,
+                                    isSelected: priority == TaskPriority.low,
+                                    onTap: () => setModalState(
+                                      () => priority = TaskPriority.low,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  child: _PriorityChip(
+                                    label: 'Medium',
+                                    color: Colors.orange,
+                                    isSelected: priority == TaskPriority.medium,
+                                    onTap: () => setModalState(
+                                      () => priority = TaskPriority.medium,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  child: _PriorityChip(
+                                    label: 'High',
+                                    color: Colors.red,
+                                    isSelected: priority == TaskPriority.high,
+                                    onTap: () => setModalState(
+                                      () => priority = TaskPriority.high,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 18),
+
+                            // Status
+                            Text(
+                              'Status',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                              ),
+                            ),
+                            SizedBox(height: 6),
+                            DropdownButtonFormField<TaskStatus>(
+                              value: status,
+                              items: TaskStatus.values
+                                  .map(
+                                    (s) => DropdownMenuItem(
+                                      value: s,
+                                      child: Text(
+                                        _getStatusText(s),
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.normal,
+                                          fontSize: 15,
+                                          color: isDark
+                                              ? Colors.white
+                                              : LoggitColors.darkGrayText,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              selectedItemBuilder: (context) => TaskStatus
+                                  .values
+                                  .map(
+                                    (s) => Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        _getStatusText(s),
+                                        style: TextStyle(
+                                          color:
+                                              (s == TaskStatus.inProgress ||
+                                                  s == TaskStatus.completed)
+                                              ? Colors.white
+                                              : (isDark
+                                                    ? Colors.white
+                                                    : LoggitColors
+                                                          .darkGrayText),
+                                          fontWeight:
+                                              (s == TaskStatus.inProgress ||
+                                                  s == TaskStatus.completed)
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (val) => setModalState(
+                                () => status = val ?? TaskStatus.notStarted,
+                              ),
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: status == TaskStatus.inProgress
+                                    ? Colors.orange
+                                    : status == TaskStatus.completed
+                                    ? LoggitColors.teal
+                                    : (isDark
+                                          ? LoggitColors.darkCard
+                                          : Color(0xFFF1F5F9)),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide.none,
+                                ),
+                                hintText: status == null
+                                    ? 'Select status'
+                                    : null,
+                              ),
+                              style: TextStyle(
+                                color:
+                                    (status == TaskStatus.inProgress ||
+                                        status == TaskStatus.completed)
+                                    ? Colors.white
+                                    : (isDark
+                                          ? Colors.white
+                                          : LoggitColors.darkGrayText),
+                                fontWeight:
+                                    (status == TaskStatus.inProgress ||
+                                        status == TaskStatus.completed)
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                                fontSize: 15,
+                              ),
+                              icon: Icon(
+                                Icons.arrow_drop_down,
+                                color:
+                                    (status == TaskStatus.inProgress ||
+                                        status == TaskStatus.completed)
+                                    ? Colors.white
+                                    : (isDark
+                                          ? Colors.white
+                                          : LoggitColors.darkGrayText),
+                              ),
+                            ),
+                            SizedBox(height: 18),
+
+                            // Reminder
+                            Text(
+                              'Set Reminder',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                              ),
+                            ),
+                            SizedBox(height: 6),
+                            DropdownButtonFormField<ReminderType>(
+                              value: reminder,
+                              items: ReminderType.values
+                                  .map(
+                                    (r) => DropdownMenuItem(
+                                      value: r,
+                                      child: Text(
+                                        _getReminderText(r),
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.normal,
+                                          fontSize: 15,
+                                          color: isDark
+                                              ? Colors.white
+                                              : LoggitColors.darkGrayText,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (val) => setModalState(
+                                () => reminder = val ?? ReminderType.none,
+                              ),
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: isDark
+                                    ? LoggitColors.darkCard
+                                    : Color(0xFFF1F5F9),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide.none,
+                                ),
+                                hintText: 'Select reminder',
+                              ),
+                            ),
+                            SizedBox(height: 18),
+
+                            // Recurring
+                            Text(
+                              'Repeat',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                              ),
+                            ),
+                            SizedBox(height: 6),
+                            DropdownButtonFormField<RecurrenceType>(
+                              value: recurrenceType,
+                              items: [
+                                DropdownMenuItem(
+                                  value: RecurrenceType.none,
+                                  child: Text(
+                                    'None',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.normal,
+                                      fontSize: 15,
+                                      color: isDark
+                                          ? Colors.white
+                                          : LoggitColors.darkGrayText,
+                                    ),
+                                  ),
+                                ),
+                                DropdownMenuItem(
+                                  value: RecurrenceType.daily,
+                                  child: Text(
+                                    'Daily',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.normal,
+                                      fontSize: 15,
+                                      color: isDark
+                                          ? Colors.white
+                                          : LoggitColors.darkGrayText,
+                                    ),
+                                  ),
+                                ),
+                                DropdownMenuItem(
+                                  value: RecurrenceType.weekly,
+                                  child: Text(
+                                    'Weekly',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.normal,
+                                      fontSize: 15,
+                                      color: isDark
+                                          ? Colors.white
+                                          : LoggitColors.darkGrayText,
+                                    ),
+                                  ),
+                                ),
+                                DropdownMenuItem(
+                                  value: RecurrenceType.monthly,
+                                  child: Text(
+                                    'Monthly',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.normal,
+                                      fontSize: 15,
+                                      color: isDark
+                                          ? Colors.white
+                                          : LoggitColors.darkGrayText,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              onChanged: (val) => setModalState(
+                                () =>
+                                    recurrenceType = val ?? RecurrenceType.none,
+                              ),
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: isDark
+                                    ? LoggitColors.darkCard
+                                    : Color(0xFFF1F5F9),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide.none,
+                                ),
+                                hintText: 'Select repeat',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: LoggitSpacing.screenPadding,
+                      vertical: 16,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: Responsive.responsiveFont(
+                              context,
+                              48,
+                              min: 44,
+                              max: 60,
+                            ),
+                            child: OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                side: BorderSide(
+                                  color: Colors.black26,
+                                  width: 1,
+                                ),
+                                textStyle: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: Responsive.responsiveFont(
+                                    context,
+                                    16,
+                                    min: 14,
+                                    max: 20,
+                                  ),
+                                ),
+                              ),
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: Text(
+                                'Cancel',
+                                style: TextStyle(color: Colors.black),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 16),
+                        Expanded(
+                          child: SizedBox(
+                            height: Responsive.responsiveFont(
+                              context,
+                              48,
+                              min: 44,
+                              max: 60,
+                            ),
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: LoggitColors.teal,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                textStyle: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: Responsive.responsiveFont(
+                                    context,
+                                    16,
+                                    min: 14,
+                                    max: 20,
+                                  ),
+                                ),
+                              ),
+                              onPressed: () {
+                                setModalState(() {
+                                  showTitleError = titleController.text
+                                      .trim()
+                                      .isEmpty;
+                                  showCategoryError =
+                                      category == null ||
+                                      category?.trim().isEmpty == true;
+                                  showDateTimeError =
+                                      dueDate == null || timeOfDay == null;
+                                });
+                                if (showTitleError ||
+                                    showCategoryError ||
+                                    showDateTimeError) {
+                                  return;
+                                }
+                                // Validate mandatory fields
+                                if (titleController.text.trim().isEmpty) {
+                                  setModalState(() {
+                                    error = 'Title is required.';
+                                  });
+                                  return;
+                                }
+                                if (category == null ||
+                                    category?.trim().isEmpty == true) {
+                                  setModalState(() {
+                                    error = 'Category is required.';
+                                  });
+                                  return;
+                                }
+                                if (dueDate == null || timeOfDay == null) {
+                                  setModalState(() {
+                                    error = 'Date & Time is required.';
+                                  });
+                                  return;
+                                }
+                                setModalState(() {
+                                  error = null;
+                                });
+                                final newTask = Task(
+                                  title: titleController.text,
+                                  description: descController.text,
+                                  dueDate: dueDate,
+                                  isCompleted: status == TaskStatus.completed,
+                                  timestamp: DateTime.now(),
+                                  category: category,
+                                  recurrenceType: recurrenceType,
+                                  timeOfDay: timeOfDay,
+                                  priority: priority,
+                                  status: status,
+                                  reminder: reminder,
+                                );
+                                Navigator.of(context).pop(newTask);
+                              },
+                              child: Text(isEditing ? 'Save' : 'Add'),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        error!,
+                        style: TextStyle(color: Colors.red, fontSize: 14),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+  return result;
+}
+
+// At the bottom of the file, above showTaskModal, add:
+
+Future<void> showDatePickerModal(
+  BuildContext context, {
+  required DateTime initialDate,
+  required Function(DateTime) onDateChanged,
+}) async {
+  final DateTime? picked = await showDatePicker(
+    context: context,
+    initialDate: initialDate,
+    firstDate: DateTime(2000),
+    lastDate: DateTime(2101),
+  );
+  if (picked != null) {
+    onDateChanged(picked);
+  }
+}
+
+Future<void> showTimePickerModal(
+  BuildContext context, {
+  required TimeOfDay initialTime,
+  required Function(TimeOfDay) onTimeChanged,
+}) async {
+  final TimeOfDay? picked = await showTimePicker(
+    context: context,
+    initialTime: initialTime,
+  );
+  if (picked != null) {
+    onTimeChanged(picked);
+  }
+}
+
+String weekdayString(int weekday) {
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  return days[(weekday - 1) % 7];
+}
+
+String monthString(int month) {
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  return months[(month - 1) % 12];
 }

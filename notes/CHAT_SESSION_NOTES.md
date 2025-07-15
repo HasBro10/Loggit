@@ -117,3 +117,21 @@ This session focused on improving the natural language parsing capabilities of t
 The log parser serves as the central "brain" for understanding natural language input. All log types (reminders, tasks, expenses, gym) flow through this unified parser before being processed by the chat interface and saved to their respective services.
 
 The chat interface acts as a bridge between natural language input and the structured data models, providing user-friendly prompts and confirmation dialogs. 
+
+---
+
+# Troubleshooting Note: Chat Edit Button Not Opening Reminders Edit Modal (June 2024)
+
+**Problem:**
+- The Edit button for reminders in the chat interface did nothing (no modal appeared), even though the callback chain was triggered and the Reminders Edit modal worked from the Reminders page.
+
+**Root Cause:**
+- The chat confirmation bubble was built using a private method (`_buildChatBubble`) and class (`_ChatMessage`) in `chat_screen_new.dart`.
+- The Edit button in this context was not wired up to open the Reminders Edit modal (bottom sheet). It either did nothing or tried to show a fallback dialog, which had been removed.
+
+**Solution:**
+- Update the Edit button logic inside `_buildChatBubble` so that, when pressed for a reminder, it directly calls the function to open the Reminders Edit modal (the same one used on the Reminders page). For tasks, it should open the Task Edit modal.
+- No need to revert code or add fallback dialogs—just ensure the button’s callback uses the correct modal-opening function.
+
+**Summary:**
+If the Edit button in chat stops opening the Reminders Edit modal, check that the button’s callback in `_buildChatBubble` is correctly calling the Reminders Edit modal function, just like on the Reminders page. 

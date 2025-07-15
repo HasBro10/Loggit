@@ -34,6 +34,7 @@ Future<Reminder?> showReminderEditModal(
 
   return showModalBottomSheet<Reminder>(
     context: context,
+    useRootNavigator: true,
     isScrollControlled: true,
     isDismissible: true,
     enableDrag: true,

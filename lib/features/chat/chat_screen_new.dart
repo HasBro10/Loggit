@@ -12,8 +12,11 @@ import '../../services/log_parser_service.dart';
 import '../../shared/design/widgets/feature_card_button.dart';
 import '../../shared/utils/responsive.dart';
 // Removed: import '../reminders/reminders_screen.dart';
-import '../../features/reminders/reminder_edit_modal.dart';
+import '../../features/reminders/reminder_edit_modal.dart'
+    show showReminderEditModal;
 import '../../services/reminders_service.dart';
+import 'chat_message.dart';
+import 'package:loggit/features/tasks/tasks_screen_new.dart' show showTaskModal;
 
 class ChatScreenNew extends StatefulWidget {
   final void Function(Expense)? onExpenseLogged;
@@ -52,6 +55,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
   final List<_ChatMessage> _messages = [];
   LogEntry? _pendingLog;
   final ScrollController _scrollController = ScrollController();
+  late BuildContext _rootContext;
 
   // Animated typing effect for actions
   final List<String> _actions = [
@@ -416,6 +420,10 @@ class _ChatScreenNewState extends State<ChatScreenNew>
         String confirmationMessage;
         bool canConfirm = true;
         bool showEdit = false;
+        if (logEntry is Reminder || logEntry is Task) {
+          showEdit = true;
+          canConfirm = true;
+        }
         // --- FIX: Use actual type of logEntry for confirmation logic ---
         if (logEntry is Task) {
           // Task-specific confirmation logic
@@ -434,7 +442,6 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             print('DEBUG: [TASK] Chat logic - Missing action');
             confirmationMessage = 'What task should I create?';
             canConfirm = false;
-            showEdit = true;
           } else if (task.timeOfDay != null && (task.dueDate == null)) {
             // Title and time present, date missing
             print(
@@ -442,7 +449,6 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             );
             confirmationMessage = 'What date is this task due?';
             canConfirm = false;
-            showEdit = true;
           } else if (task.timeOfDay != null &&
               (task.dueDate != null && task.dueDate!.year == 0)) {
             // Title and time present, date missing (dueDate year 0)
@@ -451,27 +457,23 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             );
             confirmationMessage = 'What date is this task due?';
             canConfirm = false;
-            showEdit = true;
           } else if ((task.dueDate != null &&
                   (task.dueDate!.hour == 0 && task.dueDate!.minute == 0)) &&
               (task.timeOfDay == null)) {
             print('DEBUG: [TASK] Chat logic - Missing time');
             confirmationMessage = 'What time is this task due?';
             canConfirm = false;
-            showEdit = true;
           } else if (task.dueDate != null &&
               task.timeOfDay != null &&
               task.title.isNotEmpty) {
             print('DEBUG: [TASK] Chat logic - Complete task');
             confirmationMessage = _getConfirmationMessage(logEntry);
             canConfirm = true;
-            showEdit = true; // Always show edit button for tasks
           } else {
             print('DEBUG: [TASK] Chat logic - Invalid date/time');
             confirmationMessage =
                 'That doesn\'t look like a valid date/time. Please try again.';
             canConfirm = false;
-            showEdit = true;
           }
         } else if (logEntry is Reminder) {
           // Context-aware prompt and button logic
@@ -489,37 +491,35 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             confirmationMessage =
                 'When should I remind you? Please add a date and time.';
             canConfirm = false;
-            showEdit = true;
           } else if (!parsed.hasTime) {
             print('DEBUG: Chat logic - Missing time');
             confirmationMessage = 'What time should I remind you?';
             canConfirm = false;
-            showEdit = true;
           } else if (reminder.title.isEmpty) {
             // Have date/time but missing action - ask for action
             print('DEBUG: Chat logic - Missing action');
             confirmationMessage = 'What should I remind you about?';
             canConfirm = false;
-            showEdit = true;
           } else if (parsed.dateTime != null &&
               parsed.hasTime &&
               reminder.title.isNotEmpty) {
             print('DEBUG: Chat logic - Complete reminder');
             confirmationMessage = _getConfirmationMessage(logEntry);
             canConfirm = true;
-            showEdit = true;
           } else {
             print('DEBUG: Chat logic - Invalid date/time');
             confirmationMessage =
                 'That doesn\'t look like a valid date/time. Please try again.';
             canConfirm = false;
-            showEdit = true;
           }
         } else {
           confirmationMessage = _getConfirmationMessage(logEntry);
           canConfirm = true;
-          showEdit = true; // Always show edit button for tasks and reminders
+          showEdit = true;
         }
+        print(
+          'DEBUG: Adding _ChatMessage with showEdit: $showEdit, canConfirm: $canConfirm, onConfirmationResponse: ${true}',
+        );
         _messages.add(
           _ChatMessage(
             text: confirmationMessage,
@@ -780,11 +780,79 @@ class _ChatScreenNewState extends State<ChatScreenNew>
     }
   }
 
-  void _handleLogConfirmation(bool confirmed, [LogEntry? updatedLogEntry]) {
-    final logEntry = updatedLogEntry ?? _pendingLog;
+  void _handleLogConfirmation(
+    bool confirmed, [
+    LogEntry? updatedLogEntry,
+  ]) async {
     print(
-      'DEBUG: _handleLogConfirmation called with confirmed=$confirmed, logEntry=$logEntry',
+      'DEBUG: _handleLogConfirmation called with confirmed=$confirmed, updatedLogEntry=$updatedLogEntry',
     );
+    final logEntry = updatedLogEntry ?? _pendingLog;
+    print('DEBUG: logEntry in _handleLogConfirmation: $logEntry');
+    // If user pressed Edit (confirmed == false && updatedLogEntry == null), open edit modal for reminders and tasks only
+    if (!confirmed && updatedLogEntry == null && logEntry != null) {
+      if (logEntry is Reminder) {
+        print('DEBUG: Opening showReminderEditModal for $logEntry');
+        final edited = await showReminderEditModal(context, initial: logEntry);
+        print('DEBUG: showReminderEditModal returned $edited');
+        if (edited != null) {
+          setState(() {
+            _messages.removeWhere(
+              (m) =>
+                  m.isConfirmation &&
+                  m.pendingLogEntry?.logType == logEntry.logType,
+            );
+            _messages.add(
+              _ChatMessage(
+                text: _getConfirmationMessage(edited),
+                isUser: false,
+                timestamp: DateTime.now(),
+                isConfirmation: true,
+                onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
+                    _handleLogConfirmation(
+                      confirmed,
+                      updatedLogEntry ?? edited,
+                    ),
+                pendingLogEntry: edited,
+              ),
+            );
+          });
+          _scrollToBottom();
+        }
+        return;
+      } else if (logEntry is Task) {
+        print('DEBUG: Opening showTaskModal for $logEntry');
+        final edited = await showTaskModal(context, task: logEntry);
+        print('DEBUG: showTaskModal returned $edited');
+        if (edited != null) {
+          setState(() {
+            _messages.removeWhere(
+              (m) =>
+                  m.isConfirmation &&
+                  m.pendingLogEntry?.logType == logEntry.logType,
+            );
+            _messages.add(
+              _ChatMessage(
+                text: _getConfirmationMessage(edited),
+                isUser: false,
+                timestamp: DateTime.now(),
+                isConfirmation: true,
+                onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
+                    _handleLogConfirmation(
+                      confirmed,
+                      updatedLogEntry ?? edited,
+                    ),
+                pendingLogEntry: edited,
+              ),
+            );
+          });
+          _scrollToBottom();
+        }
+        return;
+      }
+      // For other log types, do nothing (no pop-up dialog)
+      return;
+    }
     if (confirmed && logEntry != null) {
       // Special handling for reminders: require a time and check for past time
       if (logEntry.logType == 'reminder') {
@@ -844,7 +912,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
           return;
         }
       }
-      print('DEBUG: LogEntry type: ${logEntry.logType}');
+      print('DEBUG: LogEntry type:  [1m${logEntry.logType} [0m');
       switch (logEntry.logType) {
         case 'expense':
           print('DEBUG: Calling onExpenseLogged');
@@ -894,7 +962,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
         );
         _messages.add(
           _ChatMessage(
-            text: "❌ ${_getCancelledMessage(_pendingLog)}",
+            text: _getCancelledMessage(logEntry),
             isUser: false,
             timestamp: DateTime.now(),
           ),
@@ -1000,6 +1068,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
 
   @override
   Widget build(BuildContext context) {
+    _rootContext = context;
     final isDark = widget.currentThemeMode == ThemeMode.dark;
     return Scaffold(
       backgroundColor: isDark ? LoggitColors.darkBg : LoggitColors.pureWhite,
@@ -1697,13 +1766,84 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                     ),
                   ),
                   if (msg.pendingLogEntry != null &&
-                      msg.pendingLogEntry!.logType == 'reminder') ...[
+                      (msg.pendingLogEntry!.logType == 'reminder' ||
+                          msg.pendingLogEntry!.logType == 'task')) ...[
                     SizedBox(width: 8),
                     ElevatedButton(
-                      onPressed: () =>
-                          _handleEditReminder(context, msg.pendingLogEntry),
+                      onPressed: () async {
+                        if (msg.pendingLogEntry!.logType == 'reminder') {
+                          final edited = await showReminderEditModal(
+                            context,
+                            initial: msg.pendingLogEntry as Reminder,
+                          );
+                          if (edited != null) {
+                            setState(() {
+                              _messages.removeWhere(
+                                (m) =>
+                                    m.isConfirmation &&
+                                    m.pendingLogEntry?.logType ==
+                                        msg.pendingLogEntry!.logType,
+                              );
+                              _messages.add(
+                                _ChatMessage(
+                                  text: _getConfirmationMessage(edited),
+                                  isUser: false,
+                                  timestamp: DateTime.now(),
+                                  isConfirmation: true,
+                                  onConfirmationResponse:
+                                      (confirmed, [updatedLogEntry]) =>
+                                          _handleLogConfirmation(
+                                            confirmed,
+                                            updatedLogEntry ?? edited,
+                                          ),
+                                  pendingLogEntry: edited,
+                                  canConfirm: true,
+                                  showEdit: true,
+                                ),
+                              );
+                            });
+                            _scrollToBottom();
+                          }
+                        } else if (msg.pendingLogEntry!.logType == 'task') {
+                          final edited = await showTaskModal(
+                            context,
+                            task: msg.pendingLogEntry as Task,
+                          );
+                          if (edited != null) {
+                            setState(() {
+                              _messages.removeWhere(
+                                (m) =>
+                                    m.isConfirmation &&
+                                    m.pendingLogEntry?.logType ==
+                                        msg.pendingLogEntry!.logType,
+                              );
+                              _messages.add(
+                                _ChatMessage(
+                                  text: _getConfirmationMessage(edited),
+                                  isUser: false,
+                                  timestamp: DateTime.now(),
+                                  isConfirmation: true,
+                                  onConfirmationResponse:
+                                      (confirmed, [updatedLogEntry]) =>
+                                          _handleLogConfirmation(
+                                            confirmed,
+                                            updatedLogEntry ?? edited,
+                                          ),
+                                  pendingLogEntry: edited,
+                                  canConfirm: true,
+                                  showEdit: true,
+                                ),
+                              );
+                            });
+                            _scrollToBottom();
+                          }
+                        }
+                      },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.amber[800],
+                        backgroundColor:
+                            msg.pendingLogEntry!.logType == 'reminder'
+                            ? Colors.amber[800]
+                            : LoggitColors.tealDark,
                         foregroundColor: Colors.white,
                         padding: EdgeInsets.symmetric(
                           horizontal: 16,
@@ -1909,6 +2049,39 @@ class _ChatScreenNewState extends State<ChatScreenNew>
       softWrap: true,
       overflow: TextOverflow.visible,
     );
+  }
+
+  void _handleEditLogEntry(BuildContext context, LogEntry? entry) async {
+    if (entry == null) return;
+    if (entry.logType == 'task') {
+      // Use the actual task edit modal
+      final edited = await showTaskModal(context, task: entry as Task);
+      if (edited != null) {
+        setState(() {
+          _messages.removeWhere(
+            (m) =>
+                m.isConfirmation && m.pendingLogEntry?.logType == entry.logType,
+          );
+          _messages.add(
+            _ChatMessage(
+              text: _getConfirmationMessage(edited),
+              isUser: false,
+              timestamp: DateTime.now(),
+              isConfirmation: true,
+              onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
+                  _handleLogConfirmation(confirmed, updatedLogEntry ?? edited),
+              pendingLogEntry: edited,
+              canConfirm: true,
+              showEdit: true,
+            ),
+          );
+        });
+        _scrollToBottom();
+      }
+    } else {
+      // Fallback for other types (e.g., reminder)
+      // This block is intentionally left empty. Only the correct modals should be used.
+    }
   }
 }
 

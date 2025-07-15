@@ -1009,6 +1009,15 @@ class LogParserService {
       'nov',
       'dec',
     ];
+    // Helper to get month index from string
+    int _parseMonth(String monthStr) {
+      monthStr = monthStr.toLowerCase();
+      int idx = monthNames.indexOf(monthStr);
+      if (idx != -1) return idx + 1;
+      idx = monthShort.indexOf(monthStr);
+      if (idx != -1) return idx + 1;
+      return 0;
+    }
 
     // --- Robust combined date+time parsing ---
     // Accepts: '6 pm 15th July', '15th July 6 pm', 'July 15 at 6 pm', etc.
@@ -1051,8 +1060,8 @@ class LogParserService {
     for (final pattern in combinedPatterns) {
       final match = pattern.firstMatch(lower);
       if (match != null) {
-        int day = 1;
-        int month = 1;
+        int day = 0;
+        int month = 0;
         int year = now.year;
         int hour = 0;
         int minute = 0;
@@ -1063,18 +1072,28 @@ class LogParserService {
           '(\\d{1,2})(st|nd|rd|th)?\\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\s+(\\d{1,2})',
         )) {
           // "16 July 6pm" format
-          day = int.parse(match.group(1)!);
+          try {
+            day = int.parse(match.group(1)!);
+          } catch (e) {
+            print('DEBUG: Invalid day:  [31m${match.group(1)} [0m');
+            return _DateTimeWithFlag(null, false);
+          }
           String monthStr = match.group(3)!.toLowerCase();
-          month = monthNames.indexOf(monthStr) + 1;
-          if (month == 0) month = monthShort.indexOf(monthStr) + 1;
-
-          // Validate month value
-          if (month == 0 || month < 1 || month > 12) {
-            print('DEBUG: Invalid month parsed: $monthStr -> $month');
+          month = _parseMonth(monthStr);
+          if (month < 1 || month > 12) {
+            print(
+              'DEBUG: Invalid month parsed: '
+              ' [31m$monthStr -> $month [0m',
+            );
             return _DateTimeWithFlag(null, false);
           }
 
-          hour = int.parse(match.group(4)!);
+          try {
+            hour = int.parse(match.group(4)!);
+          } catch (e) {
+            print('DEBUG: Invalid hour:  [31m${match.group(4)} [0m');
+            return _DateTimeWithFlag(null, false);
+          }
           minute = match.group(6) != null ? int.parse(match.group(6)!) : 0;
           final ampm = match.group(7);
           if (ampm == 'pm' && hour < 12) hour += 12;
@@ -1083,7 +1102,12 @@ class LogParserService {
         }
         // Pattern 1: 6 pm 15th July
         else if (pattern.pattern.startsWith('(\\d{1,2}')) {
-          hour = int.parse(match.group(1)!);
+          try {
+            hour = int.parse(match.group(1)!);
+          } catch (e) {
+            print('DEBUG: Invalid hour:  [31m${match.group(1)} [0m');
+            return _DateTimeWithFlag(null, false);
+          }
           minute = match.group(3) != null ? int.parse(match.group(3)!) : 0;
           final ampm = match.group(4);
           if (ampm == 'pm' && hour < 12) hour += 12;
@@ -1091,65 +1115,95 @@ class LogParserService {
           hasTime = true;
           if (pattern.pattern.contains('january')) {
             // 6 pm 15th July
-            day = int.parse(match.group(5)!);
+            try {
+              day = int.parse(match.group(5)!);
+            } catch (e) {
+              print('DEBUG: Invalid day:  [31m${match.group(5)} [0m');
+              return _DateTimeWithFlag(null, false);
+            }
             String monthStr = match.group(7)!.toLowerCase();
-            month = monthNames.indexOf(monthStr) + 1;
-            if (month == 0) month = monthShort.indexOf(monthStr) + 1;
-
-            // Validate month value
-            if (month == 0 || month < 1 || month > 12) {
-              print('DEBUG: Invalid month parsed: $monthStr -> $month');
+            month = _parseMonth(monthStr);
+            if (month < 1 || month > 12) {
+              print(
+                'DEBUG: Invalid month parsed: '
+                ' [31m$monthStr -> $month [0m',
+              );
               return _DateTimeWithFlag(null, false);
             }
           } else {
             // 6 pm July 15
             String monthStr = match.group(5)!.toLowerCase();
-            month = monthNames.indexOf(monthStr) + 1;
-            if (month == 0) month = monthShort.indexOf(monthStr) + 1;
-
-            // Validate month value
-            if (month == 0 || month < 1 || month > 12) {
-              print('DEBUG: Invalid month parsed: $monthStr -> $month');
+            month = _parseMonth(monthStr);
+            if (month < 1 || month > 12) {
+              print(
+                'DEBUG: Invalid month parsed: '
+                ' [31m$monthStr -> $month [0m',
+              );
               return _DateTimeWithFlag(null, false);
             }
 
-            day = int.parse(match.group(6)!);
+            try {
+              day = int.parse(match.group(6)!);
+            } catch (e) {
+              print('DEBUG: Invalid day:  [31m${match.group(6)} [0m');
+              return _DateTimeWithFlag(null, false);
+            }
           }
         } else if (pattern.pattern.contains(',\\s*(\\d{1,2})')) {
           // NEW: Comma-separated patterns
           if (pattern.pattern.startsWith('(\\d{1,2})(:') &&
               pattern.pattern.contains('am|pm')) {
             // "7 pm, 15 July" format
-            hour = int.parse(match.group(1)!);
+            try {
+              hour = int.parse(match.group(1)!);
+            } catch (e) {
+              print('DEBUG: Invalid hour:  [31m${match.group(1)} [0m');
+              return _DateTimeWithFlag(null, false);
+            }
             minute = match.group(3) != null ? int.parse(match.group(3)!) : 0;
             final ampm = match.group(4);
             if (ampm == 'pm' && hour < 12) hour += 12;
             if (ampm == 'am' && hour == 12) hour = 0;
             hasTime = true;
-            day = int.parse(match.group(5)!);
+            try {
+              day = int.parse(match.group(5)!);
+            } catch (e) {
+              print('DEBUG: Invalid day:  [31m${match.group(5)} [0m');
+              return _DateTimeWithFlag(null, false);
+            }
             String monthStr = match.group(7)!.toLowerCase();
-            month = monthNames.indexOf(monthStr) + 1;
-            if (month == 0) month = monthShort.indexOf(monthStr) + 1;
-
-            // Validate month value
-            if (month == 0 || month < 1 || month > 12) {
-              print('DEBUG: Invalid month parsed: $monthStr -> $month');
+            month = _parseMonth(monthStr);
+            if (month < 1 || month > 12) {
+              print(
+                'DEBUG: Invalid month parsed: '
+                ' [31m$monthStr -> $month [0m',
+              );
               return _DateTimeWithFlag(null, false);
             }
           } else {
             // "15 July, 7 pm" format
-            day = int.parse(match.group(1)!);
+            try {
+              day = int.parse(match.group(1)!);
+            } catch (e) {
+              print('DEBUG: Invalid day:  [31m${match.group(1)} [0m');
+              return _DateTimeWithFlag(null, false);
+            }
             String monthStr = match.group(3)!.toLowerCase();
-            month = monthNames.indexOf(monthStr) + 1;
-            if (month == 0) month = monthShort.indexOf(monthStr) + 1;
-
-            // Validate month value
-            if (month == 0 || month < 1 || month > 12) {
-              print('DEBUG: Invalid month parsed: $monthStr -> $month');
+            month = _parseMonth(monthStr);
+            if (month < 1 || month > 12) {
+              print(
+                'DEBUG: Invalid month parsed: '
+                ' [31m$monthStr -> $month [0m',
+              );
               return _DateTimeWithFlag(null, false);
             }
 
-            hour = int.parse(match.group(4)!);
+            try {
+              hour = int.parse(match.group(4)!);
+            } catch (e) {
+              print('DEBUG: Invalid hour:  [31m${match.group(4)} [0m');
+              return _DateTimeWithFlag(null, false);
+            }
             minute = match.group(6) != null ? int.parse(match.group(6)!) : 0;
             final ampm = match.group(7);
             if (ampm == 'pm' && hour < 12) hour += 12;
@@ -1160,18 +1214,28 @@ class LogParserService {
           // Pattern 3/4: 15th July 6 pm or July 15 6 pm
           if (pattern.pattern.startsWith('(\\d{1,2}')) {
             // "15th July 6 pm" format
-            day = int.parse(match.group(1)!);
+            try {
+              day = int.parse(match.group(1)!);
+            } catch (e) {
+              print('DEBUG: Invalid day:  [31m${match.group(1)} [0m');
+              return _DateTimeWithFlag(null, false);
+            }
             String monthStr = match.group(3)!.toLowerCase();
-            month = monthNames.indexOf(monthStr) + 1;
-            if (month == 0) month = monthShort.indexOf(monthStr) + 1;
-
-            // Validate month value
-            if (month == 0 || month < 1 || month > 12) {
-              print('DEBUG: Invalid month parsed: $monthStr -> $month');
+            month = _parseMonth(monthStr);
+            if (month < 1 || month > 12) {
+              print(
+                'DEBUG: Invalid month parsed: '
+                ' [31m$monthStr -> $month [0m',
+              );
               return _DateTimeWithFlag(null, false);
             }
 
-            hour = int.parse(match.group(5)!);
+            try {
+              hour = int.parse(match.group(5)!);
+            } catch (e) {
+              print('DEBUG: Invalid hour:  [31m${match.group(5)} [0m');
+              return _DateTimeWithFlag(null, false);
+            }
             minute = match.group(7) != null ? int.parse(match.group(7)!) : 0;
             final ampm = match.group(8);
             if (ampm == 'pm' && hour < 12) hour += 12;
@@ -1179,17 +1243,27 @@ class LogParserService {
             hasTime = true;
           } else {
             String monthStr = match.group(1)!.toLowerCase();
-            month = monthNames.indexOf(monthStr) + 1;
-            if (month == 0) month = monthShort.indexOf(monthStr) + 1;
-
-            // Validate month value
-            if (month == 0 || month < 1 || month > 12) {
-              print('DEBUG: Invalid month parsed: $monthStr -> $month');
+            month = _parseMonth(monthStr);
+            if (month < 1 || month > 12) {
+              print(
+                'DEBUG: Invalid month parsed: '
+                ' [31m$monthStr -> $month [0m',
+              );
               return _DateTimeWithFlag(null, false);
             }
 
-            day = int.parse(match.group(2)!);
-            hour = int.parse(match.group(5)!);
+            try {
+              day = int.parse(match.group(2)!);
+            } catch (e) {
+              print('DEBUG: Invalid day:  [31m${match.group(2)} [0m');
+              return _DateTimeWithFlag(null, false);
+            }
+            try {
+              hour = int.parse(match.group(5)!);
+            } catch (e) {
+              print('DEBUG: Invalid hour:  [31m${match.group(5)} [0m');
+              return _DateTimeWithFlag(null, false);
+            }
             minute = match.group(7) != null ? int.parse(match.group(7)!) : 0;
             final ampm = match.group(8);
             if (ampm == 'pm' && hour < 12) hour += 12;
@@ -1215,7 +1289,12 @@ class LogParserService {
       int minute = 0;
       bool hasTime = false;
       if (timeMatch != null) {
-        hour = int.parse(timeMatch.group(1)!);
+        try {
+          hour = int.parse(timeMatch.group(1)!);
+        } catch (e) {
+          print('DEBUG: Invalid hour:  [31m${timeMatch.group(1)} [0m');
+          return _DateTimeWithFlag(null, false);
+        }
         minute = timeMatch.group(3) != null
             ? int.parse(timeMatch.group(3)!)
             : 0;
@@ -1249,26 +1328,36 @@ class LogParserService {
     );
     Match? match = dayMonthPattern.firstMatch(lower);
     if (match != null) {
-      int day = int.parse(match.group(1)!);
-      String monthStr = match.group(3)!.toLowerCase();
-      int month = monthNames.indexOf(monthStr) + 1;
-      if (month == 0) month = monthShort.indexOf(monthStr) + 1;
-
-      // Validate month value
-      if (month == 0 || month < 1 || month > 12) {
-        print('DEBUG: Invalid month parsed: $monthStr -> $month');
-        return _DateTimeWithFlag(null, false);
-      }
-
+      int day = 0;
+      int month = 0;
       int year = now.year;
-      // If this date has already passed, use next year
-      DateTime candidate = DateTime(year, month, day);
-      if (candidate.isBefore(now)) year++;
       int hour = 0;
       int minute = 0;
       bool hasTime = false;
+      try {
+        day = int.parse(match.group(1)!);
+      } catch (e) {
+        print('DEBUG: Invalid day:  [31m${match.group(1)} [0m');
+        return _DateTimeWithFlag(null, false);
+      }
+      String monthStr = match.group(3)!.toLowerCase();
+      month = _parseMonth(monthStr);
+      if (month < 1 || month > 12) {
+        print(
+          'DEBUG: Invalid month parsed: '
+          ' [31m$monthStr -> $month [0m',
+        );
+        return _DateTimeWithFlag(null, false);
+      }
+      DateTime candidate = DateTime(year, month, day);
+      if (candidate.isBefore(now)) year++;
       if (match.group(4) != null) {
-        hour = int.parse(match.group(4)!);
+        try {
+          hour = int.parse(match.group(4)!);
+        } catch (e) {
+          print('DEBUG: Invalid hour:  [31m${match.group(4)} [0m');
+          return _DateTimeWithFlag(null, false);
+        }
         minute = match.group(6) != null ? int.parse(match.group(6)!) : 0;
         final ampm = match.group(7);
         if (ampm == 'pm' && hour < 12) hour += 12;
@@ -1285,25 +1374,36 @@ class LogParserService {
     }
     match = monthDayPattern.firstMatch(lower);
     if (match != null) {
-      String monthStr = match.group(1)!.toLowerCase();
-      int month = monthNames.indexOf(monthStr) + 1;
-      if (month == 0) month = monthShort.indexOf(monthStr) + 1;
-
-      // Validate month value
-      if (month == 0 || month < 1 || month > 12) {
-        print('DEBUG: Invalid month parsed: $monthStr -> $month');
-        return _DateTimeWithFlag(null, false);
-      }
-
-      int day = int.parse(match.group(2)!);
+      int day = 0;
+      int month = 0;
       int year = now.year;
-      DateTime candidate = DateTime(year, month, day);
-      if (candidate.isBefore(now)) year++;
       int hour = 0;
       int minute = 0;
       bool hasTime = false;
+      String monthStr = match.group(1)!.toLowerCase();
+      month = _parseMonth(monthStr);
+      if (month < 1 || month > 12) {
+        print(
+          'DEBUG: Invalid month parsed: '
+          ' [31m$monthStr -> $month [0m',
+        );
+        return _DateTimeWithFlag(null, false);
+      }
+      try {
+        day = int.parse(match.group(2)!);
+      } catch (e) {
+        print('DEBUG: Invalid day:  [31m${match.group(2)} [0m');
+        return _DateTimeWithFlag(null, false);
+      }
+      DateTime candidate = DateTime(year, month, day);
+      if (candidate.isBefore(now)) year++;
       if (match.group(4) != null) {
-        hour = int.parse(match.group(4)!);
+        try {
+          hour = int.parse(match.group(4)!);
+        } catch (e) {
+          print('DEBUG: Invalid hour:  [31m${match.group(4)} [0m');
+          return _DateTimeWithFlag(null, false);
+        }
         minute = match.group(6) != null ? int.parse(match.group(6)!) : 0;
         final ampm = match.group(7);
         if (ampm == 'pm' && hour < 12) hour += 12;
@@ -1335,111 +1435,143 @@ class LogParserService {
 
     match = combinedTimeDatePattern1.firstMatch(lower);
     if (match != null) {
-      int hour = int.parse(match.group(1)!);
-      int minute = match.group(3) != null ? int.parse(match.group(3)!) : 0;
+      int hour = 0;
+      int minute = 0;
+      int day = 0;
+      int month = 0;
+      int year = now.year;
+      try {
+        hour = int.parse(match.group(1)!);
+      } catch (e) {
+        print('DEBUG: Invalid hour:  [31m${match.group(1)} [0m');
+        return _DateTimeWithFlag(null, false);
+      }
+      minute = match.group(3) != null ? int.parse(match.group(3)!) : 0;
       final ampm = match.group(4);
       if (ampm == 'pm' && hour < 12) hour += 12;
       if (ampm == 'am' && hour == 12) hour = 0;
-
-      int day = int.parse(match.group(5)!);
-      String monthStr = match.group(7)!.toLowerCase();
-      int month = monthNames.indexOf(monthStr) + 1;
-      if (month == 0) month = monthShort.indexOf(monthStr) + 1;
-
-      // Validate month value
-      if (month == 0 || month < 1 || month > 12) {
-        print('DEBUG: Invalid month parsed: $monthStr -> $month');
+      try {
+        day = int.parse(match.group(5)!);
+      } catch (e) {
+        print('DEBUG: Invalid day:  [31m${match.group(5)} [0m');
         return _DateTimeWithFlag(null, false);
       }
-
-      int year = now.year;
+      String monthStr = match.group(7)!.toLowerCase();
+      month = _parseMonth(monthStr);
+      if (month < 1 || month > 12) {
+        print(
+          'DEBUG: Invalid month parsed: '
+          ' [31m$monthStr -> $month [0m',
+        );
+        return _DateTimeWithFlag(null, false);
+      }
       DateTime candidate = DateTime(year, month, day);
       if (candidate.isBefore(now)) year++;
-
       return _DateTimeWithFlag(DateTime(year, month, day, hour, minute), true);
     }
 
     match = combinedTimeDatePattern2.firstMatch(lower);
     if (match != null) {
-      int hour = int.parse(match.group(1)!);
-      int minute = match.group(3) != null ? int.parse(match.group(3)!) : 0;
+      int hour = 0;
+      int minute = 0;
+      int day = 0;
+      int month = 0;
+      int year = now.year;
+      try {
+        hour = int.parse(match.group(1)!);
+      } catch (e) {
+        print('DEBUG: Invalid hour:  [31m${match.group(1)} [0m');
+        return _DateTimeWithFlag(null, false);
+      }
+      minute = match.group(3) != null ? int.parse(match.group(3)!) : 0;
       final ampm = match.group(4);
       if (ampm == 'pm' && hour < 12) hour += 12;
       if (ampm == 'am' && hour == 12) hour = 0;
-
       String monthStr = match.group(5)!.toLowerCase();
-      int month = monthNames.indexOf(monthStr) + 1;
-      if (month == 0) month = monthShort.indexOf(monthStr) + 1;
-
-      // Validate month value
-      if (month == 0 || month < 1 || month > 12) {
-        print('DEBUG: Invalid month parsed: $monthStr -> $month');
+      month = _parseMonth(monthStr);
+      if (month < 1 || month > 12) {
+        print(
+          'DEBUG: Invalid month parsed: '
+          ' [31m$monthStr -> $month [0m',
+        );
         return _DateTimeWithFlag(null, false);
       }
-
-      int day = int.parse(match.group(6)!);
-      int year = now.year;
+      try {
+        day = int.parse(match.group(6)!);
+      } catch (e) {
+        print('DEBUG: Invalid day:  [31m${match.group(6)} [0m');
+        return _DateTimeWithFlag(null, false);
+      }
       DateTime candidate = DateTime(year, month, day);
       if (candidate.isBefore(now)) year++;
-
       return _DateTimeWithFlag(DateTime(year, month, day, hour, minute), true);
     }
 
     // NEW: Handle "16 july 6pm" format
     match = combinedTimeDatePattern3.firstMatch(lower);
     if (match != null) {
-      int day = int.parse(match.group(1)!);
-      String monthStr = match.group(3)!.toLowerCase();
-      int month = monthNames.indexOf(monthStr) + 1;
-      if (month == 0) month = monthShort.indexOf(monthStr) + 1;
-
-      // Validate month value
-      if (month == 0 || month < 1 || month > 12) {
-        print('DEBUG: Invalid month parsed: $monthStr -> $month');
+      int day = 0;
+      int month = 0;
+      int hour = 0;
+      int minute = 0;
+      int year = now.year;
+      try {
+        day = int.parse(match.group(1)!);
+      } catch (e) {
+        print('DEBUG: Invalid day:  [31m${match.group(1)} [0m');
         return _DateTimeWithFlag(null, false);
       }
-
-      int hour = int.parse(match.group(4)!);
-      int minute = match.group(6) != null ? int.parse(match.group(6)!) : 0;
+      String monthStr = match.group(3)!.toLowerCase();
+      month = _parseMonth(monthStr);
+      if (month < 1 || month > 12) {
+        print(
+          'DEBUG: Invalid month parsed: '
+          ' [31m$monthStr -> $month [0m',
+        );
+        return _DateTimeWithFlag(null, false);
+      }
+      try {
+        hour = int.parse(match.group(4)!);
+      } catch (e) {
+        print('DEBUG: Invalid hour:  [31m${match.group(4)} [0m');
+        return _DateTimeWithFlag(null, false);
+      }
+      minute = match.group(6) != null ? int.parse(match.group(6)!) : 0;
       final ampm = match.group(7);
       if (ampm == 'pm' && hour < 12) hour += 12;
       if (ampm == 'am' && hour == 12) hour = 0;
-
-      int year = now.year;
       DateTime candidate = DateTime(year, month, day);
       if (candidate.isBefore(now)) year++;
-
       return _DateTimeWithFlag(DateTime(year, month, day, hour, minute), true);
     }
-    // --- End combined time and date parsing ---
 
     // e.g. "on the 18th", "for 19th"
     final dateMatch = RegExp(r'(\d{1,2})(st|nd|rd|th)?').firstMatch(lower);
     if (dateMatch != null) {
-      final day = int.parse(dateMatch.group(1)!);
+      int day = 0;
       int month = now.month;
       int year = now.year;
-      // If today is after the day, roll over to next month
-      if (now.day > day) {
-        if (month == 12) {
-          month = 1;
-          year += 1;
-        } else {
-          month += 1;
-        }
+      int hour = 0;
+      int minute = 0;
+      bool hasTime = false;
+      try {
+        day = int.parse(dateMatch.group(1)!);
+      } catch (e) {
+        print('DEBUG: Invalid day:  [31m${dateMatch.group(1)} [0m');
+        return _DateTimeWithFlag(null, false);
       }
-      // If the day is not valid for the month, fallback to current month
-      int maxDay = DateTime(year, month + 1, 0).day;
-      final safeDay = day <= maxDay ? day : maxDay;
-      // Check for time
+      DateTime candidate = DateTime(year, month, day);
+      if (candidate.isBefore(now)) year++;
       final timeMatch = RegExp(
         r'at (\d{1,2})(:(\d{2}))?\s*(am|pm)?',
       ).firstMatch(lower);
-      bool hasTime = false;
-      int hour = 0;
-      int minute = 0;
       if (timeMatch != null) {
-        hour = int.parse(timeMatch.group(1)!);
+        try {
+          hour = int.parse(timeMatch.group(1)!);
+        } catch (e) {
+          print('DEBUG: Invalid hour:  [31m${timeMatch.group(1)} [0m');
+          return _DateTimeWithFlag(null, false);
+        }
         minute = timeMatch.group(3) != null
             ? int.parse(timeMatch.group(3)!)
             : 0;
@@ -1449,13 +1581,7 @@ class LogParserService {
         hasTime = true;
       }
       return _DateTimeWithFlag(
-        DateTime(
-          year,
-          month,
-          safeDay,
-          hasTime ? hour : 0,
-          hasTime ? minute : 0,
-        ),
+        DateTime(year, month, day, hasTime ? hour : 0, hasTime ? minute : 0),
         hasTime,
       );
     }
@@ -1465,10 +1591,15 @@ class LogParserService {
       r'at (\d{1,2})(:(\d{2}))?\s*(am|pm)?',
     ).firstMatch(lower);
     if (timeMatch != null) {
-      int hour = int.parse(timeMatch.group(1)!);
-      int minute = timeMatch.group(3) != null
-          ? int.parse(timeMatch.group(3)!)
-          : 0;
+      int hour = 0;
+      int minute = 0;
+      try {
+        hour = int.parse(timeMatch.group(1)!);
+      } catch (e) {
+        print('DEBUG: Invalid hour:  [31m${timeMatch.group(1)} [0m');
+        return _DateTimeWithFlag(null, false);
+      }
+      minute = timeMatch.group(3) != null ? int.parse(timeMatch.group(3)!) : 0;
       final ampm = timeMatch.group(4);
       if (ampm == 'pm' && hour < 12) hour += 12;
       if (ampm == 'am' && hour == 12) hour = 0;
