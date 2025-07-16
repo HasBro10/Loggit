@@ -447,16 +447,17 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             print('DEBUG: [TASK] Chat logic - Missing time');
             confirmationMessage = 'What time is this task due?';
             canConfirm = false;
-          } else if (task.dueDate != null &&
-              task.timeOfDay != null &&
-              task.title.isNotEmpty) {
-            print('DEBUG: [TASK] Chat logic - Complete task');
+          } else if (task.title.isNotEmpty) {
+            // If we have a title, allow confirmation regardless of date/time
+            // The user can set date/time in the modal if needed
+            print(
+              'DEBUG: [TASK] Chat logic - Task with title, allowing confirmation',
+            );
             confirmationMessage = _getConfirmationMessage(logEntry);
             canConfirm = true;
           } else {
-            print('DEBUG: [TASK] Chat logic - Invalid date/time');
-            confirmationMessage =
-                'That doesn\'t look like a valid date/time. Please try again.';
+            print('DEBUG: [TASK] Chat logic - Missing title');
+            confirmationMessage = 'What task should I create?';
             canConfirm = false;
           }
         } else if (logEntry is Reminder) {
@@ -603,27 +604,36 @@ class _ChatScreenNewState extends State<ChatScreenNew>
         return "Log expense: £${expense.amount.toStringAsFixed(2)} for ${expense.category}?";
       case 'task':
         final task = logEntry as Task;
+        String dateTimeInfo = '';
+
         if (task.dueDate != null) {
-          // If time is 00:00, treat as 'no time set' and only show date (if present)
-          if (task.dueDate!.hour == 0 && task.dueDate!.minute == 0) {
-            final date = task.dueDate!;
-            final now = DateTime.now();
-            // Only show date if it's not today
+          final date = task.dueDate!;
+          final now = DateTime.now();
+
+          // Check if we have a specific time set (either in dueDate or timeOfDay)
+          bool hasSpecificTime =
+              (task.dueDate!.hour != 0 || task.dueDate!.minute != 0) ||
+              (task.timeOfDay != null);
+
+          if (hasSpecificTime) {
+            // Show full date and time
+            final timeString = _formatReminderTime(task.dueDate!);
+            dateTimeInfo = " due <b>$timeString</b>";
+          } else {
+            // Show date only (no time set)
             if (date.year != now.year ||
                 date.month != now.month ||
                 date.day != now.day) {
               final dateString =
                   "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}";
-              return "Create task: ${task.title} due $dateString (no time set yet)?";
+              dateTimeInfo = " due $dateString (no time set yet)";
             } else {
-              return "Create task: ${task.title} (no time set yet)?";
+              dateTimeInfo = " (no time set yet)";
             }
           }
-          final timeString = _formatReminderTime(task.dueDate!);
-          return "Create task: ${task.title} due <b>$timeString</b>?";
-        } else {
-          return "Create task: ${task.title}?";
         }
+
+        return "Create task: ${task.title}$dateTimeInfo?";
       case 'reminder':
         final reminder = logEntry as Reminder;
         // If time is 00:00, treat as 'no time set' and only show date (if present)
@@ -903,8 +913,13 @@ class _ChatScreenNewState extends State<ChatScreenNew>
           widget.onExpenseLogged?.call(logEntry as Expense);
           break;
         case 'task':
-          print('DEBUG: Calling onTaskLogged');
-          widget.onTaskLogged?.call(logEntry as Task);
+          final task = logEntry as Task;
+          print('DEBUG: Calling onTaskLogged with task: ${task.toJson()}');
+          print('DEBUG: Task title: ${task.title}');
+          print('DEBUG: Task dueDate: ${task.dueDate}');
+          print('DEBUG: Task timeOfDay: ${task.timeOfDay}');
+          print('DEBUG: Task category: ${task.category}');
+          widget.onTaskLogged?.call(task);
           break;
         case 'reminder':
           print(

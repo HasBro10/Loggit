@@ -342,10 +342,13 @@ class _LoggitHomeState extends State<LoggitHome> {
   }
 
   void _addTask(Task task) async {
+    print('[DEBUG] _addTask called with task: ${task.toJson()}');
     setState(() {
       _tasks.add(task);
     });
+    print('[DEBUG] _tasks length after adding: ${_tasks.length}');
     await _saveTasks();
+    print('[DEBUG] Task saved to persistent storage');
   }
 
   void _addReminder(Reminder reminder) async {
@@ -424,6 +427,9 @@ class _LoggitHomeState extends State<LoggitHome> {
         return DashboardScreen(expenses: _expenses);
       case FeatureType.tasks:
         return TasksScreenNew(
+          key: ValueKey(
+            _tasks.length,
+          ), // Add this line to force rebuild on list change
           tasks: _tasks,
           onBack: () {
             final chatIndex = _favorites.indexWhere(

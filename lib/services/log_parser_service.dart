@@ -121,7 +121,7 @@ class LogParserService {
         'type': LogType.reminder,
         // (1) trigger, (2) to/for, (3) action, (4) date/time
         'regex': RegExp(
-          r'(remind me|set reminder|create reminder|reminder|set a reminder|create a reminder|add reminder|new reminder|set up reminder|put reminder|add a reminder|schedule a reminder|set up a reminder|remind me to|remind me about|remind me of)?(?:\s*(to|for))?\s*(.+?)\s*(tomorrow|at\s+\d{1,2}(:\d{2})?\s*(am|pm)?|on\s+\w+|\d{1,2}(st|nd|rd|th)?|next\s+\w+|\d{1,2}(:\d{2})?\s*(am|pm)?\s+\d{1,2}(st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)|\d{1,2}(:\d{2})?\s*(am|pm)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+\d{1,2}(st|nd|rd|th)?)?$',
+          r'(remind me|set reminder|create reminder|reminder|set a reminder|create a reminder|add reminder|new reminder|set up reminder|put reminder|add a reminder|schedule a reminder|set up a reminder|remind me to|remind me about|remind me of)(?:\s*(to|for))?\s*(.+?)\s*(tomorrow|at\s+\d{1,2}(:\d{2})?\s*(am|pm)?|on\s+\w+|\d{1,2}(st|nd|rd|th)?|next\s+\w+|\d{1,2}(:\d{2})?\s*(am|pm)?\s+\d{1,2}(st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)|\d{1,2}(:\d{2})?\s*(am|pm)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+\d{1,2}(st|nd|rd|th)?)?$',
           caseSensitive: false,
         ),
       },
@@ -418,10 +418,19 @@ class LogParserService {
               }
             }
             // --- Enhanced action extraction logic ---
-            action = match.group(3) != null ? match.group(3)!.trim() : null;
-            dateTimeStr = match.group(4) != null
-                ? match.group(4)!.trim()
-                : null;
+            if (type == LogType.task) {
+              // For tasks, the action is in group 5 (after the trigger and "task" word)
+              action = match.group(5) != null ? match.group(5)!.trim() : null;
+              dateTimeStr = match.group(6) != null
+                  ? match.group(6)!.trim()
+                  : null;
+            } else {
+              // For reminders, use the original logic
+              action = match.group(3) != null ? match.group(3)!.trim() : null;
+              dateTimeStr = match.group(4) != null
+                  ? match.group(4)!.trim()
+                  : null;
+            }
             // If action is present and dateTimeStr is present at the end of action, remove it
             if (action != null &&
                 dateTimeStr != null &&

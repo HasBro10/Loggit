@@ -1,3 +1,33 @@
+# Task Management Debugging Summary (July 2024)
+
+## What’s Working
+- Chat Flow: You can create tasks via the chat interface, and the confirmation bubble appears.
+- Task Page: The task page displays tasks and allows you to open the edit modal for any task.
+- Task Edit Modal: You can open the edit modal and fill in all fields (title, date, time, category, etc.).
+- Data Model: Tasks, reminders, and other logs are all using a unified data model and are persisted locally.
+
+## What’s Not Working / Struggles
+- Saving Edits: When you edit a task from the task page and press Save, the changes are not saved—tasks revert to their previous state.
+- Chat-to-Task Sync: Tasks created via chat sometimes do not appear on the task page, or do not update correctly.
+- Edit Flow: After creating a task via chat, editing it from the task page does not always work as expected.
+- Debugging Fatigue: Multiple attempts to fix the save logic, modal return values, and data flow have led to confusion and circular debugging.
+- Unclear Source of Truth: There may be issues with how tasks are identified (ID mismatch), or how the list is updated and persisted.
+
+## What We’ve Tried
+- Added debug output to trace task saving and editing.
+- Checked the callback logic for saving tasks.
+- Ensured both chat and task page use the same _tasks list.
+- Attempted to fix the modal return and update logic.
+- Reverted and reapplied changes to try to restore working states.
+
+## Next Steps (for future sessions)
+- Review the save/edit callback logic for tasks on the task page.
+- Ensure the modal returns the updated task and the callback updates the correct item in the list.
+- Double-check task IDs and list update logic.
+- Consider simplifying the flow or isolating the bug with a minimal test.
+
+---
+
 # Latest Session Summary (June 2024)
 
 ## What Was Attempted

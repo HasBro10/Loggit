@@ -177,524 +177,543 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
 
   @override
   Widget build(BuildContext context) {
-    final topLevelContext = context;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final now = DateTime.now();
+    return Builder(
+      builder: (rootContext) {
+        final topLevelContext = context;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final now = DateTime.now();
 
-    // Filter and sort logic
-    List<Task> filteredTasks = tasks.where((task) {
-      final matchesSearch =
-          searchQuery.isEmpty ||
-          task.title.toLowerCase().contains(searchQuery.toLowerCase()) ||
-          (task.description?.toLowerCase().contains(
-                searchQuery.toLowerCase(),
-              ) ??
-              false);
+        // Filter and sort logic
+        List<Task> filteredTasks = tasks.where((task) {
+          final matchesSearch =
+              searchQuery.isEmpty ||
+              task.title.toLowerCase().contains(searchQuery.toLowerCase()) ||
+              (task.description?.toLowerCase().contains(
+                    searchQuery.toLowerCase(),
+                  ) ??
+                  false);
 
-      // Status filter
-      final matchesStatus = selectedTabIndex == 2
-          ? (statusFilter == 'All' ||
-                (statusFilter == 'Pending' && !task.isCompleted) ||
-                (statusFilter == 'Completed' && task.isCompleted) ||
-                (statusFilter == 'Overdue' &&
-                    task.dueDate != null &&
-                    _isTaskOverdue(task)))
-          : (selectedFilter == 0 || // All
-                (selectedFilter == 1 && !task.isCompleted) || // Pending
-                (selectedFilter == 2 && task.isCompleted)); // Completed
+          // Status filter
+          final matchesStatus = selectedTabIndex == 2
+              ? (statusFilter == 'All' ||
+                    (statusFilter == 'Pending' && !task.isCompleted) ||
+                    (statusFilter == 'Completed' && task.isCompleted) ||
+                    (statusFilter == 'Overdue' &&
+                        task.dueDate != null &&
+                        _isTaskOverdue(task)))
+              : (selectedFilter == 0 || // All
+                    (selectedFilter == 1 && !task.isCompleted) || // Pending
+                    (selectedFilter == 2 && task.isCompleted)); // Completed
 
-      // Category filter
-      final matchesCategory =
-          categoryFilter == null || task.category == categoryFilter;
+          // Category filter
+          final matchesCategory =
+              categoryFilter == null || task.category == categoryFilter;
 
-      // Priority filter
-      final matchesPriority =
-          priorityFilter == null || priorityString(task) == priorityFilter;
+          // Priority filter
+          final matchesPriority =
+              priorityFilter == null || priorityString(task) == priorityFilter;
 
-      // Recurrence filter
-      final matchesRecurrence =
-          recurrenceFilter == null ||
-          (recurrenceFilter == 'Recurring' &&
-              task.recurrenceType != RecurrenceType.none) ||
-          (recurrenceFilter == 'One-time' &&
-              task.recurrenceType == RecurrenceType.none);
+          // Recurrence filter
+          final matchesRecurrence =
+              recurrenceFilter == null ||
+              (recurrenceFilter == 'Recurring' &&
+                  task.recurrenceType != RecurrenceType.none) ||
+              (recurrenceFilter == 'One-time' &&
+                  task.recurrenceType == RecurrenceType.none);
 
-      // Date range filter
-      final matchesDateRange =
-          (dateFromFilter == null ||
+          // Date range filter
+          final matchesDateRange =
+              (dateFromFilter == null ||
+                  (task.dueDate != null &&
+                      task.dueDate!.isAfter(dateFromFilter!))) &&
+              (dateToFilter == null ||
+                  (task.dueDate != null &&
+                      task.dueDate!.isBefore(
+                        dateToFilter!.add(Duration(days: 1)),
+                      )));
+
+          // Date filter based on selected day
+          final matchesSelectedDate =
+              selectedDayIndex < 0 ||
               (task.dueDate != null &&
-                  task.dueDate!.isAfter(dateFromFilter!))) &&
-          (dateToFilter == null ||
-              (task.dueDate != null &&
-                  task.dueDate!.isBefore(
-                    dateToFilter!.add(Duration(days: 1)),
-                  )));
+                  _isTaskForSelectedDate(task, selectedDayIndex));
 
-      // Date filter based on selected day
-      final matchesSelectedDate =
-          selectedDayIndex < 0 ||
-          (task.dueDate != null &&
-              _isTaskForSelectedDate(task, selectedDayIndex));
+          // Overdue filter
+          final matchesOverdue =
+              !showOverdueOnly ||
+              (task.dueDate != null && _isTaskOverdue(task));
 
-      // Overdue filter
-      final matchesOverdue =
-          !showOverdueOnly || (task.dueDate != null && _isTaskOverdue(task));
+          // Due soon filter (due within 3 days)
+          final matchesDueSoon =
+              statusFilter != 'Due Soon' ||
+              (statusFilter == 'Due Soon' && _isTaskDueSoon(task));
 
-      // Due soon filter (due within 3 days)
-      final matchesDueSoon =
-          statusFilter != 'Due Soon' ||
-          (statusFilter == 'Due Soon' && _isTaskDueSoon(task));
+          return matchesSearch &&
+              matchesStatus &&
+              matchesCategory &&
+              matchesPriority &&
+              matchesRecurrence &&
+              matchesDateRange &&
+              matchesSelectedDate &&
+              matchesOverdue &&
+              matchesDueSoon;
+        }).toList();
 
-      return matchesSearch &&
-          matchesStatus &&
-          matchesCategory &&
-          matchesPriority &&
-          matchesRecurrence &&
-          matchesDateRange &&
-          matchesSelectedDate &&
-          matchesOverdue &&
-          matchesDueSoon;
-    }).toList();
+        // Sort
+        filteredTasks.sort((a, b) {
+          switch (sortOption) {
+            case TaskSortOption.dueDate:
+              // Get the effective scheduled time for each task
+              DateTime getEffectiveTime(Task task) {
+                if (task.dueDate == null) return DateTime(2100);
 
-    // Sort
-    filteredTasks.sort((a, b) {
-      switch (sortOption) {
-        case TaskSortOption.dueDate:
-          // Get the effective scheduled time for each task
-          DateTime getEffectiveTime(Task task) {
-            if (task.dueDate == null) return DateTime(2100);
+                // If task has a specific timeOfDay, combine it with the dueDate
+                if (task.timeOfDay != null) {
+                  return DateTime(
+                    task.dueDate!.year,
+                    task.dueDate!.month,
+                    task.dueDate!.day,
+                    task.timeOfDay!.hour,
+                    task.timeOfDay!.minute,
+                  );
+                }
 
-            // If task has a specific timeOfDay, combine it with the dueDate
-            if (task.timeOfDay != null) {
-              return DateTime(
-                task.dueDate!.year,
-                task.dueDate!.month,
-                task.dueDate!.day,
-                task.timeOfDay!.hour,
-                task.timeOfDay!.minute,
-              );
-            }
+                // Otherwise use the dueDate as is
+                return task.dueDate!;
+              }
 
-            // Otherwise use the dueDate as is
-            return task.dueDate!;
+              return getEffectiveTime(a).compareTo(getEffectiveTime(b));
+            case TaskSortOption.priority:
+              return priorityString(
+                b,
+              ).compareTo(priorityString(a)); // High > Medium > Low
+            case TaskSortOption.category:
+              return (a.category ?? '').compareTo(b.category ?? '');
           }
+        });
 
-          return getEffectiveTime(a).compareTo(getEffectiveTime(b));
-        case TaskSortOption.priority:
-          return priorityString(
-            b,
-          ).compareTo(priorityString(a)); // High > Medium > Low
-        case TaskSortOption.category:
-          return (a.category ?? '').compareTo(b.category ?? '');
-      }
-    });
-
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onTap: () => _openDeleteTaskTitle.value = null,
-      child: Scaffold(
-        backgroundColor: isDark ? LoggitColors.darkBg : LoggitColors.pureWhite,
-        body: SafeArea(
-          child: Column(
-            children: [
-              // Fixed header
-              Container(
-                padding: const EdgeInsets.all(LoggitSpacing.screenPadding),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: Icon(
-                        Icons.arrow_back,
-                        color: isDark
-                            ? Colors.white
-                            : LoggitColors.darkGrayText,
-                      ),
-                      onPressed: () {
-                        // Close any open delete button first
-                        _openDeleteTaskTitle.value = null;
-                        widget.onBack();
-                      },
-                    ),
-                    SizedBox(width: 4),
-                    Text(
-                      'Tasks',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 28,
-                        color: isDark
-                            ? Colors.white
-                            : LoggitColors.darkGrayText,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Scrollable content
-              Expanded(
-                child: SingleChildScrollView(
-                  controller: _scrollController,
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  child: Padding(
+        return GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: () => _openDeleteTaskTitle.value = null,
+          child: Scaffold(
+            backgroundColor: isDark
+                ? LoggitColors.darkBg
+                : LoggitColors.pureWhite,
+            body: SafeArea(
+              child: Column(
+                children: [
+                  // Fixed header
+                  Container(
                     padding: const EdgeInsets.all(LoggitSpacing.screenPadding),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        // Tab navigation
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.grey.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
+                        IconButton(
+                          icon: Icon(
+                            Icons.arrow_back,
+                            color: isDark
+                                ? Colors.white
+                                : LoggitColors.darkGrayText,
                           ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: _buildTabButton('Week', 0, isDark),
-                              ),
-                              Expanded(
-                                child: _buildTabButton('Calendar', 1, isDark),
-                              ),
-                              Expanded(
-                                child: _buildTabButton('All', 2, isDark),
-                              ),
-                            ],
+                          onPressed: () {
+                            // Close any open delete button first
+                            _openDeleteTaskTitle.value = null;
+                            widget.onBack();
+                          },
+                        ),
+                        SizedBox(width: 4),
+                        Text(
+                          'Tasks',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 28,
+                            color: isDark
+                                ? Colors.white
+                                : LoggitColors.darkGrayText,
                           ),
                         ),
-                        SizedBox(height: LoggitSpacing.lg),
-                        // Date selector bar with background
-                        if (selectedTabIndex == 0) // Week View
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Color(0xFFF1F5F9), // Light background
-                              borderRadius: BorderRadius.circular(20),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.02),
-                                  blurRadius: 2,
-                                  offset: Offset(0, 1),
-                                ),
-                              ],
+                      ],
+                    ),
+                  ),
+                  // Scrollable content
+                  Expanded(
+                    child: SingleChildScrollView(
+                      controller: _scrollController,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: Padding(
+                        padding: const EdgeInsets.all(
+                          LoggitSpacing.screenPadding,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Tab navigation
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.grey.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildTabButton('Week', 0, isDark),
+                                  ),
+                                  Expanded(
+                                    child: _buildTabButton(
+                                      'Calendar',
+                                      1,
+                                      isDark,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: _buildTabButton('All', 2, isDark),
+                                  ),
+                                ],
+                              ),
                             ),
-                            child: SizedBox(
-                              height:
-                                  76, // Increased height to accommodate border
-                              child: ListView.builder(
-                                scrollDirection: Axis.horizontal,
-                                itemCount: days.length,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
+                            SizedBox(height: LoggitSpacing.lg),
+                            // Date selector bar with background
+                            if (selectedTabIndex == 0) // Week View
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: Color(0xFFF1F5F9), // Light background
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.02),
+                                      blurRadius: 2,
+                                      offset: Offset(0, 1),
+                                    ),
+                                  ],
                                 ),
-                                physics: BouncingScrollPhysics(),
-                                shrinkWrap: true,
-                                itemBuilder: (context, i) {
-                                  final selected = i == selectedDayIndex;
-                                  return GestureDetector(
-                                    onTap: () {
-                                      // Close any open delete button first
-                                      _openDeleteTaskTitle.value = null;
-                                      setState(() {
-                                        selectedDayIndex = i;
-                                        // When a specific date is selected, we're no longer in "All" mode
-                                        // Keep the filter as "All" (0) but the visual state will be correct
-                                      });
+                                child: SizedBox(
+                                  height:
+                                      76, // Increased height to accommodate border
+                                  child: ListView.builder(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: days.length,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                    physics: BouncingScrollPhysics(),
+                                    shrinkWrap: true,
+                                    itemBuilder: (context, i) {
+                                      final selected = i == selectedDayIndex;
+                                      return GestureDetector(
+                                        onTap: () {
+                                          // Close any open delete button first
+                                          _openDeleteTaskTitle.value = null;
+                                          setState(() {
+                                            selectedDayIndex = i;
+                                            // When a specific date is selected, we're no longer in "All" mode
+                                            // Keep the filter as "All" (0) but the visual state will be correct
+                                          });
+                                        },
+                                        child: AnimatedContainer(
+                                          duration: Duration(milliseconds: 180),
+                                          margin: EdgeInsets.symmetric(
+                                            horizontal: 4,
+                                            vertical:
+                                                8, // Increased vertical margin
+                                          ),
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: selected
+                                                ? LoggitColors.teal.withOpacity(
+                                                    0.1,
+                                                  )
+                                                : Colors.transparent,
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                            border: (i == 0 || selected)
+                                                ? Border.all(
+                                                    color: LoggitColors.teal,
+                                                    width: 2,
+                                                  )
+                                                : null,
+                                          ),
+                                          child: Column(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Text(
+                                                _getUserFriendlyDateLabel(i),
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: selected
+                                                      ? Colors.black
+                                                      : i == 0
+                                                      ? LoggitColors.teal
+                                                      : Colors.grey[600],
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                              SizedBox(height: 2),
+                                              Text(
+                                                dates[i].toString(),
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  color: selected
+                                                      ? Colors.black
+                                                      : i == 0
+                                                      ? LoggitColors.teal
+                                                      : Colors.grey[800],
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
                                     },
-                                    child: AnimatedContainer(
-                                      duration: Duration(milliseconds: 180),
-                                      margin: EdgeInsets.symmetric(
-                                        horizontal: 4,
-                                        vertical:
-                                            8, // Increased vertical margin
-                                      ),
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: selected
-                                            ? LoggitColors.teal.withOpacity(0.1)
-                                            : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(16),
-                                        border: (i == 0 || selected)
-                                            ? Border.all(
-                                                color: LoggitColors.teal,
-                                                width: 2,
-                                              )
-                                            : null,
-                                      ),
-                                      child: Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Text(
-                                            _getUserFriendlyDateLabel(i),
+                                  ),
+                                ),
+                              )
+                            else if (selectedTabIndex == 1) // Month View
+                              _buildMonthView(isDark)
+                            else // All View
+                              Column(
+                                children: [
+                                  _buildAllTabSearchBar(isDark),
+                                  _buildAllTabContextBar(
+                                    isDark,
+                                    _getFilteredTasksForAllView().length,
+                                  ),
+                                  SizedBox(height: 12),
+                                  // Simple filter chips below the header
+                                  SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        _buildSimpleFilterChip(
+                                          'All',
+                                          'All',
+                                          isDark,
+                                        ),
+                                        SizedBox(width: 8),
+                                        _buildSimpleFilterChip(
+                                          'Pending',
+                                          'Pending',
+                                          isDark,
+                                        ),
+                                        SizedBox(width: 8),
+                                        _buildSimpleFilterChip(
+                                          'Completed',
+                                          'Completed',
+                                          isDark,
+                                        ),
+                                        SizedBox(width: 8),
+                                        _buildSimpleFilterChip(
+                                          'Overdue',
+                                          'Overdue',
+                                          isDark,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  SizedBox(height: 12),
+                                  _buildAllTasksView(topLevelContext, isDark),
+                                ],
+                              ),
+                            SizedBox(height: LoggitSpacing.lg),
+                            // Date context header (only for Week and Month views)
+                            if (selectedTabIndex != 2)
+                              Container(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: Colors.grey.withOpacity(0.2),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          selectedDayIndex >= 0
+                                              ? Icons.calendar_today
+                                              : Icons.list_alt,
+                                          color: Colors.grey[600],
+                                          size: 20,
+                                        ),
+                                        SizedBox(width: 8),
+                                        RichText(
+                                          text: TextSpan(
+                                            text:
+                                                (selectedTabIndex == 1 &&
+                                                        _getSelectedDateForMonthView() !=
+                                                            null) ||
+                                                    selectedDayIndex >= 0
+                                                ? _getSelectedDateContext()
+                                                : 'All Tasks',
                                             style: TextStyle(
-                                              fontSize: 12,
-                                              color: selected
-                                                  ? Colors.black
-                                                  : i == 0
-                                                  ? LoggitColors.teal
-                                                  : Colors.grey[600],
+                                              fontSize: 14,
                                               fontWeight: FontWeight.w600,
+                                              color: Colors.grey[600],
                                             ),
                                           ),
-                                          SizedBox(height: 2),
-                                          Text(
-                                            dates[i].toString(),
+                                        ),
+                                      ],
+                                    ),
+                                    RichText(
+                                      text: TextSpan(
+                                        children: [
+                                          TextSpan(
+                                            text: 'Showing: ',
                                             style: TextStyle(
-                                              fontSize: 16,
-                                              color: selected
-                                                  ? Colors.black
-                                                  : i == 0
-                                                  ? LoggitColors.teal
-                                                  : Colors.grey[800],
-                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                          TextSpan(
+                                            text: selectedTabIndex == 1
+                                                ? '${_getFilteredTasksForMonthView().length}'
+                                                : '${filteredTasks.length}',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.grey[600],
                                             ),
                                           ),
                                         ],
                                       ),
                                     ),
-                                  );
-                                },
-                              ),
-                            ),
-                          )
-                        else if (selectedTabIndex == 1) // Month View
-                          _buildMonthView(isDark)
-                        else // All View
-                          Column(
-                            children: [
-                              _buildAllTabSearchBar(isDark),
-                              _buildAllTabContextBar(
-                                isDark,
-                                _getFilteredTasksForAllView().length,
-                              ),
-                              SizedBox(height: 12),
-                              // Simple filter chips below the header
-                              SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                padding: EdgeInsets.symmetric(horizontal: 16),
-                                child: Row(
-                                  children: [
-                                    _buildSimpleFilterChip(
-                                      'All',
-                                      'All',
-                                      isDark,
-                                    ),
-                                    SizedBox(width: 8),
-                                    _buildSimpleFilterChip(
-                                      'Pending',
-                                      'Pending',
-                                      isDark,
-                                    ),
-                                    SizedBox(width: 8),
-                                    _buildSimpleFilterChip(
-                                      'Completed',
-                                      'Completed',
-                                      isDark,
-                                    ),
-                                    SizedBox(width: 8),
-                                    _buildSimpleFilterChip(
-                                      'Overdue',
-                                      'Overdue',
-                                      isDark,
-                                    ),
                                   ],
                                 ),
                               ),
-                              SizedBox(height: 12),
-                              _buildAllTasksView(topLevelContext, isDark),
-                            ],
-                          ),
-                        SizedBox(height: LoggitSpacing.lg),
-                        // Date context header (only for Week and Month views)
-                        if (selectedTabIndex != 2)
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.grey.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: Colors.grey.withOpacity(0.2),
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(
-                                      selectedDayIndex >= 0
-                                          ? Icons.calendar_today
-                                          : Icons.list_alt,
-                                      color: Colors.grey[600],
-                                      size: 20,
-                                    ),
-                                    SizedBox(width: 8),
-                                    RichText(
-                                      text: TextSpan(
-                                        text:
-                                            (selectedTabIndex == 1 &&
-                                                    _getSelectedDateForMonthView() !=
-                                                        null) ||
-                                                selectedDayIndex >= 0
-                                            ? _getSelectedDateContext()
-                                            : 'All Tasks',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                RichText(
-                                  text: TextSpan(
-                                    children: [
-                                      TextSpan(
-                                        text: 'Showing: ',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                      TextSpan(
-                                        text: selectedTabIndex == 1
-                                            ? '${_getFilteredTasksForMonthView().length}'
-                                            : '${filteredTasks.length}',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                    ],
+                            if (selectedTabIndex != 2)
+                              SizedBox(height: LoggitSpacing.md),
+                            // Tasks section (for Week and Month views)
+                            if (selectedTabIndex == 0) ...[
+                              if (filteredTasks.isNotEmpty)
+                                ...filteredTasks.map(
+                                  (task) => _buildTaskCard(
+                                    task,
+                                    isDark,
+                                    topLevelContext,
+                                    onTap: () async {
+                                      final editedTask = await showTaskModal(
+                                        topLevelContext,
+                                        task: task,
+                                      );
+                                      print(
+                                        '[DEBUG] Modal returned editedTask: ' +
+                                            (editedTask?.toJson().toString() ??
+                                                'null'),
+                                      );
+                                      if (editedTask != null) {
+                                        final index = tasks.indexWhere(
+                                          (t) => t.id == task.id,
+                                        );
+                                        if (index != -1) {
+                                          setState(() {
+                                            tasks[index] = editedTask;
+                                          });
+                                          print(
+                                            '[DEBUG] Calling onUpdateOrDeleteTask for editedTask: ' +
+                                                editedTask.toJson().toString(),
+                                          );
+                                          widget.onUpdateOrDeleteTask(
+                                            editedTask,
+                                            isDelete: false,
+                                          );
+                                        }
+                                      }
+                                    },
                                   ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        if (selectedTabIndex != 2)
-                          SizedBox(height: LoggitSpacing.md),
-                        // Tasks section (for Week and Month views)
-                        if (selectedTabIndex == 0) ...[
-                          if (filteredTasks.isNotEmpty)
-                            ...filteredTasks.map(
-                              (task) => _buildTaskCard(
-                                task,
-                                isDark,
-                                topLevelContext,
-                                onTap: () async {
-                                  final editedTask = await showTaskModal(
+                                )
+                              else
+                                _buildEmptyState(isDark),
+                            ] else if (selectedTabIndex == 1) ...[
+                              if (_getFilteredTasksForMonthView().isNotEmpty)
+                                ..._getFilteredTasksForMonthView().map(
+                                  (task) => _buildTaskCard(
+                                    task,
+                                    isDark,
                                     topLevelContext,
-                                    task: task,
-                                  );
-                                  print(
-                                    '[DEBUG] Modal returned editedTask: ' +
-                                        (editedTask?.toJson().toString() ??
-                                            'null'),
-                                  );
-                                  if (editedTask != null) {
-                                    final index = tasks.indexWhere(
-                                      (t) => t.id == task.id,
-                                    );
-                                    if (index != -1) {
-                                      setState(() {
-                                        tasks[index] = editedTask;
-                                      });
+                                    onTap: () async {
+                                      final editedTask = await showTaskModal(
+                                        topLevelContext,
+                                        task: task,
+                                      );
                                       print(
-                                        '[DEBUG] Calling onUpdateOrDeleteTask for editedTask: ' +
-                                            editedTask.toJson().toString(),
+                                        '[DEBUG] Modal returned editedTask: ' +
+                                            (editedTask?.toJson().toString() ??
+                                                'null'),
                                       );
-                                      widget.onUpdateOrDeleteTask(
-                                        editedTask,
-                                        isDelete: false,
-                                      );
-                                    }
-                                  }
-                                },
-                              ),
-                            )
-                          else
-                            _buildEmptyState(isDark),
-                        ] else if (selectedTabIndex == 1) ...[
-                          if (_getFilteredTasksForMonthView().isNotEmpty)
-                            ..._getFilteredTasksForMonthView().map(
-                              (task) => _buildTaskCard(
-                                task,
-                                isDark,
-                                topLevelContext,
-                                onTap: () async {
-                                  final editedTask = await showTaskModal(
-                                    topLevelContext,
-                                    task: task,
-                                  );
-                                  print(
-                                    '[DEBUG] Modal returned editedTask: ' +
-                                        (editedTask?.toJson().toString() ??
-                                            'null'),
-                                  );
-                                  if (editedTask != null) {
-                                    final index = tasks.indexWhere(
-                                      (t) => t.id == task.id,
-                                    );
-                                    if (index != -1) {
-                                      setState(() {
-                                        tasks[index] = editedTask;
-                                      });
-                                      print(
-                                        '[DEBUG] Calling onUpdateOrDeleteTask for editedTask: ' +
-                                            editedTask.toJson().toString(),
-                                      );
-                                      widget.onUpdateOrDeleteTask(
-                                        editedTask,
-                                        isDelete: false,
-                                      );
-                                    }
-                                  }
-                                },
-                              ),
-                            )
-                          else
-                            _buildEmptyState(isDark),
-                        ],
-                        SizedBox(height: 80),
-                      ],
+                                      if (editedTask != null) {
+                                        final index = tasks.indexWhere(
+                                          (t) => t.id == task.id,
+                                        );
+                                        if (index != -1) {
+                                          setState(() {
+                                            tasks[index] = editedTask;
+                                          });
+                                          print(
+                                            '[DEBUG] Calling onUpdateOrDeleteTask for editedTask: ' +
+                                                editedTask.toJson().toString(),
+                                          );
+                                          widget.onUpdateOrDeleteTask(
+                                            editedTask,
+                                            isDelete: false,
+                                          );
+                                        }
+                                      }
+                                    },
+                                  ),
+                                )
+                              else
+                                _buildEmptyState(isDark),
+                            ],
+                            SizedBox(height: 80),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
+            floatingActionButton: FloatingActionButton(
+              backgroundColor: LoggitColors.teal,
+              onPressed: () async {
+                _openDeleteTaskTitle.value = null;
+                final newTask = await showTaskModal(rootContext);
+                print(
+                  '[DEBUG] Modal returned newTask: ' +
+                      (newTask?.toJson().toString() ?? 'null'),
+                );
+                if (newTask != null) {
+                  setState(() {
+                    tasks.add(newTask);
+                  });
+                  print(
+                    '[DEBUG] Calling onUpdateOrDeleteTask for newTask: ' +
+                        newTask.toJson().toString(),
+                  );
+                  widget.onUpdateOrDeleteTask(newTask, isDelete: false);
+                }
+              },
+              child: Icon(Icons.add, color: Colors.white, size: 24),
+            ),
+            floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
           ),
-        ),
-        floatingActionButton: FloatingActionButton(
-          backgroundColor: LoggitColors.teal,
-          onPressed: () async {
-            print('[DEBUG] FloatingActionButton pressed');
-            _openDeleteTaskTitle.value = null;
-            final newTask = await showTaskModal(topLevelContext);
-            print(
-              '[DEBUG] Modal returned newTask: ' +
-                  (newTask?.toJson().toString() ?? 'null'),
-            );
-            if (newTask != null) {
-              setState(() {
-                tasks.add(newTask);
-              });
-              print(
-                '[DEBUG] Calling onUpdateOrDeleteTask for newTask: ' +
-                    newTask.toJson().toString(),
-              );
-              widget.onUpdateOrDeleteTask(newTask, isDelete: false);
-            }
-          },
-          child: Icon(Icons.add, color: Colors.white, size: 24),
-        ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      ),
+        );
+      },
     );
   }
 
@@ -4189,6 +4208,7 @@ class _OverlayDeleteTaskCardState extends State<OverlayDeleteTaskCard> {
 
 // Move this function to the top level (outside of any class)
 Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
+  final originalContext = context;
   final isEditing = task != null;
   final titleController = TextEditingController(text: task?.title ?? '');
   final descController = TextEditingController(text: task?.description ?? '');
@@ -4205,7 +4225,7 @@ Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
   RecurrenceType recurrenceType = task?.recurrenceType ?? RecurrenceType.none;
 
   Task? result;
-  await showModalBottomSheet(
+  return await showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     shape: RoundedRectangleBorder(
@@ -4984,13 +5004,16 @@ Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
                                   error = null;
                                 });
                                 final newTask = Task(
+                                  id: isEditing
+                                      ? task!.id
+                                      : null, // Ensure original ID is kept when editing
                                   title: titleController.text,
                                   description: descController.text,
                                   dueDate: dueDate,
                                   isCompleted: status == TaskStatus.completed,
                                   timestamp: isEditing
                                       ? task!.timestamp
-                                      : DateTime.now(),
+                                      : DateTime.now(), // Keep original timestamp when editing
                                   category: category,
                                   recurrenceType: recurrenceType,
                                   timeOfDay: timeOfDay,
@@ -5003,10 +5026,7 @@ Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
                                   '[DEBUG] About to pop modal with newTask: ' +
                                       newTask.toJson().toString(),
                                 );
-                                Navigator.of(
-                                  context,
-                                  rootNavigator: true,
-                                ).pop(newTask);
+                                Navigator.of(originalContext).pop(newTask);
                               },
                               child: Text(isEditing ? 'Save' : 'Add'),
                             ),
@@ -5031,7 +5051,6 @@ Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
       );
     },
   );
-  return result;
 }
 
 String monthString(int month) {
