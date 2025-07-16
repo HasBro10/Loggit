@@ -1840,8 +1840,9 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor:
-                            msg.pendingLogEntry!.logType == 'reminder'
-                            ? Colors.amber[800]
+                            msg.pendingLogEntry!.logType == 'reminder' ||
+                                msg.pendingLogEntry!.logType == 'task'
+                            ? Colors.orange
                             : LoggitColors.tealDark,
                         foregroundColor: Colors.white,
                         padding: EdgeInsets.symmetric(

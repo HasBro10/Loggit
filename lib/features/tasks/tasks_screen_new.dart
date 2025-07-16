@@ -3011,7 +3011,6 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                 duration: Duration(milliseconds: 200),
                 opacity: isVisible ? 1.0 : 0.0,
                 child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
                   onTap: () async {
                     print('Checkbox tapped for task: ${task.title}');
                     final shouldToggle = await showDialog<bool>(
@@ -4146,62 +4145,65 @@ class _OverlayDeleteTaskCardState extends State<OverlayDeleteTaskCard> {
   @override
   Widget build(BuildContext context) {
     final showDelete = widget.openDeleteTaskTitle.value == widget.task.title;
-    return Stack(
-      children: [
-        widget.child,
-        AnimatedPositioned(
-          duration: Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-          top: 8,
-          bottom: 8,
-          right: showDelete ? 0 : -56,
-          width: 56,
-          child: AnimatedOpacity(
-            duration: Duration(milliseconds: 200),
-            opacity: showDelete ? 1.0 : 0.0,
-            child: Material(
-              color: Colors.red.withOpacity(0.95),
-              borderRadius: BorderRadius.only(
-                topRight: Radius.circular(8),
-                bottomRight: Radius.circular(8),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Stack(
+        children: [
+          widget.child,
+          GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onHorizontalDragUpdate: _onHorizontalDragUpdate,
+            onHorizontalDragEnd: _onHorizontalDragEnd,
+            onTap: () {
+              if (showDelete) {
+                widget.openDeleteTaskTitle.value = null;
+                return;
+              }
+              // Only open task modal if no delete button is open anywhere
+              if (widget.openDeleteTaskTitle.value == null &&
+                  widget.onTap != null) {
+                widget.onTap!();
+              }
+            },
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: FractionallySizedBox(
+                widthFactor: 0.7,
+                child: Container(height: 80, color: Colors.transparent),
               ),
-              child: InkWell(
+            ),
+          ),
+          AnimatedPositioned(
+            duration: Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            top: 8,
+            bottom: 8,
+            right: showDelete ? 0 : -56,
+            width: 56,
+            child: AnimatedOpacity(
+              duration: Duration(milliseconds: 200),
+              opacity: showDelete ? 1.0 : 0.0,
+              child: Material(
+                color: Colors.red.withOpacity(0.95),
                 borderRadius: BorderRadius.only(
                   topRight: Radius.circular(8),
                   bottomRight: Radius.circular(8),
                 ),
-                onTap: widget.onDelete,
-                child: Center(
-                  child: Icon(Icons.delete, color: Colors.white, size: 28),
+                child: InkWell(
+                  borderRadius: BorderRadius.only(
+                    topRight: Radius.circular(8),
+                    bottomRight: Radius.circular(8),
+                  ),
+                  onTap: widget.onDelete,
+                  child: SizedBox.expand(
+                    child: Icon(Icons.delete, color: Colors.white, size: 28),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-        GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onHorizontalDragUpdate: _onHorizontalDragUpdate,
-          onHorizontalDragEnd: _onHorizontalDragEnd,
-          onTap: () {
-            if (showDelete) {
-              widget.openDeleteTaskTitle.value = null;
-              return;
-            }
-            // Only open task modal if no delete button is open anywhere
-            if (widget.openDeleteTaskTitle.value == null &&
-                widget.onTap != null) {
-              widget.onTap!();
-            }
-          },
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: FractionallySizedBox(
-              widthFactor: 0.7,
-              child: Container(height: 80, color: Colors.transparent),
-            ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

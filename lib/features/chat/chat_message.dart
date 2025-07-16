@@ -138,7 +138,7 @@ class ChatMessage extends StatelessWidget {
                   icon: const Icon(Icons.edit, size: 18),
                   label: const Text('Edit'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6366F1),
+                    backgroundColor: Colors.orange,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16.0,
