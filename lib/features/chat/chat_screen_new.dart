@@ -17,6 +17,7 @@ import '../../features/reminders/reminder_edit_modal.dart'
 import '../../services/reminders_service.dart';
 import 'chat_message.dart';
 import 'package:loggit/features/tasks/tasks_screen_new.dart' show showTaskModal;
+import '../../services/ai_service.dart';
 
 class ChatScreenNew extends StatefulWidget {
   final void Function(Expense)? onExpenseLogged;
@@ -521,6 +522,55 @@ class _ChatScreenNewState extends State<ChatScreenNew>
       }
       _messageController.clear();
       _scrollToBottom();
+    }
+  }
+
+  // Test AI service
+  Future<void> _testAIService() async {
+    setState(() {
+      _messages.add(
+        _ChatMessage(
+          text: "🤖 Testing AI connection...",
+          isUser: false,
+          timestamp: DateTime.now(),
+        ),
+      );
+    });
+
+    try {
+      final result = await AIService.processUserMessage(
+        "Create a task for doctor appointment tomorrow at 2pm",
+      );
+
+      setState(() {
+        if (result.containsKey('error')) {
+          _messages.add(
+            _ChatMessage(
+              text: "❌ AI Error: ${result['error']}",
+              isUser: false,
+              timestamp: DateTime.now(),
+            ),
+          );
+        } else {
+          _messages.add(
+            _ChatMessage(
+              text: "✅ AI Response: ${result.toString()}",
+              isUser: false,
+              timestamp: DateTime.now(),
+            ),
+          );
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _messages.add(
+          _ChatMessage(
+            text: "❌ AI Error: $e",
+            isUser: false,
+            timestamp: DateTime.now(),
+          ),
+        );
+      });
     }
   }
 
@@ -1256,6 +1306,19 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                         ),
                       ),
                       onPressed: _sendMessage,
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.smart_toy,
+                        color: isDark ? Colors.white : Colors.orange,
+                        size: Responsive.responsiveIcon(
+                          context,
+                          24,
+                          min: 16,
+                          max: 36,
+                        ),
+                      ),
+                      onPressed: _testAIService,
                     ),
                   ],
                 ),
