@@ -173,7 +173,114 @@ class _ChatScreenNewState extends State<ChatScreenNew>
         );
       });
 
+      // --- NEW: Use AIService to process the message and extract fields ---
+      try {
+        final result = await AIService.processUserMessage(message);
+        if (result is Map<String, dynamic> &&
+            result.containsKey('intent') &&
+            result.containsKey('fields')) {
+          final intent = result['intent'];
+          final fields = result['fields'] as Map<String, dynamic>;
+          if (intent == 'create_task') {
+            final title = fields['title'] ?? '';
+            final description = fields['description'] ?? '';
+            TaskPriority priorityEnum = TaskPriority.medium;
+            if (fields['priority'] is String && fields['priority'].isNotEmpty) {
+              final p = fields['priority'].toString().toLowerCase();
+              if (p == 'low')
+                priorityEnum = TaskPriority.low;
+              else if (p == 'high')
+                priorityEnum = TaskPriority.high;
+              else if (p == 'medium')
+                priorityEnum = TaskPriority.medium;
+            }
+            DateTime? dueDate;
+            if (fields['dueDate'] != null && fields['dueDate'] is String) {
+              final now = DateTime.now();
+              if (fields['dueDate'].toLowerCase() == 'tomorrow') {
+                dueDate = now.add(Duration(days: 1));
+              } else if (fields['dueDate'].toLowerCase() == 'today') {
+                dueDate = now;
+              } else {
+                dueDate = DateTime.tryParse(fields['dueDate']);
+              }
+            }
+            TimeOfDay? timeOfDay;
+            if (fields['timeOfDay'] != null && fields['timeOfDay'] is String) {
+              final timeMatch = RegExp(
+                r'^(\d{1,2})(?::(\d{2}))?',
+              ).firstMatch(fields['timeOfDay']);
+              if (timeMatch != null) {
+                int hour = int.parse(timeMatch.group(1)!);
+                int minute = timeMatch.group(2) != null
+                    ? int.parse(timeMatch.group(2)!)
+                    : 0;
+                timeOfDay = TimeOfDay(hour: hour, minute: minute);
+              }
+            }
+            // Create the Task object
+            final newTask = Task(
+              title: title,
+              description: description,
+              priority: priorityEnum,
+              dueDate: dueDate,
+              timeOfDay: timeOfDay,
+              timestamp: DateTime.now(),
+            );
+            setState(() {
+              _pendingLog = newTask;
+              _messages.add(
+                _ChatMessage(
+                  text: _getConfirmationMessage(newTask),
+                  isUser: false,
+                  timestamp: DateTime.now(),
+                  isConfirmation: true,
+                  onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
+                      _handleLogConfirmation(confirmed, updatedLogEntry),
+                  pendingLogEntry: newTask,
+                  canConfirm: true,
+                  showEdit: true,
+                ),
+              );
+            });
+            _messageController.clear();
+            _scrollToBottom();
+            return;
+          } else if (intent == 'create_reminder') {
+            final title = fields['title'] ?? '';
+            DateTime reminderTime = DateTime.now();
+            if (fields['reminderTime'] != null &&
+                fields['reminderTime'] is String) {
+              final now = DateTime.now();
+              if (fields['reminderTime'].toLowerCase() == 'tomorrow') {
+                reminderTime = now.add(Duration(days: 1));
+              } else if (fields['reminderTime'].toLowerCase() == 'today') {
+                reminderTime = now;
+              } else {
+                reminderTime = DateTime.tryParse(fields['reminderTime']) ?? now;
+              }
+            }
+            showReminderEditModal(
+              context,
+              initial: Reminder(
+                title: title,
+                reminderTime: reminderTime,
+                timestamp: DateTime.now(),
+              ),
+            );
+            _messageController.clear();
+            _scrollToBottom();
+            return;
+          }
+          // Add more intents as needed
+        }
+        // If AI response is not usable, fallback to local parser
+      } catch (e) {
+        print('DEBUG: AIService error: $e');
+      }
+      // --- FALLBACK: Use local parser if AI fails ---
       final parsed = LogParserService.parseUserInput(message);
+      print('DEBUG: [Fallback Parser] result: $parsed');
       print('DEBUG: Parser result: $parsed');
       print('DEBUG: Parsed type: ${parsed.type}');
       print('DEBUG: Parsed dateTime: ${parsed.dateTime}');
@@ -559,6 +666,93 @@ class _ChatScreenNewState extends State<ChatScreenNew>
               timestamp: DateTime.now(),
             ),
           );
+          // --- AI integration: open correct modal based on intent ---
+          if (result is Map<String, dynamic> &&
+              result.containsKey('intent') &&
+              result.containsKey('fields')) {
+            final intent = result['intent'];
+            final fields = result['fields'] as Map<String, dynamic>;
+            if (intent == 'create_task') {
+              final title = fields['title'] ?? '';
+              final description = fields['description'] ?? '';
+              final priority = fields['priority'] ?? '';
+              // Use AI's dueDate and timeOfDay fields directly
+              DateTime? dueDate;
+              if (fields['dueDate'] != null && fields['dueDate'] is String) {
+                final now = DateTime.now();
+                if (fields['dueDate'].toLowerCase() == 'tomorrow') {
+                  dueDate = now.add(Duration(days: 1));
+                } else if (fields['dueDate'].toLowerCase() == 'today') {
+                  dueDate = now;
+                } else {
+                  // Try to parse as date string
+                  dueDate = DateTime.tryParse(fields['dueDate']);
+                }
+              }
+              TimeOfDay? timeOfDay;
+              if (fields['timeOfDay'] != null &&
+                  fields['timeOfDay'] is String) {
+                final timeMatch = RegExp(
+                  r'^(\d{1,2})(?::(\d{2}))?',
+                ).firstMatch(fields['timeOfDay']);
+                if (timeMatch != null) {
+                  int hour = int.parse(timeMatch.group(1)!);
+                  int minute = timeMatch.group(2) != null
+                      ? int.parse(timeMatch.group(2)!)
+                      : 0;
+                  timeOfDay = TimeOfDay(hour: hour, minute: minute);
+                }
+              }
+              // Map AI string to TaskPriority enum, default to medium if missing/invalid
+              TaskPriority priorityEnum = TaskPriority.medium;
+              if (fields['priority'] is String &&
+                  fields['priority'].isNotEmpty) {
+                final p = fields['priority'].toString().toLowerCase();
+                if (p == 'low')
+                  priorityEnum = TaskPriority.low;
+                else if (p == 'high')
+                  priorityEnum = TaskPriority.high;
+                else if (p == 'medium')
+                  priorityEnum = TaskPriority.medium;
+              }
+              showTaskModal(
+                context,
+                task: Task(
+                  title: title,
+                  description: description,
+                  priority: priorityEnum,
+                  dueDate: dueDate,
+                  timeOfDay: timeOfDay,
+                  timestamp: DateTime.now(),
+                ),
+              );
+            } else if (intent == 'create_reminder') {
+              final title = fields['title'] ?? '';
+              DateTime reminderTime = DateTime.now();
+              if (fields['reminderTime'] != null &&
+                  fields['reminderTime'] is String) {
+                final now = DateTime.now();
+                if (fields['reminderTime'].toLowerCase() == 'tomorrow') {
+                  reminderTime = now.add(Duration(days: 1));
+                } else if (fields['reminderTime'].toLowerCase() == 'today') {
+                  reminderTime = now;
+                } else {
+                  // Try to parse as date/time string
+                  reminderTime =
+                      DateTime.tryParse(fields['reminderTime']) ?? now;
+                }
+              }
+              showReminderEditModal(
+                context,
+                initial: Reminder(
+                  title: title,
+                  reminderTime: reminderTime,
+                  timestamp: DateTime.now(),
+                ),
+              );
+            }
+            // Add more intents as needed
+          }
         }
       });
     } catch (e) {
