@@ -23,6 +23,7 @@ class ChatScreenNew extends StatefulWidget {
   final void Function(Expense)? onExpenseLogged;
   final void Function(Task)? onTaskLogged;
   final void Function(Reminder)? onReminderLogged;
+  final List<Task> Function()? getTasks;
   final void Function(Note)? onNoteLogged;
   final void Function(GymLog)? onGymLogLogged;
   final void Function()? onShowTasks;
@@ -35,6 +36,7 @@ class ChatScreenNew extends StatefulWidget {
     this.onExpenseLogged,
     this.onTaskLogged,
     this.onReminderLogged,
+    this.getTasks,
     this.onNoteLogged,
     this.onGymLogLogged,
     this.onShowTasks,
@@ -468,16 +470,75 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             DateTime reminderTime = DateTime.now();
             if (fields['reminderTime'] != null &&
                 fields['reminderTime'] is String) {
+              final reminderTimeStr = fields['reminderTime'] as String;
               final now = DateTime.now();
-              if (fields['reminderTime'].toLowerCase() == 'tomorrow') {
-                reminderTime = now.add(Duration(days: 1));
-              } else if (fields['reminderTime'].toLowerCase() == 'today') {
-                reminderTime = now;
+
+              // Parse reminder time string like "tomorrow 11:00" or "today 9:30"
+              if (reminderTimeStr.toLowerCase().contains('tomorrow')) {
+                // Extract time from "tomorrow 11:00" format
+                final timeMatch = RegExp(
+                  r'(\d{1,2}):?(\d{2})?\s*(am|pm)?',
+                  caseSensitive: false,
+                ).firstMatch(reminderTimeStr);
+                if (timeMatch != null) {
+                  int hour = int.parse(timeMatch.group(1)!);
+                  int minute = timeMatch.group(2) != null
+                      ? int.parse(timeMatch.group(2)!)
+                      : 0;
+                  final ampm = timeMatch.group(3)?.toLowerCase();
+                  if (ampm == 'pm' && hour < 12) hour += 12;
+                  if (ampm == 'am' && hour == 12) hour = 0;
+
+                  final tomorrow = now.add(Duration(days: 1));
+                  reminderTime = DateTime(
+                    tomorrow.year,
+                    tomorrow.month,
+                    tomorrow.day,
+                    hour,
+                    minute,
+                  );
+                } else {
+                  // No time specified, set to tomorrow at 9 AM
+                  final tomorrow = now.add(Duration(days: 1));
+                  reminderTime = DateTime(
+                    tomorrow.year,
+                    tomorrow.month,
+                    tomorrow.day,
+                    9,
+                    0,
+                  );
+                }
+              } else if (reminderTimeStr.toLowerCase().contains('today')) {
+                // Extract time from "today 11:00" format
+                final timeMatch = RegExp(
+                  r'(\d{1,2}):?(\d{2})?\s*(am|pm)?',
+                  caseSensitive: false,
+                ).firstMatch(reminderTimeStr);
+                if (timeMatch != null) {
+                  int hour = int.parse(timeMatch.group(1)!);
+                  int minute = timeMatch.group(2) != null
+                      ? int.parse(timeMatch.group(2)!)
+                      : 0;
+                  final ampm = timeMatch.group(3)?.toLowerCase();
+                  if (ampm == 'pm' && hour < 12) hour += 12;
+                  if (ampm == 'am' && hour == 12) hour = 0;
+
+                  reminderTime = DateTime(
+                    now.year,
+                    now.month,
+                    now.day,
+                    hour,
+                    minute,
+                  );
+                } else {
+                  // No time specified, set to today at 9 AM
+                  reminderTime = DateTime(now.year, now.month, now.day, 9, 0);
+                }
               } else {
-                reminderTime = DateTime.tryParse(fields['reminderTime']) ?? now;
+                // Try to parse as date/time string
+                reminderTime = DateTime.tryParse(reminderTimeStr) ?? now;
               }
             }
-
             // Create the Reminder object
             final newReminder = Reminder(
               title: title,
@@ -508,6 +569,84 @@ class _ChatScreenNewState extends State<ChatScreenNew>
               _isLoading = false; // Stop loading
             });
             _scrollToBottom();
+            return;
+          } else if (intent == 'view_reminders') {
+            final timeframe = fields['timeframe'] ?? 'all';
+
+            // Handle reminder query asynchronously
+            _handleReminderQuery(timeframe);
+            return;
+          } else if (intent == 'note') {
+            final title = fields['title'] ?? '';
+            final content = fields['content'] ?? '';
+            final note = Note(
+              title: title,
+              content: content,
+              timestamp: DateTime.now(),
+            );
+            setState(() {
+              _messages.add(
+                _ChatMessage(
+                  text: _getConfirmationMessage(note),
+                  isUser: false,
+                  timestamp: DateTime.now(),
+                  isConfirmation: true,
+                  onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
+                      _handleLogConfirmation(confirmed, updatedLogEntry),
+                  pendingLogEntry: note,
+                  canConfirm: true,
+                  showEdit: true,
+                ),
+              );
+              _isLoading = false; // Stop loading
+            });
+            _scrollToBottom();
+            return;
+          } else if (intent == 'gym') {
+            final workoutName = fields['workoutName'] ?? '';
+            final exercises = fields['exercises'] ?? [];
+            final gymLog = GymLog(
+              workoutName: workoutName,
+              exercises: exercises
+                  .map(
+                    (e) => Exercise(
+                      name: e['name'],
+                      sets: e['sets'],
+                      reps: e['reps'],
+                    ),
+                  )
+                  .toList(),
+              timestamp: DateTime.now(),
+            );
+            setState(() {
+              _pendingLog = gymLog;
+              // Remove loading message if it exists
+              if (_messages.isNotEmpty &&
+                  _messages.last.text == "🤖 Processing...") {
+                _messages.removeLast();
+              }
+              _messages.add(
+                _ChatMessage(
+                  text: _getConfirmationMessage(gymLog),
+                  isUser: false,
+                  timestamp: DateTime.now(),
+                  isConfirmation: true,
+                  onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
+                      _handleLogConfirmation(confirmed, updatedLogEntry),
+                  pendingLogEntry: gymLog,
+                  canConfirm: true,
+                  showEdit: true,
+                ),
+              );
+              _isLoading = false; // Stop loading
+            });
+            _scrollToBottom();
+            return;
+          } else if (intent == 'view_tasks') {
+            final timeframe = fields['timeframe'] ?? 'all';
+
+            // Handle task query asynchronously
+            _handleTaskQuery(timeframe);
             return;
           }
           // Add more intents as needed
@@ -1207,15 +1346,73 @@ class _ChatScreenNewState extends State<ChatScreenNew>
               DateTime reminderTime = DateTime.now();
               if (fields['reminderTime'] != null &&
                   fields['reminderTime'] is String) {
+                final reminderTimeStr = fields['reminderTime'] as String;
                 final now = DateTime.now();
-                if (fields['reminderTime'].toLowerCase() == 'tomorrow') {
-                  reminderTime = now.add(Duration(days: 1));
-                } else if (fields['reminderTime'].toLowerCase() == 'today') {
-                  reminderTime = now;
+
+                // Parse reminder time string like "tomorrow 11:00" or "today 9:30"
+                if (reminderTimeStr.toLowerCase().contains('tomorrow')) {
+                  // Extract time from "tomorrow 11:00" format
+                  final timeMatch = RegExp(
+                    r'(\d{1,2}):?(\d{2})?\s*(am|pm)?',
+                    caseSensitive: false,
+                  ).firstMatch(reminderTimeStr);
+                  if (timeMatch != null) {
+                    int hour = int.parse(timeMatch.group(1)!);
+                    int minute = timeMatch.group(2) != null
+                        ? int.parse(timeMatch.group(2)!)
+                        : 0;
+                    final ampm = timeMatch.group(3)?.toLowerCase();
+                    if (ampm == 'pm' && hour < 12) hour += 12;
+                    if (ampm == 'am' && hour == 12) hour = 0;
+
+                    final tomorrow = now.add(Duration(days: 1));
+                    reminderTime = DateTime(
+                      tomorrow.year,
+                      tomorrow.month,
+                      tomorrow.day,
+                      hour,
+                      minute,
+                    );
+                  } else {
+                    // No time specified, set to tomorrow at 9 AM
+                    final tomorrow = now.add(Duration(days: 1));
+                    reminderTime = DateTime(
+                      tomorrow.year,
+                      tomorrow.month,
+                      tomorrow.day,
+                      9,
+                      0,
+                    );
+                  }
+                } else if (reminderTimeStr.toLowerCase().contains('today')) {
+                  // Extract time from "today 11:00" format
+                  final timeMatch = RegExp(
+                    r'(\d{1,2}):?(\d{2})?\s*(am|pm)?',
+                    caseSensitive: false,
+                  ).firstMatch(reminderTimeStr);
+                  if (timeMatch != null) {
+                    int hour = int.parse(timeMatch.group(1)!);
+                    int minute = timeMatch.group(2) != null
+                        ? int.parse(timeMatch.group(2)!)
+                        : 0;
+                    final ampm = timeMatch.group(3)?.toLowerCase();
+                    if (ampm == 'pm' && hour < 12) hour += 12;
+                    if (ampm == 'am' && hour == 12) hour = 0;
+
+                    reminderTime = DateTime(
+                      now.year,
+                      now.month,
+                      now.day,
+                      hour,
+                      minute,
+                    );
+                  } else {
+                    // No time specified, set to today at 9 AM
+                    reminderTime = DateTime(now.year, now.month, now.day, 9, 0);
+                  }
                 } else {
                   // Try to parse as date/time string
-                  reminderTime =
-                      DateTime.tryParse(fields['reminderTime']) ?? now;
+                  reminderTime = DateTime.tryParse(reminderTimeStr) ?? now;
                 }
               }
               showReminderEditModal(
@@ -1547,6 +1744,404 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             pendingLogEntry: updated,
           ),
         );
+      });
+      _scrollToBottom();
+    }
+  }
+
+  Future<void> _handleReminderQuery(String timeframe) async {
+    try {
+      // Get all reminders from the service
+      final allReminders = await RemindersService.loadReminders();
+      List<Reminder> filteredReminders = [];
+
+      // Filter reminders based on timeframe
+      if (timeframe == 'this week') {
+        final now = DateTime.now();
+        final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+        final endOfWeek = startOfWeek.add(Duration(days: 6));
+
+        filteredReminders = allReminders.where((reminder) {
+          return reminder.reminderTime.isAfter(
+                startOfWeek.subtract(Duration(days: 1)),
+              ) &&
+              reminder.reminderTime.isBefore(endOfWeek.add(Duration(days: 1)));
+        }).toList();
+      } else if (timeframe == 'next week') {
+        final now = DateTime.now();
+        final startOfNextWeek = now.add(Duration(days: 8 - now.weekday));
+        final endOfNextWeek = startOfNextWeek.add(Duration(days: 6));
+
+        filteredReminders = allReminders.where((reminder) {
+          return reminder.reminderTime.isAfter(
+                startOfNextWeek.subtract(Duration(days: 1)),
+              ) &&
+              reminder.reminderTime.isBefore(
+                endOfNextWeek.add(Duration(days: 1)),
+              );
+        }).toList();
+      } else if (timeframe.startsWith('next ') && timeframe.contains('week')) {
+        // Handle "next X weeks" format
+        final weekMatch = RegExp(r'next (\d+) weeks?').firstMatch(timeframe);
+        if (weekMatch != null) {
+          final weeks = int.parse(weekMatch.group(1)!);
+          final now = DateTime.now();
+          final startDate = now.add(Duration(days: 1)); // Start from tomorrow
+          final endDate = startDate.add(
+            Duration(days: weeks * 7 - 1),
+          ); // X weeks from start
+
+          filteredReminders = allReminders.where((reminder) {
+            return reminder.reminderTime.isAfter(
+                  startDate.subtract(Duration(seconds: 1)),
+                ) &&
+                reminder.reminderTime.isBefore(endDate.add(Duration(days: 1)));
+          }).toList();
+        } else {
+          // Fallback to next week if parsing fails
+          final now = DateTime.now();
+          final startOfNextWeek = now.add(Duration(days: 8 - now.weekday));
+          final endOfNextWeek = startOfNextWeek.add(Duration(days: 6));
+
+          filteredReminders = allReminders.where((reminder) {
+            return reminder.reminderTime.isAfter(
+                  startOfNextWeek.subtract(Duration(days: 1)),
+                ) &&
+                reminder.reminderTime.isBefore(
+                  endOfNextWeek.add(Duration(days: 1)),
+                );
+          }).toList();
+        }
+      } else if (timeframe == 'this month') {
+        final now = DateTime.now();
+        final startOfMonth = DateTime(now.year, now.month, 1);
+        final endOfMonth = DateTime(now.year, now.month + 1, 0);
+
+        filteredReminders = allReminders.where((reminder) {
+          return reminder.reminderTime.isAfter(
+                startOfMonth.subtract(Duration(seconds: 1)),
+              ) &&
+              reminder.reminderTime.isBefore(endOfMonth.add(Duration(days: 1)));
+        }).toList();
+      } else if (timeframe == 'next month') {
+        final now = DateTime.now();
+        final startOfNextMonth = DateTime(now.year, now.month + 1, 1);
+        final endOfNextMonth = DateTime(now.year, now.month + 2, 0);
+
+        filteredReminders = allReminders.where((reminder) {
+          return reminder.reminderTime.isAfter(
+                startOfNextMonth.subtract(Duration(seconds: 1)),
+              ) &&
+              reminder.reminderTime.isBefore(
+                endOfNextMonth.add(Duration(days: 1)),
+              );
+        }).toList();
+      } else if (timeframe == 'today') {
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final tomorrow = today.add(Duration(days: 1));
+
+        filteredReminders = allReminders.where((reminder) {
+          return reminder.reminderTime.isAfter(
+                today.subtract(Duration(seconds: 1)),
+              ) &&
+              reminder.reminderTime.isBefore(tomorrow);
+        }).toList();
+      } else if (timeframe == 'tomorrow') {
+        final now = DateTime.now();
+        final tomorrow = DateTime(now.year, now.month, now.day + 1);
+        final dayAfterTomorrow = tomorrow.add(Duration(days: 1));
+
+        filteredReminders = allReminders.where((reminder) {
+          return reminder.reminderTime.isAfter(
+                tomorrow.subtract(Duration(seconds: 1)),
+              ) &&
+              reminder.reminderTime.isBefore(dayAfterTomorrow);
+        }).toList();
+      } else {
+        // Show all reminders (for "all" timeframe)
+        filteredReminders = allReminders;
+      }
+
+      // Sort reminders by time
+      filteredReminders.sort(
+        (a, b) => a.reminderTime.compareTo(b.reminderTime),
+      );
+
+      setState(() {
+        // Remove loading message if it exists
+        if (_messages.isNotEmpty && _messages.last.text == "🤖 Processing...") {
+          _messages.removeLast();
+        }
+
+        // Add header message
+        if (filteredReminders.isEmpty) {
+          _messages.add(
+            _ChatMessage(
+              text:
+                  "📅 No reminders found for ${timeframe == 'all' ? 'any time' : timeframe}.",
+              isUser: false,
+              timestamp: DateTime.now(),
+            ),
+          );
+        } else {
+          // Add header message
+          _messages.add(
+            _ChatMessage(
+              text:
+                  "📅 Reminders for ${timeframe == 'all' ? 'all time' : timeframe}:",
+              isUser: false,
+              timestamp: DateTime.now(),
+            ),
+          );
+
+          // Add individual reminder bubbles
+          for (final reminder in filteredReminders) {
+            _messages.add(
+              _ChatMessage(
+                text: "", // Empty text since we'll use custom widget
+                isUser: false,
+                timestamp: DateTime.now(),
+                customWidget: _ReminderBubble(
+                  reminder: reminder,
+                  onEdit: () async {
+                    final edited = await showReminderEditModal(
+                      context,
+                      initial: reminder,
+                    );
+                    if (edited != null) {
+                      await RemindersService.updateReminder(edited);
+                      // Refresh the reminder list
+                      _handleReminderQuery(timeframe);
+                    }
+                  },
+                  onDelete: () async {
+                    await RemindersService.deleteReminder(reminder);
+                    // Refresh the reminder list
+                    _handleReminderQuery(timeframe);
+                  },
+                ),
+              ),
+            );
+          }
+        }
+        _isLoading = false; // Stop loading
+      });
+      _scrollToBottom();
+    } catch (e) {
+      setState(() {
+        // Remove loading message if it exists
+        if (_messages.isNotEmpty && _messages.last.text == "🤖 Processing...") {
+          _messages.removeLast();
+        }
+        _messages.add(
+          _ChatMessage(
+            text: "❌ Error loading reminders: $e",
+            isUser: false,
+            timestamp: DateTime.now(),
+          ),
+        );
+        _isLoading = false; // Stop loading
+      });
+      _scrollToBottom();
+    }
+  }
+
+  Future<void> _handleTaskQuery(String timeframe) async {
+    try {
+      // Get all tasks from the callback
+      final allTasks = widget.getTasks?.call() ?? [];
+      print('DEBUG: _handleTaskQuery - timeframe: $timeframe');
+      print('DEBUG: _handleTaskQuery - allTasks count: ${allTasks.length}');
+      print(
+        'DEBUG: _handleTaskQuery - allTasks: ${allTasks.map((t) => '${t.title} (${t.dueDate})').toList()}',
+      );
+      List<Task> filteredTasks = [];
+
+      // Filter tasks based on timeframe
+      if (timeframe == 'this week') {
+        final now = DateTime.now();
+        final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+        final endOfWeek = startOfWeek.add(Duration(days: 6));
+
+        print('DEBUG: this week filtering - now: $now');
+        print('DEBUG: this week filtering - startOfWeek: $startOfWeek');
+        print('DEBUG: this week filtering - endOfWeek: $endOfWeek');
+
+        filteredTasks = allTasks.where((task) {
+          if (task.dueDate == null) return false;
+          final isInRange =
+              task.dueDate!.isAfter(startOfWeek.subtract(Duration(days: 1))) &&
+              task.dueDate!.isBefore(endOfWeek.add(Duration(days: 1)));
+          print(
+            'DEBUG: task ${task.title} (${task.dueDate}) - isInRange: $isInRange',
+          );
+          return isInRange;
+        }).toList();
+
+        print('DEBUG: this week filteredTasks count: ${filteredTasks.length}');
+      } else if (timeframe == 'next week') {
+        final now = DateTime.now();
+        final startOfNextWeek = now.add(Duration(days: 8 - now.weekday));
+        final endOfNextWeek = startOfNextWeek.add(Duration(days: 6));
+
+        filteredTasks = allTasks.where((task) {
+          if (task.dueDate == null) return false;
+          return task.dueDate!.isAfter(
+                startOfNextWeek.subtract(Duration(days: 1)),
+              ) &&
+              task.dueDate!.isBefore(endOfNextWeek.add(Duration(days: 1)));
+        }).toList();
+      } else if (timeframe.startsWith('next ') && timeframe.contains('week')) {
+        // Handle "next X weeks" format
+        final weekMatch = RegExp(r'next (\d+) weeks?').firstMatch(timeframe);
+        if (weekMatch != null) {
+          final weeks = int.parse(weekMatch.group(1)!);
+          final now = DateTime.now();
+          final startDate = now.add(Duration(days: 1)); // Start from tomorrow
+          final endDate = startDate.add(
+            Duration(days: weeks * 7 - 1),
+          ); // X weeks from start
+
+          filteredTasks = allTasks.where((task) {
+            if (task.dueDate == null) return false;
+            return task.dueDate!.isAfter(
+                  startDate.subtract(Duration(seconds: 1)),
+                ) &&
+                task.dueDate!.isBefore(endDate.add(Duration(days: 1)));
+          }).toList();
+        }
+      } else if (timeframe == 'this month') {
+        final now = DateTime.now();
+        final startOfMonth = DateTime(now.year, now.month, 1);
+        final endOfMonth = DateTime(now.year, now.month + 1, 0);
+
+        filteredTasks = allTasks.where((task) {
+          if (task.dueDate == null) return false;
+          return task.dueDate!.isAfter(
+                startOfMonth.subtract(Duration(seconds: 1)),
+              ) &&
+              task.dueDate!.isBefore(endOfMonth.add(Duration(days: 1)));
+        }).toList();
+      } else if (timeframe == 'next month') {
+        final now = DateTime.now();
+        final startOfNextMonth = DateTime(now.year, now.month + 1, 1);
+        final endOfNextMonth = DateTime(now.year, now.month + 2, 0);
+
+        filteredTasks = allTasks.where((task) {
+          if (task.dueDate == null) return false;
+          return task.dueDate!.isAfter(
+                startOfNextMonth.subtract(Duration(seconds: 1)),
+              ) &&
+              task.dueDate!.isBefore(endOfNextMonth.add(Duration(days: 1)));
+        }).toList();
+      } else if (timeframe == 'today') {
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final tomorrow = today.add(Duration(days: 1));
+
+        filteredTasks = allTasks.where((task) {
+          if (task.dueDate == null) return false;
+          return task.dueDate!.isAfter(today.subtract(Duration(seconds: 1))) &&
+              task.dueDate!.isBefore(tomorrow);
+        }).toList();
+      } else if (timeframe == 'tomorrow') {
+        final now = DateTime.now();
+        final tomorrow = DateTime(now.year, now.month, now.day + 1);
+        final dayAfterTomorrow = tomorrow.add(Duration(days: 1));
+
+        filteredTasks = allTasks.where((task) {
+          if (task.dueDate == null) return false;
+          return task.dueDate!.isAfter(
+                tomorrow.subtract(Duration(seconds: 1)),
+              ) &&
+              task.dueDate!.isBefore(dayAfterTomorrow);
+        }).toList();
+      } else {
+        // Show all tasks (for "all" timeframe)
+        filteredTasks = allTasks;
+      }
+
+      // Sort tasks by due date
+      filteredTasks.sort((a, b) {
+        if (a.dueDate == null && b.dueDate == null) return 0;
+        if (a.dueDate == null) return 1;
+        if (b.dueDate == null) return -1;
+        return a.dueDate!.compareTo(b.dueDate!);
+      });
+
+      setState(() {
+        // Remove loading message if it exists
+        if (_messages.isNotEmpty && _messages.last.text == "🤖 Processing...") {
+          _messages.removeLast();
+        }
+
+        // Add header message
+        if (filteredTasks.isEmpty) {
+          _messages.add(
+            _ChatMessage(
+              text:
+                  "📋 No tasks found for ${timeframe == 'all' ? 'any time' : timeframe}.",
+              isUser: false,
+              timestamp: DateTime.now(),
+            ),
+          );
+        } else {
+          // Add header message
+          _messages.add(
+            _ChatMessage(
+              text:
+                  "📋 Tasks for ${timeframe == 'all' ? 'all time' : timeframe}:",
+              isUser: false,
+              timestamp: DateTime.now(),
+            ),
+          );
+
+          // Add individual task bubbles
+          for (final task in filteredTasks) {
+            _messages.add(
+              _ChatMessage(
+                text: "", // Empty text since we'll use custom widget
+                isUser: false,
+                timestamp: DateTime.now(),
+                customWidget: _TaskBubble(
+                  task: task,
+                  onEdit: () async {
+                    final edited = await showTaskModal(context, task: task);
+                    if (edited != null) {
+                      widget.onTaskLogged?.call(edited);
+                      // Refresh the task list
+                      _handleTaskQuery(timeframe);
+                    }
+                  },
+                  onDelete: () async {
+                    // Use the callback to delete the task
+                    widget.onTaskLogged?.call(task);
+                    // Refresh the task list
+                    _handleTaskQuery(timeframe);
+                  },
+                ),
+              ),
+            );
+          }
+        }
+        _isLoading = false; // Stop loading
+      });
+      _scrollToBottom();
+    } catch (e) {
+      setState(() {
+        // Remove loading message if it exists
+        if (_messages.isNotEmpty && _messages.last.text == "🤖 Processing...") {
+          _messages.removeLast();
+        }
+        _messages.add(
+          _ChatMessage(
+            text: "❌ Error loading tasks: $e",
+            isUser: false,
+            timestamp: DateTime.now(),
+          ),
+        );
+        _isLoading = false; // Stop loading
       });
       _scrollToBottom();
     }
@@ -2488,6 +3083,21 @@ class _ChatScreenNewState extends State<ChatScreenNew>
 
   Widget _buildChatBubble(BuildContext context, _ChatMessage msg, bool isDark) {
     final isUser = msg.isUser;
+
+    // If there's a custom widget, display it directly
+    if (msg.customWidget != null) {
+      return Align(
+        alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.85,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+          child: msg.customWidget!,
+        ),
+      );
+    }
+
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -2701,7 +3311,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
     bool isDeleteMode,
   ) {
     return Container(
-      margin: EdgeInsets.only(bottom: 8),
+      margin: EdgeInsets.symmetric(vertical: 2, horizontal: 8),
       padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: isDark ? LoggitColors.darkBorder : Color(0xFFF8FAFC),
@@ -3131,6 +3741,7 @@ class _ChatMessage {
   final String? originalSearchTerm;
   final bool canConfirm;
   final bool showEdit;
+  final Widget? customWidget;
   const _ChatMessage({
     required this.text,
     required this.isUser,
@@ -3144,6 +3755,7 @@ class _ChatMessage {
     this.originalSearchTerm,
     this.canConfirm = true,
     this.showEdit = false,
+    this.customWidget,
   });
 }
 
@@ -3371,5 +3983,311 @@ class _LogOptionGrid extends StatelessWidget {
         );
       }).toList(),
     );
+  }
+}
+
+class _ReminderBubble extends StatelessWidget {
+  final Reminder reminder;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _ReminderBubble({
+    required this.reminder,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final formattedTime = _formatReminderTime(reminder.reminderTime);
+
+    return Container(
+      margin: EdgeInsets.symmetric(vertical: 0, horizontal: 8),
+      padding: EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Reminder icon
+          Container(
+            padding: EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: LoggitColors.remindersBg,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              Icons.alarm,
+              color: LoggitColors.remindersText,
+              size: 20,
+            ),
+          ),
+          SizedBox(width: 12),
+          // Reminder content
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  reminder.title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  formattedTime,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: LoggitColors.darkGrayText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Action buttons
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Edit button
+              InkWell(
+                onTap: onEdit,
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: LoggitColors.indigoLight,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Icon(Icons.edit, size: 16, color: LoggitColors.indigo),
+                ),
+              ),
+              SizedBox(width: 8),
+              // Delete button
+              InkWell(
+                onTap: onDelete,
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Color(0xFFFFEBEE),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Icon(Icons.delete, size: 16, color: Color(0xFFD32F2F)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatReminderTime(DateTime reminderTime) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(Duration(days: 1));
+    final reminderDate = DateTime(
+      reminderTime.year,
+      reminderTime.month,
+      reminderTime.day,
+    );
+
+    String dateStr;
+    if (reminderDate == today) {
+      dateStr = 'Today';
+    } else if (reminderDate == tomorrow) {
+      dateStr = 'Tomorrow';
+    } else {
+      final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      final months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
+      dateStr =
+          '${days[reminderTime.weekday - 1]}, ${reminderTime.day} ${months[reminderTime.month - 1]}';
+    }
+
+    final hour = reminderTime.hour;
+    final minute = reminderTime.minute;
+    final ampm = hour >= 12 ? 'PM' : 'AM';
+    final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    final timeStr = '${displayHour}:${minute.toString().padLeft(2, '0')} $ampm';
+
+    return '$dateStr at $timeStr';
+  }
+}
+
+class _TaskBubble extends StatelessWidget {
+  final Task task;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _TaskBubble({
+    required this.task,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final formattedDate = _formatTaskDate(task.dueDate);
+    final formattedTime = task.timeOfDay != null
+        ? _formatTaskTime(task.timeOfDay!)
+        : null;
+
+    return Container(
+      margin: EdgeInsets.symmetric(vertical: 0, horizontal: 8),
+      padding: EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Task icon
+          Container(
+            padding: EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: LoggitColors.pendingTasksBg,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              Icons.task,
+              color: LoggitColors.pendingTasksText,
+              size: 20,
+            ),
+          ),
+          SizedBox(width: 12),
+          // Task content
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  task.title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  formattedDate +
+                      (formattedTime != null ? ' at $formattedTime' : ''),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: LoggitColors.darkGrayText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Action buttons
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Edit button
+              InkWell(
+                onTap: onEdit,
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: LoggitColors.indigoLight,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Icon(Icons.edit, size: 16, color: LoggitColors.indigo),
+                ),
+              ),
+              SizedBox(width: 8),
+              // Delete button
+              InkWell(
+                onTap: onDelete,
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Color(0xFFFFEBEE),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Icon(Icons.delete, size: 16, color: Color(0xFFD32F2F)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatTaskDate(DateTime? dueDate) {
+    if (dueDate == null) return 'No due date';
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(Duration(days: 1));
+    final taskDate = DateTime(dueDate.year, dueDate.month, dueDate.day);
+
+    if (taskDate == today) {
+      return 'Today';
+    } else if (taskDate == tomorrow) {
+      return 'Tomorrow';
+    } else {
+      final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      final months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
+      return '${days[dueDate.weekday - 1]}, ${dueDate.day} ${months[dueDate.month - 1]}';
+    }
+  }
+
+  String _formatTaskTime(TimeOfDay timeOfDay) {
+    final hour = timeOfDay.hour;
+    final minute = timeOfDay.minute;
+    final ampm = hour >= 12 ? 'PM' : 'AM';
+    final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    return '${displayHour}:${minute.toString().padLeft(2, '0')} $ampm';
   }
 }

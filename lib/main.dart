@@ -398,6 +398,7 @@ class _LoggitHomeState extends State<LoggitHome> {
           onExpenseLogged: _addExpense,
           onTaskLogged: _addTask,
           onReminderLogged: _addReminder,
+          getTasks: () => _tasks,
           onNoteLogged: _addNote,
           onGymLogLogged: _addGymLog,
           onShowTasks: () {
