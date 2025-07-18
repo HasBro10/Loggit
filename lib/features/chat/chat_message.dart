@@ -12,6 +12,8 @@ class ChatMessage extends StatelessWidget {
   final LogEntry? pendingLogEntry;
   final bool canConfirm;
   final bool showEdit;
+  final VoidCallback? onTap; // NEW
+  final VoidCallback? onDelete; // NEW
 
   const ChatMessage({
     super.key,
@@ -23,17 +25,14 @@ class ChatMessage extends StatelessWidget {
     this.pendingLogEntry,
     this.canConfirm = true,
     this.showEdit = false,
+    this.onTap, // NEW
+    this.onDelete, // NEW
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    if (isConfirmation) {
-      print(
-        'DEBUG: ChatMessage build - showEdit: $showEdit, canConfirm: $canConfirm, onConfirmationResponse: ${onConfirmationResponse != null}',
-      );
-    }
     Color bubbleColor;
     Color textColor;
     BorderRadius borderRadius;
@@ -72,68 +71,281 @@ class ChatMessage extends StatelessWidget {
       margin = const EdgeInsets.fromLTRB(12, 6, 60, 6); // left-aligned
     }
 
-    Widget bubbleContent = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          text,
-          style: TextStyle(
-            color: textColor,
-            fontWeight: isConfirmation ? FontWeight.w600 : FontWeight.normal,
-            fontSize: 16,
-          ),
+    Widget bubbleContent;
+    if (showEdit &&
+        pendingLogEntry != null &&
+        (pendingLogEntry is tasks.Task ||
+            pendingLogEntry is reminders.Reminder)) {
+      final isTask = pendingLogEntry is tasks.Task;
+      final title = isTask
+          ? (pendingLogEntry as tasks.Task).title
+          : (pendingLogEntry as reminders.Reminder).title;
+      final date = isTask
+          ? (pendingLogEntry as tasks.Task).dueDate
+          : (pendingLogEntry as reminders.Reminder).reminderTime;
+      final time = isTask ? (pendingLogEntry as tasks.Task).timeOfDay : null;
+      // Card-style layout for tasks/reminders (match reminders page)
+      bubbleContent = Container(
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.10),
+              blurRadius: 16,
+              offset: Offset(0, 6),
+            ),
+          ],
+          border: Border.all(color: Colors.orange.withOpacity(0.55), width: 2),
         ),
-        if (isConfirmation && onConfirmationResponse != null) ...[
-          const SizedBox(height: 12.0),
-          Row(
-            children: [
-              ElevatedButton.icon(
-                icon: const Icon(Icons.check, size: 18),
-                label: const Text('Yes'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: isDark
-                      ? const Color(0xFF22C55E) // green
-                      : const Color(0xFF22C55E),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16.0,
-                    vertical: 8.0,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Accent icon
+            Column(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.15),
+                    shape: BoxShape.circle,
                   ),
-                  minimumSize: const Size(80, 36),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                  child: Icon(
+                    Icons.calendar_today,
+                    color: Colors.orange,
+                    size: 26,
                   ),
-                  elevation: 2,
-                  shadowColor: Colors.black.withOpacity(0.10),
                 ),
-                onPressed: canConfirm
-                    ? () => onConfirmationResponse!(true, pendingLogEntry)
-                    : null,
-              ),
-              const SizedBox(width: 12),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.close, size: 18),
-                label: const Text('No'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: isDark
-                      ? const Color(0xFFEF4444) // red
-                      : const Color(0xFFEF4444),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16.0,
-                    vertical: 8.0,
+                SizedBox(height: 4),
+                Text(
+                  isTask ? 'Task' : 'Reminder',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.orange,
                   ),
-                  minimumSize: const Size(80, 36),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  elevation: 2,
-                  shadowColor: Colors.black.withOpacity(0.10),
                 ),
-                onPressed: () => onConfirmationResponse!(false),
+              ],
+            ),
+            SizedBox(width: 16),
+            // Main content
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 17,
+                      color: Colors.black,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_today,
+                        size: 15,
+                        color: Colors.grey[500],
+                      ),
+                      SizedBox(width: 4),
+                      Text(
+                        date != null
+                            ? '${date.day}/${date.month}/${date.year}'
+                            : '',
+                        style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                      ),
+                      if (time != null) ...[
+                        SizedBox(width: 12),
+                        Icon(
+                          Icons.access_time,
+                          size: 15,
+                          color: Colors.grey[500],
+                        ),
+                        SizedBox(width: 4),
+                        Text(
+                          time.format(context),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  SizedBox(height: 12.0),
+                  Row(
+                    children: [
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.edit, size: 18),
+                        label: const Text('Edit'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16.0,
+                            vertical: 8.0,
+                          ),
+                          minimumSize: const Size(80, 36),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          elevation: 2,
+                          shadowColor: Colors.black.withOpacity(0.10),
+                        ),
+                        onPressed: onTap,
+                      ),
+                      if (onDelete != null) ...[
+                        const SizedBox(width: 12),
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.delete, size: 18),
+                          label: const Text('Delete'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16.0,
+                              vertical: 8.0,
+                            ),
+                            minimumSize: const Size(80, 36),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            elevation: 2,
+                            shadowColor: Colors.black.withOpacity(0.10),
+                          ),
+                          onPressed: onDelete,
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
               ),
-              if (showEdit) ...[
+            ),
+          ],
+        ),
+      );
+    } else {
+      // Only show text if not a card
+      bubbleContent = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            text,
+            style: TextStyle(
+              color: textColor,
+              fontWeight: isConfirmation ? FontWeight.w600 : FontWeight.normal,
+              fontSize: 16,
+            ),
+          ),
+          if (isConfirmation && onConfirmationResponse != null) ...[
+            const SizedBox(height: 12.0),
+            Row(
+              children: [
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.check, size: 18),
+                  label: const Text('Yes'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isDark
+                        ? const Color(0xFF22C55E) // green
+                        : const Color(0xFF22C55E),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16.0,
+                      vertical: 8.0,
+                    ),
+                    minimumSize: const Size(80, 36),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 2,
+                    shadowColor: Colors.black.withOpacity(0.10),
+                  ),
+                  onPressed: canConfirm
+                      ? () => onConfirmationResponse!(true, pendingLogEntry)
+                      : null,
+                ),
                 const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.close, size: 18),
+                  label: const Text('No'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isDark
+                        ? const Color(0xFFEF4444) // red
+                        : const Color(0xFFEF4444),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16.0,
+                      vertical: 8.0,
+                    ),
+                    minimumSize: const Size(80, 36),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 2,
+                    shadowColor: Colors.black.withOpacity(0.10),
+                  ),
+                  onPressed: () => onConfirmationResponse!(false),
+                ),
+                if (showEdit) ...[
+                  const SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.edit, size: 18),
+                    label: const Text('Edit'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0,
+                        vertical: 8.0,
+                      ),
+                      minimumSize: const Size(80, 36),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 2,
+                      shadowColor: Colors.black.withOpacity(0.10),
+                    ),
+                    onPressed: () {
+                      if (onConfirmationResponse != null) {
+                        onConfirmationResponse!(false, null);
+                      }
+                    },
+                  ),
+                  if (onDelete != null) ...[
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.delete, size: 18),
+                      label: const Text('Delete'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0,
+                          vertical: 8.0,
+                        ),
+                        minimumSize: const Size(80, 36),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        elevation: 2,
+                        shadowColor: Colors.black.withOpacity(0.10),
+                      ),
+                      onPressed: onDelete,
+                    ),
+                  ],
+                ],
+              ],
+            ),
+          ],
+          if (!isConfirmation && showEdit) ...[
+            const SizedBox(height: 12.0),
+            Row(
+              children: [
                 ElevatedButton.icon(
                   icon: const Icon(Icons.edit, size: 18),
                   label: const Text('Edit'),
@@ -151,38 +363,58 @@ class ChatMessage extends StatelessWidget {
                     elevation: 2,
                     shadowColor: Colors.black.withOpacity(0.10),
                   ),
-                  onPressed: () {
-                    print('DEBUG: Edit button pressed in chat_message.dart');
-                    if (onConfirmationResponse != null) {
-                      onConfirmationResponse!(false, null);
-                    }
-                  },
+                  onPressed: onTap,
                 ),
+                if (onDelete != null) ...[
+                  const SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.delete, size: 18),
+                    label: const Text('Delete'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0,
+                        vertical: 8.0,
+                      ),
+                      minimumSize: const Size(80, 36),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 2,
+                      shadowColor: Colors.black.withOpacity(0.10),
+                    ),
+                    onPressed: onDelete,
+                  ),
+                ],
               ],
-            ],
-          ),
+            ),
+          ],
         ],
-      ],
-    );
+      );
+    }
 
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: margin,
-        padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 14.0),
-        decoration: BoxDecoration(
-          color: bubbleColor,
-          borderRadius: borderRadius,
-          boxShadow: [
-            if (!isDark)
-              BoxShadow(
-                color: Colors.black.withOpacity(0.07),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-          ],
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          margin: margin,
+          padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 14.0),
+          decoration: BoxDecoration(
+            color: bubbleColor,
+            borderRadius: borderRadius,
+            boxShadow: [
+              if (!isDark)
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.07),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+            ],
+          ),
+          child: bubbleContent,
         ),
-        child: bubbleContent,
       ),
     );
   }

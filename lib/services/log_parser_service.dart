@@ -344,19 +344,16 @@ class LogParserService {
               }
             }
             // Check if this is a standalone date input
-            if (match.groupCount == 2 &&
-                (match.group(1) != null || match.group(2) != null)) {
-              // This could be a standalone date input (like "15th July" or "15 July")
-              final dtResult = parseSimpleDateTimeWithTimeFlag(input);
-              if (dtResult.dateTime != null) {
-                return ParsedLog(
-                  type: LogType.reminder,
-                  action: null,
-                  dateTime: dtResult.dateTime,
-                  hasTime: dtResult.hasTime,
-                  raw: input,
-                );
-              }
+            final dtResult = parseSimpleDateTimeWithTimeFlag(input);
+            if (dtResult.dateTime != null) {
+              // Standalone date input: always treat as date, not as action/title
+              return ParsedLog(
+                type: LogType.reminder, // or LogType.task if merging
+                action: null, // <-- always null for date-only
+                dateTime: dtResult.dateTime,
+                hasTime: dtResult.hasTime,
+                raw: input,
+              );
             }
             // Check if this is a combined time and date input
             if (match.groupCount >= 6) {
@@ -457,45 +454,155 @@ class LogParserService {
             // --- Enhanced action extraction logic ---
             if (type == LogType.task) {
               // For tasks, the action is in group 5 (after the trigger and "task" word)
-              action = match.group(5) != null ? match.group(5)!.trim() : null;
-              dateTimeStr = match.group(6) != null
+              action = (match.groupCount >= 5 && match.group(5) != null)
+                  ? match.group(5)!.trim()
+                  : null;
+              dateTimeStr = (match.groupCount >= 6 && match.group(6) != null)
                   ? match.group(6)!.trim()
                   : null;
 
-              // Special handling for task actions that contain date/time information
-              if (action != null && dateTimeStr != null) {
-                // Check if the action contains the date/time string and remove it
-                final actionLower = action.toLowerCase();
-                final dateTimeLower = dateTimeStr.toLowerCase();
-
-                // If the action ends with the date/time, remove it
-                if (actionLower.endsWith(dateTimeLower)) {
-                  action = action
-                      .substring(0, action.length - dateTimeStr.length)
-                      .trim();
+              // --- Always run improved date/time extraction on action ---
+              if (action != null) {
+                // Extract and remove date words anywhere in the action
+                final datePattern = RegExp(
+                  r'(the\s*)?(\d{1,2})(st|nd|rd|th)?\s+of\s+\w+|(the\s*)?(\d{1,2})(st|nd|rd|th)?\s+\w+',
+                  caseSensitive: false,
+                );
+                final dateMatch = datePattern.firstMatch(action);
+                DateTime? extractedDate;
+                if (dateMatch != null) {
+                  int day = 0;
+                  int month = 0;
+                  int year = DateTime.now().year;
+                  try {
+                    if ((dateMatch.groupCount >= 2 &&
+                            dateMatch.group(2) != null) ||
+                        (dateMatch.groupCount >= 6 &&
+                            dateMatch.group(6) != null)) {
+                      day = int.parse(
+                        dateMatch.group(2) ?? dateMatch.group(6)!,
+                      );
+                    }
+                    String? monthStr = dateMatch.group(4) ?? dateMatch.group(7);
+                    if (monthStr == null) {
+                      // Try to extract month from the last word
+                      final words = action.split(' ');
+                      if (words.isNotEmpty) {
+                        monthStr = words.last;
+                      }
+                    }
+                    if (monthStr != null) {
+                      final months = [
+                        'january',
+                        'february',
+                        'march',
+                        'april',
+                        'may',
+                        'june',
+                        'july',
+                        'august',
+                        'september',
+                        'october',
+                        'november',
+                        'december',
+                        'jan',
+                        'feb',
+                        'mar',
+                        'apr',
+                        'may',
+                        'jun',
+                        'jul',
+                        'aug',
+                        'sep',
+                        'oct',
+                        'nov',
+                        'dec',
+                      ];
+                      int idx = months.indexWhere(
+                        (m) => m.toLowerCase() == monthStr!.toLowerCase(),
+                      );
+                      if (idx != -1) {
+                        month = (idx % 12) + 1;
+                        extractedDate = DateTime(year, month, day);
+                      }
+                    }
+                  } catch (e) {}
+                  // Remove the date phrase from the action
+                  action = action.replaceFirst(datePattern, '').trim();
                 }
-
-                // Also check for common date/time patterns within the action
+                // Remove time words anywhere in the action
+                final timePattern = RegExp(
+                  r'at\s+\d{1,2}(:\d{2})?\s*(am|pm)?',
+                  caseSensitive: false,
+                );
+                final timeMatch = timePattern.firstMatch(action);
+                TimeOfDay? extractedTime;
+                if (timeMatch != null) {
+                  try {
+                    int hour = int.parse(
+                      timeMatch.group(0)!.replaceAll(RegExp(r'[^0-9]'), ''),
+                    );
+                    int minute = 0;
+                    if (timeMatch.group(1) != null) {
+                      minute = int.parse(
+                        timeMatch.group(1)!.replaceAll(':', ''),
+                      );
+                    }
+                    final ampm = timeMatch.group(2);
+                    if (ampm == 'pm' && hour < 12) hour += 12;
+                    if (ampm == 'am' && hour == 12) hour = 0;
+                    extractedTime = TimeOfDay(hour: hour, minute: minute);
+                  } catch (e) {}
+                  action = action.replaceFirst(timePattern, '').trim();
+                }
+                // Remove any remaining date/time keywords
                 final dateTimePatterns = [
                   RegExp(r'\btomorrow\b', caseSensitive: false),
                   RegExp(r'\btoday\b', caseSensitive: false),
                   RegExp(r'\byesterday\b', caseSensitive: false),
+                  RegExp(r'\bnext\s+\w+\b', caseSensitive: false),
+                  RegExp(r'\bon\s+\w+\b', caseSensitive: false),
+                  RegExp(r'\bthis\s+\w+\b', caseSensitive: false),
                   RegExp(
-                    r'\bat\s+\d{1,2}(:\d{2})?\s*(am|pm)?\b',
+                    r'\bfor\s+\d{1,2}(:\d{2})?\s*(am|pm)?',
                     caseSensitive: false,
                   ),
-                  RegExp(r'\bon\s+\w+\b', caseSensitive: false),
-                  RegExp(r'\bnext\s+\w+\b', caseSensitive: false),
+                  RegExp(
+                    r'\b\d{1,2}(st|nd|rd|th)?\s+\w+',
+                    caseSensitive: false,
+                  ),
                 ];
-
                 for (final pattern in dateTimePatterns) {
                   action = action?.replaceAll(pattern, '').trim();
+                }
+                action = action
+                    ?.replaceAll(RegExp(r'^[,\s]+|[,\s]+\u00000'), '')
+                    .trim();
+                // If we extracted a date/time, return immediately with the cleaned action and date/time
+                if (extractedDate != null) {
+                  return ParsedLog(
+                    type: LogType.task,
+                    action: action,
+                    dateTime: extractedTime != null
+                        ? DateTime(
+                            extractedDate.year,
+                            extractedDate.month,
+                            extractedDate.day,
+                            extractedTime.hour,
+                            extractedTime.minute,
+                          )
+                        : extractedDate,
+                    hasTime: extractedTime != null,
+                    raw: input,
+                  );
                 }
               }
             } else {
               // For reminders, use the original logic
-              action = match.group(3) != null ? match.group(3)!.trim() : null;
-              dateTimeStr = match.group(4) != null
+              action = (match.groupCount >= 3 && match.group(3) != null)
+                  ? match.group(3)!.trim()
+                  : null;
+              dateTimeStr = (match.groupCount >= 4 && match.group(4) != null)
                   ? match.group(4)!.trim()
                   : null;
             }
@@ -858,8 +965,10 @@ class LogParserService {
             break;
           case LogType.task:
             // Task-specific parsing logic
-            action = match.group(5) != null ? match.group(5)!.trim() : null;
-            dateTimeStr = match.group(6) != null
+            action = (match.groupCount >= 5 && match.group(5) != null)
+                ? match.group(5)!.trim()
+                : null;
+            dateTimeStr = (match.groupCount >= 6 && match.group(6) != null)
                 ? match.group(6)!.trim()
                 : null;
 
@@ -1150,32 +1259,40 @@ class LogParserService {
         )) {
           // "16 July 6pm" format
           try {
-            day = int.parse(match.group(1)!);
+            if (match.groupCount >= 1 && match.group(1) != null) {
+              day = int.parse(match.group(1)!);
+            } else {
+              return _DateTimeWithFlag(null, false);
+            }
           } catch (e) {
-            print('DEBUG: Invalid day:  [31m${match.group(1)} [0m');
+            print('DEBUG: Invalid day:  [31m[31m[0m');
             return _DateTimeWithFlag(null, false);
           }
-          String monthStr = match.group(3)!.toLowerCase();
-          month = _parseMonth(monthStr);
-          if (month < 1 || month > 12) {
-            print(
-              'DEBUG: Invalid month parsed: '
-              ' [31m$monthStr -> $month [0m',
-            );
+          if (match.groupCount >= 3 && match.group(3) != null) {
+            String monthStr = match.group(3)!.toLowerCase();
+            month = _parseMonth(monthStr);
+            if (month < 1 || month > 12) {
+              print('DEBUG: Invalid month parsed: [31m$monthStr -> $month [0m');
+              return _DateTimeWithFlag(null, false);
+            }
+          } else {
             return _DateTimeWithFlag(null, false);
           }
-
-          try {
-            hour = int.parse(match.group(4)!);
-          } catch (e) {
-            print('DEBUG: Invalid hour:  [31m${match.group(4)} [0m');
-            return _DateTimeWithFlag(null, false);
+          if (match.groupCount >= 4 && match.group(4) != null) {
+            try {
+              hour = int.parse(match.group(4)!);
+            } catch (e) {
+              print('DEBUG: Invalid hour:  [31m${match.group(4)} [0m');
+              return _DateTimeWithFlag(null, false);
+            }
           }
-          minute = match.group(6) != null ? int.parse(match.group(6)!) : 0;
-          final ampm = match.group(7);
+          minute = (match.groupCount >= 6 && match.group(6) != null)
+              ? int.parse(match.group(6)!)
+              : 0;
+          final ampm = (match.groupCount >= 7) ? match.group(7) : null;
           if (ampm == 'pm' && hour < 12) hour += 12;
           if (ampm == 'am' && hour == 12) hour = 0;
-          hasTime = true;
+          hasTime = (match.groupCount >= 4 && match.group(4) != null);
         }
         // Pattern 1: 6 pm 15th July
         else if (pattern.pattern.startsWith('(\\d{1,2}')) {
@@ -1684,6 +1801,37 @@ class LogParserService {
         DateTime(now.year, now.month, now.day, hour, minute),
         true,
       );
+    }
+
+    // Standalone date pattern: e.g. '1 august'
+    final datePattern = RegExp(
+      r'^(\d{1,2})(st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)$',
+      caseSensitive: false,
+    );
+    final standaloneDateMatch = datePattern.firstMatch(lower);
+    if (standaloneDateMatch != null) {
+      int day = 0;
+      int month = 0;
+      int year = now.year;
+      try {
+        if (standaloneDateMatch.groupCount >= 1 &&
+            standaloneDateMatch.group(1) != null) {
+          day = int.parse(standaloneDateMatch.group(1)!);
+        } else {
+          return _DateTimeWithFlag(null, false);
+        }
+        if (standaloneDateMatch.groupCount >= 3 &&
+            standaloneDateMatch.group(3) != null) {
+          String monthStr = standaloneDateMatch.group(3)!.toLowerCase();
+          month = _parseMonth(monthStr);
+          if (month < 1 || month > 12) return _DateTimeWithFlag(null, false);
+        } else {
+          return _DateTimeWithFlag(null, false);
+        }
+      } catch (e) {
+        return _DateTimeWithFlag(null, false);
+      }
+      return _DateTimeWithFlag(DateTime(year, month, day), false);
     }
 
     // If no recognizable date/time, return null (do not default to today)
