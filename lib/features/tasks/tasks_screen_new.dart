@@ -80,6 +80,12 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
     final today = DateTime.now();
     final weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+    // Store current selection before regenerating
+    final currentSelectedDayIndex = selectedDayIndex;
+    print(
+      'DEBUG: _generateDynamicDates - currentSelectedDayIndex: $currentSelectedDayIndex',
+    );
+
     days = [];
     dates = [];
 
@@ -90,8 +96,17 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
       dates.add(date.day);
     }
 
-    // Set selectedDayIndex to 0 to show today's tasks by default
-    selectedDayIndex = 0;
+    // Preserve the current selection, but ensure it's within bounds
+    if (currentSelectedDayIndex >= 0 && currentSelectedDayIndex < days.length) {
+      selectedDayIndex = currentSelectedDayIndex;
+      print(
+        'DEBUG: _generateDynamicDates - preserved selection: $selectedDayIndex',
+      );
+    } else {
+      // Only reset to 0 if the current selection is invalid
+      selectedDayIndex = 0;
+      print('DEBUG: _generateDynamicDates - reset to 0 (invalid selection)');
+    }
   }
 
   bool _isTaskForSelectedDate(Task task, int selectedIndex) {
@@ -2075,9 +2090,13 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
           // Reset to current date when switching tabs
           if (index == 0) {
             // Week tab - select today
+            print('DEBUG: Tab switch - Week tab, setting selectedDayIndex = 0');
             selectedDayIndex = 0;
           } else if (index == 1) {
             // Month tab - always reset to today and current month
+            print(
+              'DEBUG: Tab switch - Month tab, setting selectedDayIndex = 0',
+            );
             selectedDayIndex = 0;
             _displayedMonth = DateTime(
               DateTime.now().year,
@@ -2086,6 +2105,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
             _selectedDateForMonthView = DateTime.now();
           } else if (index == 2) {
             // All tab - select today and reset filter to "All"
+            print('DEBUG: Tab switch - All tab, setting selectedDayIndex = 0');
             selectedDayIndex = 0;
             statusFilter = 'All';
           }

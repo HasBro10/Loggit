@@ -133,6 +133,14 @@ class LogParserService {
           caseSensitive: false,
         ),
       },
+      // "for [time]" input (common when adding time to existing task/reminder)
+      {
+        'type': LogType.reminder,
+        'regex': RegExp(
+          r'^for\s+(\d{1,2})(:(\d{2}))?\s*(am|pm)?$',
+          caseSensitive: false,
+        ),
+      },
       // Standalone date input (for when user just types a date)
       {
         'type': LogType.reminder,
@@ -253,6 +261,35 @@ class LogParserService {
                     ? int.parse(timeMatch.group(4)!)
                     : 0;
                 final ampm = timeMatch.group(5);
+                if (ampm == 'pm' && hour < 12) hour += 12;
+                if (ampm == 'am' && hour == 12) hour = 0;
+
+                // For standalone time input, don't set a date - let the conversation continuation handle it
+                // This prevents overwriting the original date from pending tasks
+                return ParsedLog(
+                  type: LogType.reminder,
+                  action: null,
+                  dateTime: null, // Don't set date for standalone time
+                  hasTime: true,
+                  raw: input,
+                );
+              }
+            }
+
+            // Check for "for [time]" pattern (common when adding time to existing task/reminder)
+            final forTimePattern = RegExp(
+              r'^for\s+(\d{1,2})(:(\d{2}))?\s*(am|pm)?$',
+              caseSensitive: false,
+            );
+            if (forTimePattern.hasMatch(input.toLowerCase())) {
+              print('DEBUG: Input matches "for [time]" pattern');
+              final timeMatch = forTimePattern.firstMatch(input.toLowerCase());
+              if (timeMatch != null) {
+                int hour = int.parse(timeMatch.group(1)!);
+                int minute = timeMatch.group(3) != null
+                    ? int.parse(timeMatch.group(3)!)
+                    : 0;
+                final ampm = timeMatch.group(4);
                 if (ampm == 'pm' && hour < 12) hour += 12;
                 if (ampm == 'am' && hour == 12) hour = 0;
 
@@ -424,6 +461,37 @@ class LogParserService {
               dateTimeStr = match.group(6) != null
                   ? match.group(6)!.trim()
                   : null;
+
+              // Special handling for task actions that contain date/time information
+              if (action != null && dateTimeStr != null) {
+                // Check if the action contains the date/time string and remove it
+                final actionLower = action.toLowerCase();
+                final dateTimeLower = dateTimeStr.toLowerCase();
+
+                // If the action ends with the date/time, remove it
+                if (actionLower.endsWith(dateTimeLower)) {
+                  action = action
+                      .substring(0, action.length - dateTimeStr.length)
+                      .trim();
+                }
+
+                // Also check for common date/time patterns within the action
+                final dateTimePatterns = [
+                  RegExp(r'\btomorrow\b', caseSensitive: false),
+                  RegExp(r'\btoday\b', caseSensitive: false),
+                  RegExp(r'\byesterday\b', caseSensitive: false),
+                  RegExp(
+                    r'\bat\s+\d{1,2}(:\d{2})?\s*(am|pm)?\b',
+                    caseSensitive: false,
+                  ),
+                  RegExp(r'\bon\s+\w+\b', caseSensitive: false),
+                  RegExp(r'\bnext\s+\w+\b', caseSensitive: false),
+                ];
+
+                for (final pattern in dateTimePatterns) {
+                  action = action?.replaceAll(pattern, '').trim();
+                }
+              }
             } else {
               // For reminders, use the original logic
               action = match.group(3) != null ? match.group(3)!.trim() : null;

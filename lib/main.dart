@@ -427,9 +427,6 @@ class _LoggitHomeState extends State<LoggitHome> {
         return DashboardScreen(expenses: _expenses);
       case FeatureType.tasks:
         return TasksScreenNew(
-          key: ValueKey(
-            _tasks.length,
-          ), // Add this line to force rebuild on list change
           tasks: _tasks,
           onBack: () {
             final chatIndex = _favorites.indexWhere(
