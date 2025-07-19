@@ -247,6 +247,61 @@ This document outlines the phases, goals, and features of the Loggit app. Each p
 
 ---
 
+- [ ] **Phase 5: AI Learning & Local Intelligence**
+
+  - [ ] AI Interaction Logging
+    - [ ] Log all user inputs and AI responses
+    - [ ] Store successful parsing patterns
+    - [ ] Track user confirmation/feedback
+    - [ ] Create learning database structure
+
+  - [ ] Pattern Learning System
+    - [ ] Extract common patterns from AI responses
+    - [ ] Learn date/time format variations
+    - [ ] Build intent classification patterns
+    - [ ] Store learned patterns locally
+
+  - [ ] Local Parser Evolution
+    - [ ] Phase 1: Simple Pattern Learning
+      - [ ] Extract basic patterns (dates, times, intents)
+      - [ ] Build simple matching rules
+      - [ ] Test with common cases
+    - [ ] Phase 2: Structured Learning
+      - [ ] Learn complex date formats ("27th of August")
+      - [ ] Understand context and conversation flow
+      - [ ] Build confidence scoring system
+    - [ ] Phase 3: Advanced Learning
+      - [ ] Implement machine learning model
+      - [ ] Train on user-specific patterns
+      - [ ] Handle edge cases and exceptions
+
+  - [ ] Hybrid Processing System
+    - [ ] Local parser handles routine cases
+    - [ ] AI handles complex/unknown patterns
+    - [ ] Seamless fallback between systems
+    - [ ] Performance optimization for speed
+
+  - [ ] User Privacy & Data Control
+    - [ ] All learning data stays local
+    - [ ] No sensitive data sent to external AI
+    - [ ] User controls what gets learned
+    - [ ] Option to reset learning data
+
+  - [ ] Learning Analytics
+    - [ ] Track learning progress
+    - [ ] Show accuracy improvements
+    - [ ] Display patterns learned
+    - [ ] User feedback on learning quality
+
+  - [ ] Future Benefits
+    - [ ] Instant local processing for common tasks
+    - [ ] Reduced API costs
+    - [ ] Works offline for routine operations
+    - [ ] Personalized to user's communication style
+    - [ ] Continuous improvement over time
+
+---
+
 - [ ] **Across All Phases**
   - [x] Maintain dark mode support
   - [ ] Implement data export/restore:
