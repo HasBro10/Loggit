@@ -2,12 +2,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class AIService {
-  // SECURITY: API key should be set via environment variable
-  // Run with: flutter run --dart-define=GROQ_API_KEY=your_actual_key_here
-  // Or set in your IDE's run configuration
+  // API key - must be set via environment variable
   static const String _groqApiKey = String.fromEnvironment(
     'GROQ_API_KEY',
-    defaultValue: 'YOUR_API_KEY_HERE',
+    defaultValue: '', // No default - must be set via environment
   );
   static const String _groqEndpoint =
       'https://api.groq.com/openai/v1/chat/completions';

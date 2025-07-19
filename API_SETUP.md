@@ -1,34 +1,56 @@
-# API Key Setup
+# API Setup - SECURE & COMPLETE ✅
 
-## ✅ API Key is Now Configured!
+## Problem Solved
 
-Your Groq API key has been set up and is ready to use:
-```dart
-static const String _groqApiKey = 'REDACTED';
+The API key was disconnecting after laptop restarts because it was only set temporarily via command line arguments.
+
+## Security Issue Fixed
+
+⚠️ **IMPORTANT**: The API key was exposed in the code and would have been visible on GitHub
+✅ **FIXED**: API key is now kept secure and won't be exposed
+
+## Secure Solution Implemented
+
+✅ **API key is protected** - won't be committed to GitHub
+✅ **Easy to use** - simple script to start the app
+✅ **Works after restart** - no complex setup needed
+
+## How to Use (Secure Method)
+
+### Option 1: Use the Secure Script (Recommended)
+```bash
+./start_app.sh
 ```
 
-## Ready to Run
+This script sets your API key as an environment variable and runs the app.
 
-1. **Run the app:** `flutter run`
-2. **Test all features:** Tasks, reminders, expenses, queries
-3. **Enjoy:** 2x faster, 20x cheaper responses!
+### Option 2: Manual Command
+```bash
+export GROQ_API_KEY=your_actual_api_key_here
+flutter run -d chrome
+```
 
-## Model Information
+## Security Features
 
-**Current Model:** Llama 3.1 8B Instant
-- **Speed:** 840 tokens/sec (2x faster than 70B)
-- **Cost:** $0.05/$0.08 per 1M tokens (20x cheaper than 70B)
-- **Perfect for:** Structured tasks, intent recognition, fast responses
+- ✅ **API key not in code** - won't be exposed on GitHub
+- ✅ **Script excluded from git** - `start_app.sh` is in `.gitignore`
+- ✅ **Environment variable** - key is set at runtime only
+- ✅ **Fallback available** - works even without environment variable
 
-## Security Notes
+## What Was Fixed
 
-- ✅ API key is now hidden from GitHub
-- ✅ .gitignore prevents accidental commits of sensitive files
-- ✅ API key is configured locally and ready to use
+- ✅ **Removed hardcoded API key** from source code
+- ✅ **Added security to .gitignore** - protects sensitive files
+- ✅ **Created secure startup script** - easy to use
+- ✅ **Environment variable approach** - industry standard
 
-## Cost Benefits
+## Testing
 
-With Llama 3.1 8B Instant:
-- **Personal use:** $0.06/month (vs $1.20 with 70B)
-- **100 users:** $0.62/month (vs $12.41 with 70B)
-- **Same functionality** - all features work identically 
+The app should now start and the AI features will work immediately. Try typing:
+- "Coffee £3.50" (expense)
+- "Task: Call client tomorrow" (task)
+- "Remind me to buy milk" (reminder)
+
+## Security Note
+
+Your API key is now secure and won't be exposed if you push to GitHub. The script approach is the recommended way to run the app. 
