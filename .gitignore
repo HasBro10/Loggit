@@ -47,6 +47,13 @@ app.*.map.json
 secrets/
 config/secrets.dart
 
+# VS Code settings (may contain API keys)
+.vscode/launch.json
+.vscode/settings.json
+
+# Local scripts that may contain API keys
+start_app.sh
+
 # Android Studio will place build artifacts here
 /android/app/debug
 /android/app/profile
