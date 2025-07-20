@@ -20,6 +20,8 @@ class Reminder implements LogEntry {
   final DateTime timestamp;
   @override
   final String? category;
+  // Advance timing field to store original timing like "30 minutes before"
+  final String? advanceTiming;
   // Recurrence fields
   final RecurrenceType recurrenceType;
   final List<int>? customDays; // 1=Mon, 7=Sun
@@ -35,6 +37,7 @@ class Reminder implements LogEntry {
     this.isCompleted = false,
     required this.timestamp,
     this.category,
+    this.advanceTiming,
     this.recurrenceType = RecurrenceType.none,
     this.customDays,
     this.interval,
@@ -49,6 +52,7 @@ class Reminder implements LogEntry {
     bool? isCompleted,
     DateTime? timestamp,
     String? category,
+    String? advanceTiming,
     RecurrenceType? recurrenceType,
     List<int>? customDays,
     int? interval,
@@ -62,6 +66,7 @@ class Reminder implements LogEntry {
       isCompleted: isCompleted ?? this.isCompleted,
       timestamp: timestamp ?? this.timestamp,
       category: category ?? this.category,
+      advanceTiming: advanceTiming ?? this.advanceTiming,
       recurrenceType: recurrenceType ?? this.recurrenceType,
       customDays: customDays ?? this.customDays,
       interval: interval ?? this.interval,
@@ -79,6 +84,7 @@ class Reminder implements LogEntry {
       'isCompleted': isCompleted,
       'timestamp': timestamp.toIso8601String(),
       'category': category,
+      'advanceTiming': advanceTiming,
       'recurrenceType': recurrenceType.name,
       'customDays': customDays,
       'interval': interval,
@@ -101,6 +107,7 @@ class Reminder implements LogEntry {
       isCompleted: json['isCompleted'] ?? false,
       timestamp: DateTime.parse(json['timestamp']),
       category: json['category'],
+      advanceTiming: json['advanceTiming'],
       recurrenceType: recurrenceType,
       customDays: json['customDays'] != null
           ? List<int>.from(json['customDays'])

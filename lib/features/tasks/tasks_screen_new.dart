@@ -4066,10 +4066,18 @@ String _getReminderText(ReminderType reminder) {
   switch (reminder) {
     case ReminderType.none:
       return 'No Reminder';
+    case ReminderType.fiveMinutes:
+      return '5 minutes before';
     case ReminderType.fifteenMinutes:
       return '15 minutes before';
+    case ReminderType.twentyMinutes:
+      return '20 minutes before';
+    case ReminderType.thirtyMinutes:
+      return '30 minutes before';
     case ReminderType.oneHour:
       return '1 hour before';
+    case ReminderType.twoHours:
+      return '2 hours before';
     case ReminderType.oneDay:
       return '1 day before';
   }

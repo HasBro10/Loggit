@@ -2,6 +2,12 @@
 
 This document outlines the phases, goals, and features of the Loggit app. Each phase includes a **detailed checklist**. Cursor can tick off tasks as they're completed.
 
+## 📋 Feature Scope Documents
+
+For detailed implementation plans of specific features, see:
+- **Notes Feature**: `scope/NOTES_FEATURE_SCOPE.md` - Comprehensive notes system with AI integration
+- **Chat NLP**: `scope/CHAT_NLP-SCOPE.MD` - Advanced natural language processing patterns
+
 ---
 
 ## Phases and Features
@@ -103,30 +109,30 @@ This document outlines the phases, goals, and features of the Loggit app. Each p
       - [x] Gym logs
     - [x] Implement Yes/No handling for each
 
-  - [ ] Dashboards for Each Log Type
-    - [ ] Task Dashboard (Tasks Page)
-      - [ ] Core Functions
-        - [ ] Create a Task
-          - [ ] Add task title
-          - [ ] Add optional description/notes
-          - [ ] Set due date & time
-          - [ ] Assign category (e.g. Work, Personal)
-          - [ ] Set priority level (High, Medium, Low)
-        - [ ] Edit / Update a Task
-          - [ ] Change title, description, or date
-          - [ ] Adjust priority or category
-          - [ ] Mark as recurring, if needed
-        - [ ] View Task List
-          - [ ] Filter by status (Pending, Completed)
-          - [ ] Filter by date (Today, This Week, etc.)
-          - [ ] Filter by category or priority
-          - [ ] Search tasks quickly
-        - [ ] Mark Task as Completed
-          - [ ] Simple checkbox or swipe gesture
-          - [ ] Option to undo if checked by mistake
-        - [ ] Delete a Task
-          - [ ] Single task deletion
-          - [ ] Option to delete multiple tasks at once
+  - [x] Dashboards for Each Log Type
+    - [x] Task Dashboard (Tasks Page)
+      - [x] Core Functions
+        - [x] Create a Task
+          - [x] Add task title
+          - [x] Add optional description/notes
+          - [x] Set due date & time
+          - [x] Assign category (e.g. Work, Personal)
+          - [x] Set priority level (High, Medium, Low)
+        - [x] Edit / Update a Task
+          - [x] Change title, description, or date
+          - [x] Adjust priority or category
+          - [x] Mark as recurring, if needed
+        - [x] View Task List
+          - [x] Filter by status (Pending, Completed)
+          - [x] Filter by date (Today, This Week, etc.)
+          - [x] Filter by category or priority
+          - [x] Search tasks quickly
+        - [x] Mark Task as Completed
+          - [x] Simple checkbox or swipe gesture
+          - [x] Option to undo if checked by mistake
+        - [x] Delete a Task
+          - [x] Single task deletion
+          - [x] Option to delete multiple tasks at once
         - [ ] Reminders / Notifications
           - [ ] Push notifications for upcoming deadlines
           - [ ] Option to snooze reminders
@@ -136,41 +142,44 @@ This document outlines the phases, goals, and features of the Loggit app. Each p
         - [ ] Notes / Attachments
           - [ ] Add a note or short comment to a task
           - [ ] Optionally attach files or images (advanced, Phase 2+)
-        - [ ] Sorting & Grouping
-          - [ ] Sort tasks by due date, priority, or category
-          - [ ] Group tasks under headers like Today, Tomorrow, Upcoming
-        - [ ] Dark Mode Support
-          - [ ] Ensure consistent look in dark theme
+        - [x] Sorting & Grouping
+          - [x] Sort tasks by due date, priority, or category
+          - [x] Group tasks under headers like Today, Tomorrow, Upcoming
+        - [x] Dark Mode Support
+          - [x] Ensure consistent look in dark theme
       - [ ] Optional (Nice-to-Have) Features
         - [ ] Progress indicator (for big tasks with subtasks)
         - [ ] Collaboration / Assign tasks to others (Phase 3+)
         - [ ] Voice input (speak your task instead of typing)
         - [ ] Calendar view (see tasks on a calendar grid)
-      - [ ] All features should integrate naturally with chat/text commands, e.g.:
-        - [ ] “Add task: Call accountant tomorrow at 3pm”
-        - [ ] “Show my tasks for this week”
-        - [ ] “Complete ‘Submit VAT return’”
-    - [ ] Reminder Dashboard
-      - [ ] Show upcoming reminders
-      - [ ] Allow editing reminders
+      - [x] All features should integrate naturally with chat/text commands, e.g.:
+        - [x] "Add task: Call accountant tomorrow at 3pm"
+        - [x] "Show my tasks for this week"
+        - [x] "Complete 'Submit VAT return'"
+    - [x] Reminder Dashboard
+      - [x] Show upcoming reminders
+      - [x] Allow editing reminders
     - [ ] Notes Dashboard
-      - [ ] List notes
-      - [ ] Edit or delete notes
+      - [ ] **For comprehensive Notes feature scope, see: `scope/NOTES_FEATURE_SCOPE.md`**
+      - [ ] Basic note creation and management
+      - [ ] AI integration for note creation
+      - [ ] Cross-feature integration with tasks and reminders
+      - [ ] Advanced organization and search capabilities
     - [ ] Gym Log Dashboard
       - [ ] Summarize workouts
       - [ ] View logs by date
 
-  - [ ] Edit/Delete Capability
-    - [ ] Add edit function for each log type
-    - [ ] Add delete function for each log type
+  - [x] Edit/Delete Capability
+    - [x] Add edit function for each log type
+    - [x] Add delete function for each log type
 
-  - [ ] Customizable Categories
-    - [ ] Allow user to create new categories
-    - [ ] Assign categories to logs
-    - [ ] Store custom categories
+  - [x] Customizable Categories
+    - [x] Allow user to create new categories
+    - [x] Assign categories to logs
+    - [x] Store custom categories
 
-  - [ ] Maintain Dark Mode Support
-    - [ ] Test all new screens in dark mode
+  - [x] Maintain Dark Mode Support
+    - [x] Test all new screens in dark mode
 
 ---
 
@@ -324,7 +333,7 @@ This document outlines the phases, goals, and features of the Loggit app. Each p
   - [x] Local or Supabase saving of expenses
   - [x] Basic dashboard with totals
   - [x] Dark mode support
-  - [ ] Ability to edit or delete logs
+  - [x] Ability to edit or delete logs
   - [ ] Guest mode without login
 
 ---
