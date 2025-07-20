@@ -231,6 +231,9 @@ class _ChatScreenNewState extends State<ChatScreenNew>
           },
         );
 
+        // Debug: Print the raw AI response
+        print('DEBUG: Raw AI response for message "$message": $result');
+
         if (result is Map<String, dynamic> &&
             result.containsKey('intent') &&
             result.containsKey('fields')) {
@@ -244,25 +247,49 @@ class _ChatScreenNewState extends State<ChatScreenNew>
               'DEBUG: AI Conversation continuation - merging with pending log',
             );
 
-            // If we have a pending task and AI returns reminder intent, treat it as task continuation
+            // If we have a pending task and AI returns task or reminder intent, treat it as task continuation
             if (_pendingLog is Task &&
-                (intent == 'create_task' || intent == 'set_reminder')) {
+                (intent == 'create_task' ||
+                    intent == 'set_reminder' ||
+                    intent == 'create_reminder')) {
               final pending = _pendingLog as Task;
-              final title =
-                  (fields['title'] != null &&
-                      fields['title'].toString().isNotEmpty)
-                  ? fields['title']
-                  : pending.title;
+
+              // Keep the original title unless a meaningful new title is provided
+              // If AI returns generic titles like "reminder", "task", etc., keep the original title
+              String title = pending.title;
+              if (fields['title'] != null &&
+                  fields['title'].toString().isNotEmpty) {
+                final aiTitle = fields['title'].toString().toLowerCase();
+                // Only use AI title if it's not a generic placeholder
+                if (aiTitle != 'reminder' &&
+                    aiTitle != 'task' &&
+                    aiTitle != 'reminder' &&
+                    aiTitle.length > 3) {
+                  // Avoid very short generic titles
+                  title = fields['title'];
+                }
+              }
+
               final description = fields['description'] ?? '';
 
               // Parse AI's date and time
               DateTime? dueDate = pending.dueDate;
               TimeOfDay? timeOfDay = pending.timeOfDay;
 
-              // Handle both dueDate and reminderTime fields (AI might use either)
-              String? dateField = fields['dueDate'] ?? fields['reminderTime'];
-              String? timeField = fields['timeOfDay'] ?? fields['time'];
+              print('DEBUG: Original pending dueDate: $dueDate');
+              print('DEBUG: Original pending timeOfDay: $timeOfDay');
 
+              // Handle both dueDate and reminderTime fields (AI might use either)
+              String? dateField = fields['dueDate'] ?? fields['reminderDate'];
+              String? timeField =
+                  fields['timeOfDay'] ??
+                  fields['time'] ??
+                  fields['reminderTime'];
+
+              print('DEBUG: AI dateField: $dateField');
+              print('DEBUG: AI timeField: $timeField');
+
+              // Only process date field if it's actually a date (not a time)
               if (dateField != null && dateField is String) {
                 final now = DateTime.now();
                 final dateStr = dateField.toLowerCase();
@@ -306,15 +333,29 @@ class _ChatScreenNewState extends State<ChatScreenNew>
               }
 
               if (timeField != null && timeField is String) {
+                print('DEBUG: Processing time field: "$timeField"');
+
+                // Handle "today 19:00" format by extracting just the time part
+                String timeStr = timeField;
+                if (timeField.contains(' ')) {
+                  final parts = timeField.split(' ');
+                  if (parts.length >= 2) {
+                    timeStr = parts.last; // Get the last part (the time)
+                  }
+                }
+
                 final timeMatch = RegExp(
                   r'^(\d{1,2})(?::(\d{2}))?',
-                ).firstMatch(timeField);
+                ).firstMatch(timeStr);
                 if (timeMatch != null) {
                   int hour = int.parse(timeMatch.group(1)!);
                   int minute = timeMatch.group(2) != null
                       ? int.parse(timeMatch.group(2)!)
                       : 0;
                   timeOfDay = TimeOfDay(hour: hour, minute: minute);
+                  print(
+                    'DEBUG: Extracted time: ${timeOfDay!.hour}:${timeOfDay!.minute}',
+                  );
                 }
               }
 
@@ -366,6 +407,125 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             }
           }
 
+          // Handle reminder conversation continuation
+          if (_pendingLog is Reminder &&
+              (intent == 'create_reminder' || intent == 'set_reminder')) {
+            final pending = _pendingLog as Reminder;
+
+            // Keep the original title unless a meaningful new title is provided
+            String title = pending.title;
+            if (fields['title'] != null &&
+                fields['title'].toString().isNotEmpty) {
+              final aiTitle = fields['title'].toString().toLowerCase();
+              // Only use AI title if it's not a generic placeholder
+              if (aiTitle != 'reminder' &&
+                  aiTitle != 'task' &&
+                  aiTitle.length > 3) {
+                title = fields['title'];
+              }
+            }
+
+            // Parse AI's date and time
+            DateTime? reminderDate = pending.reminderTime;
+            TimeOfDay? reminderTime = TimeOfDay.fromDateTime(
+              pending.reminderTime,
+            );
+
+            print('DEBUG: Original pending reminderTime: $reminderDate');
+            print('DEBUG: Original pending reminderTime: $reminderTime');
+
+            // Handle reminder date and time fields
+            String? dateField = fields['reminderDate'] ?? fields['dueDate'];
+            String? timeField = fields['reminderTime'] ?? fields['time'];
+
+            print('DEBUG: AI reminder dateField: $dateField');
+            print('DEBUG: AI reminder timeField: $timeField');
+
+            // Only process date field if it's actually a date (not a time)
+            if (dateField != null && dateField is String) {
+              final now = DateTime.now();
+              final dateStr = dateField.toLowerCase();
+
+              if (dateStr == 'tomorrow') {
+                reminderDate = DateTime(now.year, now.month, now.day + 1);
+              } else if (dateStr == 'today') {
+                reminderDate = DateTime(now.year, now.month, now.day);
+              } else {
+                reminderDate = DateTime.tryParse(dateField);
+              }
+            }
+
+            if (timeField != null && timeField is String) {
+              print('DEBUG: Processing reminder time field: "$timeField"');
+
+              // Handle "today 14:00" format by extracting just the time part
+              String timeStr = timeField;
+              if (timeField.contains(' ')) {
+                final parts = timeField.split(' ');
+                if (parts.length >= 2) {
+                  timeStr = parts.last; // Get the last part (the time)
+                }
+              }
+
+              final timeMatch = RegExp(
+                r'^(\d{1,2})(?::(\d{2}))?',
+              ).firstMatch(timeStr);
+              if (timeMatch != null) {
+                int hour = int.parse(timeMatch.group(1)!);
+                int minute = timeMatch.group(2) != null
+                    ? int.parse(timeMatch.group(2)!)
+                    : 0;
+                reminderTime = TimeOfDay(hour: hour, minute: minute);
+                print(
+                  'DEBUG: Extracted reminder time: ${reminderTime!.hour}:${reminderTime!.minute}',
+                );
+              }
+            }
+
+            // Combine date and time into a single DateTime for reminderTime
+            DateTime finalReminderTime = reminderDate ?? pending.reminderTime;
+            if (reminderTime != null) {
+              finalReminderTime = DateTime(
+                finalReminderTime.year,
+                finalReminderTime.month,
+                finalReminderTime.day,
+                reminderTime.hour,
+                reminderTime.minute,
+              );
+            }
+
+            final updatedReminder = Reminder(
+              title: title,
+              reminderTime: finalReminderTime,
+              timestamp: DateTime.now(),
+            );
+
+            setState(() {
+              _pendingLog = updatedReminder;
+              // Remove loading message if it exists
+              if (_messages.isNotEmpty &&
+                  _messages.last.text == "🤖 Processing...") {
+                _messages.removeLast();
+              }
+              _messages.add(
+                _ChatMessage(
+                  text: _getConfirmationMessage(updatedReminder),
+                  isUser: false,
+                  timestamp: DateTime.now(),
+                  isConfirmation: true,
+                  onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
+                      _handleLogConfirmation(confirmed, updatedLogEntry),
+                  pendingLogEntry: updatedReminder,
+                  canConfirm: true,
+                  showEdit: true,
+                ),
+              );
+              _isLoading = false; // Stop loading
+            });
+            _scrollToBottom();
+            return;
+          }
+
           // Original AI logic for new tasks/reminders
           if (intent == 'create_task') {
             final title = fields['title'] ?? '';
@@ -397,12 +557,16 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                 final targetWeekday = _getWeekdayFromName(dayName);
                 if (targetWeekday != null) {
                   final daysUntilTarget = (targetWeekday - now.weekday + 7) % 7;
+                  print(
+                    'DEBUG: Next day calculation - targetWeekday: $targetWeekday, now.weekday: ${now.weekday}, daysUntilTarget: $daysUntilTarget',
+                  );
                   // Set only the date part, not the time
                   dueDate = DateTime(
                     now.year,
                     now.month,
                     now.day + daysUntilTarget,
                   );
+                  print('DEBUG: Calculated dueDate: $dueDate');
                 }
               } else if (dateStr.startsWith('the ')) {
                 // Handle "the 22nd", "the 15th", etc.
@@ -423,7 +587,11 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                   dueDate = testDate;
                 }
               } else {
+                print(
+                  'DEBUG: Trying to parse date string: "${fields['dueDate']}"',
+                );
                 dueDate = DateTime.tryParse(fields['dueDate']);
+                print('DEBUG: Parsed dueDate: $dueDate');
               }
             }
             TimeOfDay? timeOfDay;
@@ -475,6 +643,9 @@ class _ChatScreenNewState extends State<ChatScreenNew>
           } else if (intent == 'create_reminder') {
             final title = fields['title'] ?? '';
             DateTime reminderTime = DateTime.now();
+
+            // Debug: Print the AI response
+            print('DEBUG: AI Response for reminder - fields: $fields');
 
             // Handle reminderDate + reminderTime format (what AI is actually returning)
             if (fields['reminderDate'] != null &&
@@ -611,6 +782,13 @@ class _ChatScreenNewState extends State<ChatScreenNew>
               timestamp: DateTime.now(),
             );
             setState(() {
+              _pendingLog =
+                  reminder; // Set pending log for conversation continuation
+              // Remove loading message if it exists
+              if (_messages.isNotEmpty &&
+                  _messages.last.text == "🤖 Processing...") {
+                _messages.removeLast();
+              }
               _messages.add(
                 _ChatMessage(
                   text: _getConfirmationMessage(reminder),
@@ -1434,10 +1612,9 @@ class _ChatScreenNewState extends State<ChatScreenNew>
     switch (logEntry.logType) {
       case 'task':
         final task = logEntry as Task;
-        // Tasks require: title, dueDate, and timeOfDay
+        // Tasks require: title and dueDate (timeOfDay is optional)
         final hasTitle = task.title.isNotEmpty;
         final hasDueDate = task.dueDate != null;
-        final hasTimeOfDay = task.timeOfDay != null;
 
         print('DEBUG: _hasRequiredFields - task validation:');
         print('DEBUG: _hasRequiredFields - title: "$hasTitle" (${task.title})');
@@ -1445,10 +1622,10 @@ class _ChatScreenNewState extends State<ChatScreenNew>
           'DEBUG: _hasRequiredFields - dueDate: $hasDueDate (${task.dueDate})',
         );
         print(
-          'DEBUG: _hasRequiredFields - timeOfDay: $hasTimeOfDay (${task.timeOfDay})',
+          'DEBUG: _hasRequiredFields - timeOfDay: ${task.timeOfDay} (optional)',
         );
 
-        return hasTitle && hasDueDate && hasTimeOfDay;
+        return hasTitle && hasDueDate;
       case 'reminder':
         final reminder = logEntry as Reminder;
         // Reminders require: title and a specific time (not 00:00)
@@ -1508,7 +1685,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
               displayDateTime = date;
             }
             final timeString = _formatReminderTime(displayDateTime);
-            dateTimeInfo = " due <b>$timeString</b>";
+            dateTimeInfo = " due **$timeString**";
           } else {
             // Show date only (no time set)
             if (date.year != now.year ||
@@ -1543,7 +1720,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
           }
         }
         final timeString = _formatReminderTime(reminder.reminderTime);
-        return "Set reminder: ${reminder.title} for <b>$timeString</b>?";
+        return "Set reminder: ${reminder.title} for **$timeString**?";
       case 'note':
         final note = logEntry as Note;
         return "Save note: ${note.content}?";
@@ -2266,11 +2443,27 @@ class _ChatScreenNewState extends State<ChatScreenNew>
         return "Expense logged: £${expense.amount.toStringAsFixed(2)} for ${expense.category}";
       case 'task':
         final task = logEntry as Task;
+        if (task.dueDate != null && task.timeOfDay != null) {
+          final timeString = _formatReminderTime(
+            DateTime(
+              task.dueDate!.year,
+              task.dueDate!.month,
+              task.dueDate!.day,
+              task.timeOfDay!.hour,
+              task.timeOfDay!.minute,
+            ),
+          );
+          return "Task created: ${task.title} due **$timeString**";
+        } else if (task.dueDate != null) {
+          final dateString =
+              "${task.dueDate!.day.toString().padLeft(2, '0')}/${task.dueDate!.month.toString().padLeft(2, '0')}/${task.dueDate!.year}";
+          return "Task created: ${task.title} due **$dateString**";
+        }
         return "Task created: ${task.title}";
       case 'reminder':
         final reminder = logEntry as Reminder;
         final dateTimeString = _formatReminderTime(reminder.reminderTime);
-        return "Reminder set: ${reminder.title} on <b>$dateTimeString</b>";
+        return "Reminder set: ${reminder.title} on **$dateTimeString**";
       case 'note':
         final note = logEntry as Note;
         return "Note saved: ${note.content}";

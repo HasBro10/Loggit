@@ -18,12 +18,22 @@ RULES:
 - Always extract the main intent: create_task, create_reminder, log_expense, view_reminders, or view_tasks.
 - Always extract the title or description (e.g., "bowling", "doctor appointment").
 - Always extract the due date or reminder date if mentioned (e.g., "tomorrow", "1st of August", "next Monday").
-- Always extract the time if mentioned (e.g., "9 pm", "21:00").
+- IMPORTANT: When user says just "Monday", "Tuesday", etc., interpret as "this Monday", "this Tuesday" (the next occurrence of that day).
+- IMPORTANT: Only use "next Monday" when user explicitly says "next Monday".
+- Always extract the time if mentioned (e.g., "9 pm", "21:00"). For tasks, time is optional - only include timeOfDay if user specifies a time.
 - For reminder queries, extract the timeframe (e.g., "this week", "today", "tomorrow", "next month", "this month", "next 2 weeks", "next 3 weeks", "all").
 - Ignore the order of words; the user may say date/time before or after the title.
 - Remove all date/time words from the title.
 - For expenses, extract the amount and category if present.
 - If user provides only time (like "7 pm", "9:30 am") and there's no clear context, assume they want to create a reminder for that time today.
+- IMPORTANT: Follow the user's exact intent - if they say "task", use create_task; if they say "reminder", use create_reminder.
+- IMPORTANT: Always use YYYY-MM-DD format for dates (e.g., "2025-07-21" for Monday July 21st).
+- IMPORTANT: Never use phrases like "this Monday", "next Monday", "today", etc. - always convert to YYYY-MM-DD format.
+- IMPORTANT: When user provides only time (like "6pm"), preserve the original date context - do not change to "today".
+- IMPORTANT: Always use YYYY-MM-DD format for dates (e.g., "2025-08-27" for August 27th).
+- IMPORTANT: Always use 24-hour format for times (e.g., "19:00" for 7 pm).
+- IMPORTANT: When user says "tomorrow", use the next day from today. If today is 2025-07-20 (Sunday), then "tomorrow" is 2025-07-21 (Monday).
+- IMPORTANT: When user says "today", use the current date 2025-07-20.
 - Respond ONLY with a single valid JSON object, no comments or extra text.
 
 EXAMPLES:
@@ -32,6 +42,45 @@ Response: {"intent": "create_task", "fields": {"title": "bowling", "dueDate": "2
 
 User: create a reminder for the 27th of August to call John at 1 pm
 Response: {"intent": "create_reminder", "fields": {"title": "call John", "reminderDate": "2025-08-27", "reminderTime": "13:00"}}
+
+User: task for the 27th of August at the gym at 7 pm
+Response: {"intent": "create_task", "fields": {"title": "gym", "dueDate": "2025-08-27", "timeOfDay": "19:00"}}
+
+User: created a task for the 27th of August at the gym
+Response: {"intent": "create_task", "fields": {"title": "gym", "dueDate": "2025-08-27"}}
+
+User: task for meeting on Monday
+Response: {"intent": "create_task", "fields": {"title": "meeting", "dueDate": "2025-07-21"}}
+
+User: create a task for Monday at 1 pm for boxing practice
+Response: {"intent": "create_task", "fields": {"title": "boxing practice", "dueDate": "2025-07-21", "timeOfDay": "13:00"}}
+
+User: boxing practice on Monday
+Response: {"intent": "create_task", "fields": {"title": "boxing practice", "dueDate": "2025-07-21"}}
+
+User: doctor appointment tomorrow
+Response: {"intent": "create_task", "fields": {"title": "doctor appointment", "dueDate": "2025-07-21"}}
+
+User: meeting with John on Friday
+Response: {"intent": "create_task", "fields": {"title": "meeting with John", "dueDate": "2025-07-25"}}
+
+User: Add a reminder for Monday boxing practice
+Response: {"intent": "create_reminder", "fields": {"title": "boxing practice", "reminderDate": "2025-07-21"}}
+
+User: Create a reminder for Monday for team meeting
+Response: {"intent": "create_reminder", "fields": {"title": "team meeting", "reminderDate": "2025-07-21"}}
+
+User: Remind me on Monday to call mum
+Response: {"intent": "create_reminder", "fields": {"title": "call mum", "reminderDate": "2025-07-21"}}
+
+User: Reminder for Tuesday gym session
+Response: {"intent": "create_reminder", "fields": {"title": "gym session", "reminderDate": "2025-07-22"}}
+
+User: create task for doctor appointment tomorrow
+Response: {"intent": "create_task", "fields": {"title": "doctor appointment", "dueDate": "2025-07-21"}}
+
+User: gym on the 27th of August at 7 pm
+Response: {"intent": "create_task", "fields": {"title": "gym", "dueDate": "2025-08-27", "timeOfDay": "19:00"}}
 
 User: remind me tomorrow at 8 am to call mum
 Response: {"intent": "create_reminder", "fields": {"title": "call mum", "reminderTime": "tomorrow 08:00"}}
@@ -101,6 +150,12 @@ Response: {"intent": "create_reminder", "fields": {"title": "reminder", "reminde
 
 User: 3:45 pm
 Response: {"intent": "create_reminder", "fields": {"title": "reminder", "reminderTime": "today 15:45"}}
+
+User: 6pm
+Response: {"intent": "create_reminder", "fields": {"title": "reminder", "reminderTime": "today 18:00"}}
+
+User: 9:30am
+Response: {"intent": "create_reminder", "fields": {"title": "reminder", "reminderTime": "today 09:30"}}
 ''';
 
   static Future<Map<String, dynamic>> processUserMessage(String message) async {
@@ -127,7 +182,17 @@ Response: {"intent": "create_reminder", "fields": {"title": "reminder", "reminde
         final data = jsonDecode(response.body);
         final content = data['choices'][0]['message']['content'];
         try {
-          return jsonDecode(content);
+          // Clean up the response - remove markdown formatting if present
+          String cleanContent = content.trim();
+          if (cleanContent.startsWith('```json')) {
+            cleanContent = cleanContent.substring(7);
+          }
+          if (cleanContent.endsWith('```')) {
+            cleanContent = cleanContent.substring(0, cleanContent.length - 3);
+          }
+          cleanContent = cleanContent.trim();
+
+          return jsonDecode(cleanContent);
         } catch (e) {
           print('DEBUG: Failed to parse AI response: ${e.toString()}');
           return {'error': 'Failed to parse AI response', 'raw': content};
