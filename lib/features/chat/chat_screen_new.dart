@@ -20,6 +20,7 @@ import '../../shared/utils/responsive.dart';
 import '../expenses/expense_model.dart';
 import '../gym/gym_log_model.dart';
 import '../notes/note_model.dart';
+import '../../services/notes_service.dart';
 import '../reminders/reminder_edit_modal.dart';
 import '../reminders/reminder_model.dart';
 import '../tasks/task_model.dart';
@@ -35,6 +36,7 @@ class ChatScreenNew extends StatefulWidget {
   final void Function(GymLog)? onGymLogLogged;
   final void Function()? onShowTasks;
   final void Function()? onShowReminders;
+  final void Function()? onShowNotes;
   final VoidCallback? onThemeToggle;
   final ThemeMode currentThemeMode;
 
@@ -48,6 +50,7 @@ class ChatScreenNew extends StatefulWidget {
     this.onGymLogLogged,
     this.onShowTasks,
     this.onShowReminders,
+    this.onShowNotes,
     this.onThemeToggle,
     required this.currentThemeMode,
   });
@@ -1565,9 +1568,9 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             final title = fields['title'] ?? '';
             final content = fields['content'] ?? '';
             final note = Note(
+              id: NotesService.generateId(),
               title: title,
               content: content,
-              timestamp: DateTime.now(),
             );
             setState(() {
               _messages.add(
@@ -2419,7 +2422,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
 
   Note? _mapToNote(Map data) {
     final title = data['title'] ?? '';
-    return Note(title: title, content: title, timestamp: DateTime.now());
+    return Note(id: NotesService.generateId(), title: title, content: title);
   }
 
   GymLog? _mapToGymLog(Map data) {
@@ -4141,9 +4144,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             icon: Icons.note,
             label: 'Notes',
             color: isDark ? LoggitColors.darkAccent : Colors.amber[800]!,
-            onTap: () {
-              /* TODO */
-            },
+            onTap: widget.onShowNotes,
           ),
         ];
         return FractionallySizedBox(

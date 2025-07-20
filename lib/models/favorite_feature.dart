@@ -92,6 +92,12 @@ class FavoriteFeature {
       icon: Icons.alarm,
       order: 3,
     ),
+    const FavoriteFeature(
+      type: FeatureType.notes,
+      title: 'Notes',
+      icon: Icons.note,
+      order: 4,
+    ),
   ];
 
   static List<FavoriteFeature> get allAvailableFeatures => [

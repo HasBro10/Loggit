@@ -15,6 +15,7 @@ import 'shared/design/color_guide.dart';
 import 'package:device_preview/device_preview.dart';
 import 'package:flutter/foundation.dart';
 import 'features/reminders/reminders_screen.dart';
+import 'features/notes/notes_screen.dart';
 import 'services/reminders_service.dart';
 
 void main() {
@@ -421,6 +422,16 @@ class _LoggitHomeState extends State<LoggitHome> {
               });
             }
           },
+          onShowNotes: () {
+            final notesIndex = _favorites.indexWhere(
+              (f) => f.type == FeatureType.notes,
+            );
+            if (notesIndex != -1) {
+              setState(() {
+                _currentTabIndex = notesIndex;
+              });
+            }
+          },
           onThemeToggle: widget.onThemeToggle,
           currentThemeMode: widget.currentThemeMode,
         );
@@ -483,27 +494,23 @@ class _LoggitHomeState extends State<LoggitHome> {
           },
         );
       case FeatureType.notes:
-        return _buildNotesTab();
+        return NotesScreen(
+          onThemeToggle: widget.onThemeToggle,
+          currentThemeMode: widget.currentThemeMode,
+          onBackToChat: () {
+            final chatIndex = _favorites.indexWhere(
+              (f) => f.type == FeatureType.chat,
+            );
+            if (chatIndex != -1) {
+              setState(() {
+                _currentTabIndex = chatIndex;
+              });
+            }
+          },
+        );
       case FeatureType.gymLogs:
         return _buildGymLogsTab();
     }
-  }
-
-  Widget _buildNotesTab() {
-    final theme = Theme.of(context);
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        _buildSectionHeader('Notes', Icons.note, _notes.length),
-        if (_notes.isEmpty)
-          _buildEmptyState(
-            'No notes yet',
-            'Try saying "Note: Client prefers calls"',
-          )
-        else
-          ..._notes.map((note) => _buildNoteCard(note)),
-      ],
-    );
   }
 
   Widget _buildGymLogsTab() {
@@ -595,37 +602,6 @@ class _LoggitHomeState extends State<LoggitHome> {
                   ),
                 ),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNoteCard(Note note) {
-    final theme = Theme.of(context);
-    return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: theme.colorScheme.secondary.withOpacity(0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            note.title,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            note.content,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.secondary,
             ),
           ),
         ],
