@@ -182,6 +182,229 @@ class _ChatScreenNewState extends State<ChatScreenNew>
     return weekdays[dayName.toLowerCase()];
   }
 
+  // Helper method to extract time from various message formats (including typos)
+  TimeOfDay? _extractTimeFromMessage(String message) {
+    final cleanMessage = message.toLowerCase().trim();
+    print('DEBUG: _extractTimeFromMessage - input: "$cleanMessage"');
+
+    // Try various time formats
+    // 1. Standard format: "9am", "9 am", "9:30am", "9:30 am"
+    final standardMatch = RegExp(
+      r'^(\d{1,2})(:(\d{2}))?\s*(am|pm)$',
+      caseSensitive: false,
+    ).firstMatch(cleanMessage);
+
+    if (standardMatch != null) {
+      int hour = int.parse(standardMatch.group(1)!);
+      int minute = standardMatch.group(3) != null
+          ? int.parse(standardMatch.group(3)!)
+          : 0;
+      final ampm = standardMatch.group(4)?.toLowerCase();
+      if (ampm == 'pm' && hour < 12) hour += 12;
+      if (ampm == 'am' && hour == 12) hour = 0;
+      print(
+        'DEBUG: _extractTimeFromMessage - standard match: ${hour}:${minute}',
+      );
+      return TimeOfDay(hour: hour, minute: minute);
+    }
+
+    // 2. Simple format: "530", "5:30" (assume PM)
+    final simpleMatch = RegExp(
+      r'^(\d{1,2})(:(\d{2}))?$',
+    ).firstMatch(cleanMessage);
+    if (simpleMatch != null) {
+      int hour = int.parse(simpleMatch.group(1)!);
+      int minute = simpleMatch.group(3) != null
+          ? int.parse(simpleMatch.group(3)!)
+          : 0;
+      if (hour < 12) hour += 12; // Assume PM
+      print('DEBUG: _extractTimeFromMessage - simple match: ${hour}:${minute}');
+      return TimeOfDay(hour: hour, minute: minute);
+    }
+
+    // 3. Handle typos like "p a.m." (with spaces and dots)
+    final typoMatch = RegExp(
+      r'^(\d{1,2})\s*(a\.?m\.?|p\.?m\.?)$',
+      caseSensitive: false,
+    ).firstMatch(cleanMessage);
+
+    if (typoMatch != null) {
+      int hour = int.parse(typoMatch.group(1)!);
+      final ampm = typoMatch.group(2)?.toLowerCase().replaceAll('.', '');
+      if (ampm == 'pm' && hour < 12) hour += 12;
+      if (ampm == 'am' && hour == 12) hour = 0;
+      print('DEBUG: _extractTimeFromMessage - typo match: ${hour}:0');
+      return TimeOfDay(hour: hour, minute: 0);
+    }
+
+    // 4. Handle more typos like "9a.m.", "9p.m." (no spaces)
+    final noSpaceTypoMatch = RegExp(
+      r'^(\d{1,2})(a\.?m\.?|p\.?m\.?)$',
+      caseSensitive: false,
+    ).firstMatch(cleanMessage);
+
+    if (noSpaceTypoMatch != null) {
+      int hour = int.parse(noSpaceTypoMatch.group(1)!);
+      final ampm = noSpaceTypoMatch.group(2)?.toLowerCase().replaceAll('.', '');
+      if (ampm == 'pm' && hour < 12) hour += 12;
+      if (ampm == 'am' && hour == 12) hour = 0;
+      print('DEBUG: _extractTimeFromMessage - no space typo match: ${hour}:0');
+      return TimeOfDay(hour: hour, minute: 0);
+    }
+
+    // 5. Handle very short inputs that might be typos
+    if (cleanMessage.length <= 4 && RegExp(r'^\d+$').hasMatch(cleanMessage)) {
+      int hour = int.parse(cleanMessage);
+      if (hour >= 1 && hour <= 12) {
+        // Assume PM for single digit hours
+        if (hour < 12) hour += 12;
+        print('DEBUG: _extractTimeFromMessage - short number match: ${hour}:0');
+        return TimeOfDay(hour: hour, minute: 0);
+      }
+    }
+
+    print('DEBUG: _extractTimeFromMessage - no match found');
+    return null;
+  }
+
+  // Helper method to parse common time-related queries when AI fails
+  Map<String, dynamic>? _parseTimeQueryFallback(String message) {
+    final cleanMessage = message.toLowerCase().trim();
+    print('DEBUG: _parseTimeQueryFallback - input: "$message"');
+    print('DEBUG: _parseTimeQueryFallback - cleanMessage: "$cleanMessage"');
+
+    // Check for view reminders queries
+    if (cleanMessage.contains('reminder') ||
+        cleanMessage.contains('reminders')) {
+      print('DEBUG: _parseTimeQueryFallback - detected reminders query');
+
+      if (cleanMessage.contains('this week') || cleanMessage.contains('week')) {
+        print('DEBUG: _parseTimeQueryFallback - matched "this week"');
+        return {
+          'intent': 'view_reminders',
+          'fields': {'timeframe': 'this week'},
+        };
+      } else if (cleanMessage.contains('next week') ||
+          cleanMessage.contains('following week') ||
+          cleanMessage.contains('upcoming week')) {
+        print('DEBUG: _parseTimeQueryFallback - matched "next week"');
+        return {
+          'intent': 'view_reminders',
+          'fields': {'timeframe': 'next week'},
+        };
+      } else if (cleanMessage.contains('this month') ||
+          cleanMessage.contains('current month') ||
+          cleanMessage.contains('month')) {
+        print('DEBUG: _parseTimeQueryFallback - matched "this month"');
+        return {
+          'intent': 'view_reminders',
+          'fields': {'timeframe': 'this month'},
+        };
+      } else if (cleanMessage.contains('next month') ||
+          cleanMessage.contains('following month') ||
+          cleanMessage.contains('upcoming month')) {
+        print('DEBUG: _parseTimeQueryFallback - matched "next month"');
+        return {
+          'intent': 'view_reminders',
+          'fields': {'timeframe': 'next month'},
+        };
+      } else if (cleanMessage.contains('today')) {
+        print('DEBUG: _parseTimeQueryFallback - matched "today"');
+        return {
+          'intent': 'view_reminders',
+          'fields': {'timeframe': 'today'},
+        };
+      } else if (cleanMessage.contains('tomorrow') ||
+          cleanMessage.contains("tomorrow's") ||
+          cleanMessage.contains('for tomorrow')) {
+        print('DEBUG: _parseTimeQueryFallback - matched "tomorrow"');
+        return {
+          'intent': 'view_reminders',
+          'fields': {'timeframe': 'tomorrow'},
+        };
+      } else if (cleanMessage.contains('all')) {
+        print('DEBUG: _parseTimeQueryFallback - matched "all"');
+        return {
+          'intent': 'view_reminders',
+          'fields': {'timeframe': 'all'},
+        };
+      }
+    }
+
+    // Check for view tasks queries
+    if (cleanMessage.contains('task') || cleanMessage.contains('tasks')) {
+      print('DEBUG: _parseTimeQueryFallback - detected tasks query');
+
+      if (cleanMessage.contains('this week') || cleanMessage.contains('week')) {
+        print('DEBUG: _parseTimeQueryFallback - matched "this week"');
+        return {
+          'intent': 'view_tasks',
+          'fields': {'timeframe': 'this week'},
+        };
+      } else if (cleanMessage.contains('next week') ||
+          cleanMessage.contains('following week') ||
+          cleanMessage.contains('upcoming week')) {
+        print('DEBUG: _parseTimeQueryFallback - matched "next week"');
+        return {
+          'intent': 'view_tasks',
+          'fields': {'timeframe': 'next week'},
+        };
+      } else if (cleanMessage.contains('this month') ||
+          cleanMessage.contains('current month') ||
+          cleanMessage.contains('month')) {
+        print('DEBUG: _parseTimeQueryFallback - matched "this month"');
+        return {
+          'intent': 'view_tasks',
+          'fields': {'timeframe': 'this month'},
+        };
+      } else if (cleanMessage.contains('next month') ||
+          cleanMessage.contains('following month') ||
+          cleanMessage.contains('upcoming month')) {
+        print('DEBUG: _parseTimeQueryFallback - matched "next month"');
+        return {
+          'intent': 'view_tasks',
+          'fields': {'timeframe': 'next month'},
+        };
+      } else if (cleanMessage.contains('today')) {
+        print('DEBUG: _parseTimeQueryFallback - matched "today"');
+        return {
+          'intent': 'view_tasks',
+          'fields': {'timeframe': 'today'},
+        };
+      } else if (cleanMessage.contains('tomorrow') ||
+          cleanMessage.contains("tomorrow's") ||
+          cleanMessage.contains('for tomorrow')) {
+        print('DEBUG: _parseTimeQueryFallback - matched "tomorrow"');
+        return {
+          'intent': 'view_tasks',
+          'fields': {'timeframe': 'tomorrow'},
+        };
+      } else if (cleanMessage.contains('all')) {
+        print('DEBUG: _parseTimeQueryFallback - matched "all"');
+        return {
+          'intent': 'view_tasks',
+          'fields': {'timeframe': 'all'},
+        };
+      }
+    }
+
+    print('DEBUG: _parseTimeQueryFallback - no match found');
+    return null;
+  }
+
+  String _capitalizeTitle(String title) {
+    if (title.isEmpty) return title;
+
+    // Split by spaces and capitalize first letter of each word
+    final words = title.split(' ');
+    final capitalizedWords = words.map((word) {
+      if (word.isEmpty) return word;
+      return word[0].toUpperCase() + word.substring(1).toLowerCase();
+    }).toList();
+
+    return capitalizedWords.join(' ');
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted &&
@@ -234,6 +457,58 @@ class _ChatScreenNewState extends State<ChatScreenNew>
         // Debug: Print the raw AI response
         print('DEBUG: Raw AI response for message "$message": $result');
 
+        // Check if AI returned an error or invalid response
+        if (result.containsKey('error')) {
+          print('DEBUG: AI returned error: ${result['error']}');
+
+          // Try fallback parsing for common time queries
+          final fallbackResult = _parseTimeQueryFallback(message);
+          if (fallbackResult != null) {
+            print('DEBUG: Using fallback parser result: $fallbackResult');
+            // Process the fallback result as if it came from AI
+            final intent = fallbackResult['intent'];
+            final fields = fallbackResult['fields'] as Map<String, dynamic>;
+
+            // Handle the fallback result
+            if (intent == 'view_reminders') {
+              await _handleReminderQuery(fields['timeframe']);
+            } else if (intent == 'view_tasks') {
+              await _handleTaskQuery(fields['timeframe']);
+            }
+            return;
+          }
+
+          // If no fallback worked, show helpful error message
+          setState(() {
+            // Remove loading message
+            if (_messages.isNotEmpty &&
+                _messages.last.text == "🤖 Processing...") {
+              _messages.removeLast();
+            }
+
+            String errorMessage =
+                "❌ Sorry, I'm having trouble understanding that.";
+
+            // Check if it's a rate limit error
+            if (result['error'].toString().contains('rate limit') ||
+                result['error'].toString().contains('429')) {
+              errorMessage =
+                  "⏰ I'm a bit busy right now. Please try again in a few seconds.";
+            }
+
+            _messages.add(
+              _ChatMessage(
+                text: errorMessage,
+                isUser: false,
+                timestamp: DateTime.now(),
+              ),
+            );
+            _isLoading = false;
+          });
+          _scrollToBottom();
+          return;
+        }
+
         if (result is Map<String, dynamic> &&
             result.containsKey('intent') &&
             result.containsKey('fields')) {
@@ -266,7 +541,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                     aiTitle != 'reminder' &&
                     aiTitle.length > 3) {
                   // Avoid very short generic titles
-                  title = fields['title'];
+                  title = _capitalizeTitle(fields['title']);
                 }
               }
 
@@ -290,11 +565,19 @@ class _ChatScreenNewState extends State<ChatScreenNew>
               print('DEBUG: AI timeField: $timeField');
 
               // Only process date field if it's actually a date (not a time)
+              // IMPORTANT: If only time is provided, preserve the original date from pending task
               if (dateField != null && dateField is String) {
                 final now = DateTime.now();
                 final dateStr = dateField.toLowerCase();
 
-                if (dateStr == 'tomorrow') {
+                // Check if this is just a time input (like "today 09:00") - if so, preserve original date
+                if (dateStr.contains('today') && timeField != null) {
+                  // This is likely just a time input, preserve the original date
+                  dueDate = pending.dueDate;
+                  print(
+                    'DEBUG: Preserving original date for time-only input: $dueDate',
+                  );
+                } else if (dateStr == 'tomorrow') {
                   // Set only the date part, not the time
                   dueDate = DateTime(now.year, now.month, now.day + 1);
                 } else if (dateStr == 'today') {
@@ -371,9 +654,19 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                   priorityEnum = TaskPriority.medium;
               }
 
+              // Set default category to Personal if not specified (matching dropdown options)
+              String category = pending.category ?? 'Personal';
+              if (fields['category'] is String &&
+                  fields['category'].isNotEmpty) {
+                category = fields['category'].toString().toLowerCase();
+                // Capitalize first letter to match dropdown options
+                category = category[0].toUpperCase() + category.substring(1);
+              }
+
               final updatedTask = Task(
                 title: title,
                 description: description,
+                category: category,
                 priority: priorityEnum,
                 dueDate: dueDate,
                 timeOfDay: timeOfDay,
@@ -387,6 +680,21 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                     _messages.last.text == "🤖 Processing...") {
                   _messages.removeLast();
                 }
+
+                // Convert previous task confirmation messages to regular messages (remove buttons but keep text)
+                for (int i = 0; i < _messages.length; i++) {
+                  if (_messages[i].isConfirmation &&
+                      _messages[i].pendingLogEntry?.logType == 'task') {
+                    // Convert confirmation message to regular message (removes Yes/No/Edit buttons)
+                    _messages[i] = _ChatMessage(
+                      text: _messages[i].text,
+                      isUser: false,
+                      timestamp: _messages[i].timestamp,
+                      isConfirmation: false, // This removes the buttons
+                    );
+                  }
+                }
+
                 _messages.add(
                   _ChatMessage(
                     text: _getConfirmationMessage(updatedTask),
@@ -421,7 +729,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
               if (aiTitle != 'reminder' &&
                   aiTitle != 'task' &&
                   aiTitle.length > 3) {
-                title = fields['title'];
+                title = _capitalizeTitle(fields['title']);
               }
             }
 
@@ -496,8 +804,10 @@ class _ChatScreenNewState extends State<ChatScreenNew>
 
             final updatedReminder = Reminder(
               title: title,
+              description: pending.description,
               reminderTime: finalReminderTime,
               timestamp: DateTime.now(),
+              advanceTiming: pending.advanceTiming,
             );
 
             setState(() {
@@ -507,6 +817,21 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                   _messages.last.text == "🤖 Processing...") {
                 _messages.removeLast();
               }
+
+              // Convert previous reminder confirmation messages to regular messages (remove buttons but keep text)
+              for (int i = 0; i < _messages.length; i++) {
+                if (_messages[i].isConfirmation &&
+                    _messages[i].pendingLogEntry?.logType == 'reminder') {
+                  // Convert confirmation message to regular message (removes Yes/No/Edit buttons)
+                  _messages[i] = _ChatMessage(
+                    text: _messages[i].text,
+                    isUser: false,
+                    timestamp: _messages[i].timestamp,
+                    isConfirmation: false, // This removes the buttons
+                  );
+                }
+              }
+
               _messages.add(
                 _ChatMessage(
                   text: _getConfirmationMessage(updatedReminder),
@@ -526,10 +851,337 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             return;
           }
 
+          // --- Handle continue_conversation intent ---
+          if (intent == 'continue_conversation' && _pendingLog != null) {
+            print('DEBUG: Continue conversation intent detected');
+
+            // Try to extract time from the message
+            TimeOfDay? extractedTime = _extractTimeFromMessage(message);
+            print(
+              'DEBUG: Continue conversation - extracted time: $extractedTime',
+            );
+
+            if (_pendingLog is Task) {
+              final pending = _pendingLog as Task;
+              if (extractedTime != null && pending.dueDate != null) {
+                // Update task with extracted time
+                final updatedTask = Task(
+                  id: pending.id,
+                  title: pending.title,
+                  dueDate: pending.dueDate,
+                  timeOfDay: extractedTime,
+                  timestamp: DateTime.now(),
+                );
+
+                setState(() {
+                  _pendingLog = updatedTask;
+                  // Remove loading message if it exists
+                  if (_messages.isNotEmpty &&
+                      _messages.last.text == "🤖 Processing...") {
+                    _messages.removeLast();
+                  }
+
+                  // Convert previous task confirmation messages to regular messages
+                  for (int i = 0; i < _messages.length; i++) {
+                    if (_messages[i].isConfirmation &&
+                        _messages[i].pendingLogEntry?.logType == 'task') {
+                      _messages[i] = _ChatMessage(
+                        text: _messages[i].text,
+                        isUser: false,
+                        timestamp: _messages[i].timestamp,
+                        isConfirmation: false,
+                      );
+                    }
+                  }
+
+                  _messages.add(
+                    _ChatMessage(
+                      text: _getConfirmationMessage(updatedTask),
+                      isUser: false,
+                      timestamp: DateTime.now(),
+                      isConfirmation: true,
+                      onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
+                          _handleLogConfirmation(confirmed, updatedLogEntry),
+                      pendingLogEntry: updatedTask,
+                      canConfirm: _hasRequiredFields(updatedTask),
+                      showEdit: true,
+                    ),
+                  );
+                  _isLoading = false;
+                });
+                _scrollToBottom();
+                return;
+              } else {
+                // No time extracted or no due date - just continue the conversation
+                setState(() {
+                  // Remove loading message if it exists
+                  if (_messages.isNotEmpty &&
+                      _messages.last.text == "🤖 Processing...") {
+                    _messages.removeLast();
+                  }
+
+                  // Add a helpful message to continue the conversation
+                  _messages.add(
+                    _ChatMessage(
+                      text:
+                          "⏰ I didn't understand that time format. Please try again with a time like '9am', '2:30pm', or '14:30'.",
+                      isUser: false,
+                      timestamp: DateTime.now(),
+                    ),
+                  );
+                  _isLoading = false;
+                });
+                _scrollToBottom();
+                return;
+              }
+            } else if (_pendingLog is Reminder) {
+              final pending = _pendingLog as Reminder;
+              if (extractedTime != null) {
+                // Update reminder with extracted time
+                final updatedReminder = Reminder(
+                  title: pending.title,
+                  description: pending.description,
+                  reminderTime: DateTime(
+                    pending.reminderTime.year,
+                    pending.reminderTime.month,
+                    pending.reminderTime.day,
+                    extractedTime.hour,
+                    extractedTime.minute,
+                  ),
+                  timestamp: DateTime.now(),
+                  advanceTiming: pending.advanceTiming,
+                );
+
+                setState(() {
+                  _pendingLog = updatedReminder;
+                  // Remove loading message if it exists
+                  if (_messages.isNotEmpty &&
+                      _messages.last.text == "🤖 Processing...") {
+                    _messages.removeLast();
+                  }
+
+                  // Convert previous reminder confirmation messages to regular messages
+                  for (int i = 0; i < _messages.length; i++) {
+                    if (_messages[i].isConfirmation &&
+                        _messages[i].pendingLogEntry?.logType == 'reminder') {
+                      _messages[i] = _ChatMessage(
+                        text: _messages[i].text,
+                        isUser: false,
+                        timestamp: _messages[i].timestamp,
+                        isConfirmation: false,
+                      );
+                    }
+                  }
+
+                  _messages.add(
+                    _ChatMessage(
+                      text: _getConfirmationMessage(updatedReminder),
+                      isUser: false,
+                      timestamp: DateTime.now(),
+                      isConfirmation: true,
+                      onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
+                          _handleLogConfirmation(confirmed, updatedLogEntry),
+                      pendingLogEntry: updatedReminder,
+                      canConfirm: true,
+                      showEdit: true,
+                    ),
+                  );
+                  _isLoading = false;
+                });
+                _scrollToBottom();
+                return;
+              } else {
+                // No time extracted - just continue the conversation
+                setState(() {
+                  // Remove loading message if it exists
+                  if (_messages.isNotEmpty &&
+                      _messages.last.text == "🤖 Processing...") {
+                    _messages.removeLast();
+                  }
+
+                  // Add a helpful message to continue the conversation
+                  _messages.add(
+                    _ChatMessage(
+                      text:
+                          "⏰ I didn't understand that time format. Please try again with a time like '9am', '2:30pm', or '14:30'.",
+                      isUser: false,
+                      timestamp: DateTime.now(),
+                    ),
+                  );
+                  _isLoading = false;
+                });
+                _scrollToBottom();
+                return;
+              }
+            }
+          }
+
+          // --- FALLBACK: Handle any input when there's a pending log entry (for typos, etc.) ---
+          if (_pendingLog != null &&
+              (intent == 'create_task' || intent == 'create_reminder') &&
+              fields['title'] != null &&
+              (fields['title'].toString().toLowerCase() == 'reminder' ||
+                  fields['title'].toString().toLowerCase() == 'task' ||
+                  fields['title'].toString().length <= 3 ||
+                  _extractTimeFromMessage(message) != null)) {
+            print(
+              'DEBUG: Fallback continuation - treating as time/date input for pending log',
+            );
+
+            if (_pendingLog is Task) {
+              final pending = _pendingLog as Task;
+              // Try to extract time from the original message
+              TimeOfDay? extractedTime = _extractTimeFromMessage(message);
+
+              // If we extracted a time and have a due date, update the task
+              if (extractedTime != null && pending.dueDate != null) {
+                // Create updated task with extracted time
+                final updatedTask = Task(
+                  id: pending.id,
+                  title: pending.title,
+                  dueDate: DateTime(
+                    pending.dueDate!.year,
+                    pending.dueDate!.month,
+                    pending.dueDate!.day,
+                    extractedTime.hour,
+                    extractedTime.minute,
+                  ),
+                  timeOfDay: extractedTime,
+                  timestamp: DateTime.now(),
+                );
+
+                setState(() {
+                  _pendingLog = updatedTask;
+                  // Remove loading message if it exists
+                  if (_messages.isNotEmpty &&
+                      _messages.last.text == "🤖 Processing...") {
+                    _messages.removeLast();
+                  }
+
+                  // Convert previous task confirmation messages to regular messages
+                  for (int i = 0; i < _messages.length; i++) {
+                    if (_messages[i].isConfirmation &&
+                        _messages[i].pendingLogEntry?.logType == 'task') {
+                      _messages[i] = _ChatMessage(
+                        text: _messages[i].text,
+                        isUser: false,
+                        timestamp: _messages[i].timestamp,
+                        isConfirmation: false,
+                      );
+                    }
+                  }
+
+                  _messages.add(
+                    _ChatMessage(
+                      text: _getConfirmationMessage(updatedTask),
+                      isUser: false,
+                      timestamp: DateTime.now(),
+                      isConfirmation: true,
+                      onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
+                          _handleLogConfirmation(confirmed, updatedLogEntry),
+                      pendingLogEntry: updatedTask,
+                      canConfirm: _hasRequiredFields(updatedTask),
+                      showEdit: true,
+                    ),
+                  );
+                  _isLoading = false;
+                });
+                _scrollToBottom();
+                return;
+              } else {
+                // No time extracted or no due date - just continue the conversation
+                setState(() {
+                  // Remove loading message if it exists
+                  if (_messages.isNotEmpty &&
+                      _messages.last.text == "🤖 Processing...") {
+                    _messages.removeLast();
+                  }
+                  _isLoading = false;
+                });
+                _scrollToBottom();
+                return;
+              }
+            } else if (_pendingLog is Reminder) {
+              final pending = _pendingLog as Reminder;
+              // Try to extract time from the original message
+              TimeOfDay? extractedTime = _extractTimeFromMessage(message);
+
+              if (extractedTime != null) {
+                // Create updated reminder with extracted time
+                final updatedReminder = Reminder(
+                  title: pending.title,
+                  description: pending.description,
+                  reminderTime: DateTime(
+                    pending.reminderTime.year,
+                    pending.reminderTime.month,
+                    pending.reminderTime.day,
+                    extractedTime.hour,
+                    extractedTime.minute,
+                  ),
+                  timestamp: DateTime.now(),
+                  advanceTiming: pending.advanceTiming,
+                );
+
+                setState(() {
+                  _pendingLog = updatedReminder;
+                  // Remove loading message if it exists
+                  if (_messages.isNotEmpty &&
+                      _messages.last.text == "🤖 Processing...") {
+                    _messages.removeLast();
+                  }
+
+                  // Convert previous reminder confirmation messages to regular messages
+                  for (int i = 0; i < _messages.length; i++) {
+                    if (_messages[i].isConfirmation &&
+                        _messages[i].pendingLogEntry?.logType == 'reminder') {
+                      _messages[i] = _ChatMessage(
+                        text: _messages[i].text,
+                        isUser: false,
+                        timestamp: _messages[i].timestamp,
+                        isConfirmation: false,
+                      );
+                    }
+                  }
+
+                  _messages.add(
+                    _ChatMessage(
+                      text: _getConfirmationMessage(updatedReminder),
+                      isUser: false,
+                      timestamp: DateTime.now(),
+                      isConfirmation: true,
+                      onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
+                          _handleLogConfirmation(confirmed, updatedLogEntry),
+                      pendingLogEntry: updatedReminder,
+                      canConfirm: true,
+                      showEdit: true,
+                    ),
+                  );
+                  _isLoading = false;
+                });
+                _scrollToBottom();
+                return;
+              } else {
+                // No time extracted - just continue the conversation
+                setState(() {
+                  // Remove loading message if it exists
+                  if (_messages.isNotEmpty &&
+                      _messages.last.text == "🤖 Processing...") {
+                    _messages.removeLast();
+                  }
+                  _isLoading = false;
+                });
+                _scrollToBottom();
+                return;
+              }
+            }
+          }
+
           // Original AI logic for new tasks/reminders
           if (intent == 'create_task') {
-            final title = fields['title'] ?? '';
+            final title = _capitalizeTitle(fields['title'] ?? '');
             final description = fields['description'] ?? '';
+
+            // Set default priority to medium if not specified
             TaskPriority priorityEnum = TaskPriority.medium;
             if (fields['priority'] is String && fields['priority'].isNotEmpty) {
               final p = fields['priority'].toString().toLowerCase();
@@ -540,6 +1192,38 @@ class _ChatScreenNewState extends State<ChatScreenNew>
               else if (p == 'medium')
                 priorityEnum = TaskPriority.medium;
             }
+
+            // Set default category to Personal if not specified (matching dropdown options)
+            String category = 'Personal';
+            if (fields['category'] is String && fields['category'].isNotEmpty) {
+              category = fields['category'].toString().toLowerCase();
+              // Capitalize first letter to match dropdown options
+              category = category[0].toUpperCase() + category.substring(1);
+            }
+
+            // Set default reminder to none if not specified
+            ReminderType reminderType = ReminderType.none;
+            final reminderAdvance = fields['reminderAdvance'] ?? '';
+            if (reminderAdvance.isNotEmpty) {
+              if (reminderAdvance.contains('15 minutes before')) {
+                reminderType = ReminderType.fifteenMinutes;
+              } else if (reminderAdvance.contains('30 minutes before') ||
+                  reminderAdvance.contains('half an hour before')) {
+                reminderType = ReminderType.thirtyMinutes;
+              } else if (reminderAdvance.contains('1 hour before') ||
+                  reminderAdvance.contains('one hour before')) {
+                reminderType = ReminderType.oneHour;
+              } else if (reminderAdvance.contains('2 hours before')) {
+                reminderType = ReminderType.twoHours;
+              } else if (reminderAdvance.contains('1 day before')) {
+                reminderType = ReminderType.oneDay;
+              } else if (reminderAdvance.contains('5 minutes before')) {
+                reminderType = ReminderType.fiveMinutes;
+              } else if (reminderAdvance.contains('20 minutes before')) {
+                reminderType = ReminderType.twentyMinutes;
+              }
+            }
+
             DateTime? dueDate;
             if (fields['dueDate'] != null && fields['dueDate'] is String) {
               final now = DateTime.now();
@@ -556,7 +1240,12 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                 final dayName = dateStr.substring(5); // Remove "next "
                 final targetWeekday = _getWeekdayFromName(dayName);
                 if (targetWeekday != null) {
-                  final daysUntilTarget = (targetWeekday - now.weekday + 7) % 7;
+                  // Fix: Calculate days until next occurrence of target weekday
+                  int daysUntilTarget = targetWeekday - now.weekday;
+                  if (daysUntilTarget <= 0) {
+                    // If target is today or in the past, get next week's occurrence
+                    daysUntilTarget += 7;
+                  }
                   print(
                     'DEBUG: Next day calculation - targetWeekday: $targetWeekday, now.weekday: ${now.weekday}, daysUntilTarget: $daysUntilTarget',
                   );
@@ -611,9 +1300,11 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             final newTask = Task(
               title: title,
               description: description,
+              category: category,
               priority: priorityEnum,
               dueDate: dueDate,
               timeOfDay: timeOfDay,
+              reminder: reminderType,
               timestamp: DateTime.now(),
             );
             setState(() {
@@ -623,25 +1314,54 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                   _messages.last.text == "🤖 Processing...") {
                 _messages.removeLast();
               }
-              _messages.add(
-                _ChatMessage(
-                  text: _getConfirmationMessage(newTask),
-                  isUser: false,
-                  timestamp: DateTime.now(),
-                  isConfirmation: true,
-                  onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
-                      _handleLogConfirmation(confirmed, updatedLogEntry),
-                  pendingLogEntry: newTask,
-                  canConfirm: _hasRequiredFields(newTask),
-                  showEdit: true,
-                ),
-              );
+
+              // Check if task has a time set
+              bool hasTime =
+                  (newTask.timeOfDay != null) ||
+                  (newTask.dueDate != null &&
+                      (newTask.dueDate!.hour != 0 ||
+                          newTask.dueDate!.minute != 0));
+
+              if (hasTime) {
+                // Show confirmation if task has time
+                _messages.add(
+                  _ChatMessage(
+                    text: _getConfirmationMessage(newTask),
+                    isUser: false,
+                    timestamp: DateTime.now(),
+                    isConfirmation: true,
+                    onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
+                        _handleLogConfirmation(confirmed, updatedLogEntry),
+                    pendingLogEntry: newTask,
+                    canConfirm: _hasRequiredFields(newTask),
+                    showEdit: true,
+                  ),
+                );
+              } else {
+                // Show message that time is required
+                _messages.add(
+                  _ChatMessage(
+                    text:
+                        "⏰ You have not placed a time for your task. Please set a time by tapping [Edit] or typing something like 'at 18:00' or 'tomorrow at 9am'.",
+                    isUser: false,
+                    timestamp: DateTime.now(),
+                    isConfirmation: true,
+                    onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
+                        _handleLogConfirmation(confirmed, updatedLogEntry),
+                    pendingLogEntry: newTask,
+                    canConfirm: false, // Disable Yes button when no time is set
+                    showEdit: true,
+                  ),
+                );
+              }
               _isLoading = false; // Stop loading
             });
             _scrollToBottom();
             return;
           } else if (intent == 'create_reminder') {
-            final title = fields['title'] ?? '';
+            final title = _capitalizeTitle(fields['title'] ?? '');
+            final description = fields['description'] ?? '';
+            final reminderAdvance = fields['reminderAdvance'] ?? '';
             DateTime reminderTime = DateTime.now();
 
             // Debug: Print the AI response
@@ -692,12 +1412,12 @@ class _ChatScreenNewState extends State<ChatScreenNew>
               final reminderDateStr = fields['reminderDate'] as String;
               DateTime? reminderDate = DateTime.tryParse(reminderDateStr);
               if (reminderDate != null) {
-                // Set to midnight (00:00) to indicate no specific time set
+                // Set to 9 AM instead of midnight for better user experience
                 reminderTime = DateTime(
                   reminderDate.year,
                   reminderDate.month,
                   reminderDate.day,
-                  0,
+                  9,
                   0,
                 );
               }
@@ -776,10 +1496,39 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             }
 
             // Create reminder and show confirmation instead of opening modal directly
+
+            // Handle reminder advance timing
+            DateTime finalReminderTime = reminderTime;
+            if (reminderAdvance.isNotEmpty) {
+              if (reminderAdvance.contains('15 minutes before')) {
+                finalReminderTime = reminderTime.subtract(
+                  Duration(minutes: 15),
+                );
+              } else if (reminderAdvance.contains('30 minutes before') ||
+                  reminderAdvance.contains('half an hour before')) {
+                finalReminderTime = reminderTime.subtract(
+                  Duration(minutes: 30),
+                );
+              } else if (reminderAdvance.contains('1 hour before') ||
+                  reminderAdvance.contains('one hour before')) {
+                finalReminderTime = reminderTime.subtract(Duration(hours: 1));
+              } else if (reminderAdvance.contains('2 hours before')) {
+                finalReminderTime = reminderTime.subtract(Duration(hours: 2));
+              } else if (reminderAdvance.contains('1 day before')) {
+                finalReminderTime = reminderTime.subtract(Duration(days: 1));
+              } else if (reminderAdvance.contains('5 minutes before')) {
+                finalReminderTime = reminderTime.subtract(Duration(minutes: 5));
+              }
+            }
+
             final reminder = Reminder(
               title: title,
-              reminderTime: reminderTime,
+              description: description.isNotEmpty ? description : null,
+              reminderTime: reminderTime, // Store original time (e.g., 6:00am)
               timestamp: DateTime.now(),
+              advanceTiming: reminderAdvance.isNotEmpty
+                  ? reminderAdvance
+                  : null,
             );
             setState(() {
               _pendingLog =
@@ -1243,6 +1992,34 @@ class _ChatScreenNewState extends State<ChatScreenNew>
           print(
             'DEBUG: Adding _ChatMessage with showEdit: $showEdit, canConfirm: $canConfirm, onConfirmationResponse: ${true}',
           );
+          
+          // Convert previous confirmation messages to regular messages (remove buttons but keep text)
+          if (logEntry is Task) {
+            for (int i = 0; i < _messages.length; i++) {
+              if (_messages[i].isConfirmation && _messages[i].pendingLogEntry?.logType == 'task') {
+                // Convert confirmation message to regular message (removes Yes/No/Edit buttons)
+                _messages[i] = _ChatMessage(
+                  text: _messages[i].text,
+                  isUser: false,
+                  timestamp: _messages[i].timestamp,
+                  isConfirmation: false, // This removes the buttons
+                );
+              }
+            }
+          } else if (logEntry is Reminder) {
+            for (int i = 0; i < _messages.length; i++) {
+              if (_messages[i].isConfirmation && _messages[i].pendingLogEntry?.logType == 'reminder') {
+                // Convert confirmation message to regular message (removes Yes/No/Edit buttons)
+                _messages[i] = _ChatMessage(
+                  text: _messages[i].text,
+                  isUser: false,
+                  timestamp: _messages[i].timestamp,
+                  isConfirmation: false, // This removes the buttons
+                );
+              }
+            }
+          }
+          
           _messages.add(
             _ChatMessage(
               text: confirmationMessage,
@@ -1378,7 +2155,9 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                 ),
               );
             } else if (intent == 'create_reminder') {
-              final title = fields['title'] ?? '';
+              final title = _capitalizeTitle(fields['title'] ?? '');
+              final description = fields['description'] ?? '';
+              final reminderAdvance = fields['reminderAdvance'] ?? '';
               DateTime reminderTime = DateTime.now();
 
               // Handle reminderDate + reminderTime format (what AI is actually returning)
@@ -1493,10 +2272,45 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                 }
               }
               // Create reminder and show confirmation instead of opening modal directly
+
+              // Handle reminder advance timing
+              DateTime finalReminderTime = reminderTime;
+              if (reminderAdvance.isNotEmpty) {
+                if (reminderAdvance.contains('15 minutes before')) {
+                  finalReminderTime = reminderTime.subtract(
+                    Duration(minutes: 15),
+                  );
+                } else if (reminderAdvance.contains('30 minutes before') ||
+                    reminderAdvance.contains('half an hour before')) {
+                  finalReminderTime = reminderTime.subtract(
+                    Duration(minutes: 30),
+                  );
+                } else if (reminderAdvance.contains('1 hour before') ||
+                    reminderAdvance.contains('one hour before')) {
+                  finalReminderTime = reminderTime.subtract(Duration(hours: 1));
+                } else if (reminderAdvance.contains('2 hours before')) {
+                  finalReminderTime = reminderTime.subtract(Duration(hours: 2));
+                } else if (reminderAdvance.contains('1 day before')) {
+                  finalReminderTime = reminderTime.subtract(Duration(days: 1));
+                } else if (reminderAdvance.contains('5 minutes before')) {
+                  finalReminderTime = reminderTime.subtract(
+                    Duration(minutes: 5),
+                  );
+                } else if (reminderAdvance.contains('20 minutes before')) {
+                  finalReminderTime = reminderTime.subtract(
+                    Duration(minutes: 20),
+                  );
+                }
+              }
+
               final reminder = Reminder(
                 title: title,
-                reminderTime: reminderTime,
+                description: description.isNotEmpty ? description : null,
+                reminderTime: finalReminderTime,
                 timestamp: DateTime.now(),
+                advanceTiming: reminderAdvance.isNotEmpty
+                    ? reminderAdvance
+                    : null,
               );
               setState(() {
                 _messages.add(
@@ -1522,15 +2336,25 @@ class _ChatScreenNewState extends State<ChatScreenNew>
         }
       });
     } catch (e) {
+      print('DEBUG: Exception in AI processing: $e');
+
       setState(() {
+        // Remove loading message
+        if (_messages.isNotEmpty && _messages.last.text == "🤖 Processing...") {
+          _messages.removeLast();
+        }
+
         _messages.add(
           _ChatMessage(
-            text: "❌ AI Error: $e",
+            text:
+                "❌ Sorry, I'm having trouble right now. Please try again in a moment.",
             isUser: false,
             timestamp: DateTime.now(),
           ),
         );
+        _isLoading = false;
       });
+      _scrollToBottom();
     }
   }
 
@@ -1612,20 +2436,23 @@ class _ChatScreenNewState extends State<ChatScreenNew>
     switch (logEntry.logType) {
       case 'task':
         final task = logEntry as Task;
-        // Tasks require: title and dueDate (timeOfDay is optional)
+        // Tasks require: title, dueDate, AND a specific time
         final hasTitle = task.title.isNotEmpty;
         final hasDueDate = task.dueDate != null;
+        final hasTime =
+            (task.timeOfDay != null) ||
+            (task.dueDate != null &&
+                (task.dueDate!.hour != 0 || task.dueDate!.minute != 0));
 
         print('DEBUG: _hasRequiredFields - task validation:');
         print('DEBUG: _hasRequiredFields - title: "$hasTitle" (${task.title})');
         print(
           'DEBUG: _hasRequiredFields - dueDate: $hasDueDate (${task.dueDate})',
         );
-        print(
-          'DEBUG: _hasRequiredFields - timeOfDay: ${task.timeOfDay} (optional)',
-        );
+        print('DEBUG: _hasRequiredFields - timeOfDay: ${task.timeOfDay}');
+        print('DEBUG: _hasRequiredFields - hasTime: $hasTime');
 
-        return hasTitle && hasDueDate;
+        return hasTitle && hasDueDate && hasTime;
       case 'reminder':
         final reminder = logEntry as Reminder;
         // Reminders require: title and a specific time (not 00:00)
@@ -1685,7 +2512,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
               displayDateTime = date;
             }
             final timeString = _formatReminderTime(displayDateTime);
-            dateTimeInfo = " due **$timeString**";
+            dateTimeInfo = " due <b>$timeString</b>";
           } else {
             // Show date only (no time set)
             if (date.year != now.year ||
@@ -1693,16 +2520,43 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                 date.day != now.day) {
               final dateString =
                   "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}";
-              dateTimeInfo = " due $dateString (no time set yet)";
+              dateTimeInfo = " due <b>$dateString</b> (no time set yet)";
             } else {
               dateTimeInfo = " (no time set yet)";
             }
           }
         }
 
-        return "Create task: ${task.title}$dateTimeInfo?";
+        // Add priority info only (category is handled internally)
+        String priorityInfo = '';
+        if (task.priority == TaskPriority.high) {
+          priorityInfo = " 🔴 HIGH PRIORITY";
+        } else if (task.priority == TaskPriority.low) {
+          priorityInfo = " 🟢 LOW PRIORITY";
+        }
+
+        // Add reminder info
+        String reminderInfo = '';
+        if (task.reminder == ReminderType.fifteenMinutes) {
+          reminderInfo = " with reminder 15 minutes before";
+        } else if (task.reminder == ReminderType.oneHour) {
+          reminderInfo = " with reminder 1 hour before";
+        } else if (task.reminder == ReminderType.oneDay) {
+          reminderInfo = " with reminder 1 day before";
+        } else if (task.reminder == ReminderType.fiveMinutes) {
+          reminderInfo = " with reminder 5 minutes before";
+        } else if (task.reminder == ReminderType.twentyMinutes) {
+          reminderInfo = " with reminder 20 minutes before";
+        } else if (task.reminder == ReminderType.thirtyMinutes) {
+          reminderInfo = " with reminder 30 minutes before";
+        } else if (task.reminder == ReminderType.twoHours) {
+          reminderInfo = " with reminder 2 hours before";
+        }
+
+        return "Create task: ${task.title}$priorityInfo$dateTimeInfo$reminderInfo?";
       case 'reminder':
         final reminder = logEntry as Reminder;
+
         // If time is 00:00, treat as 'no time set' and only show date (if present)
         if (reminder.reminderTime.hour == 0 &&
             reminder.reminderTime.minute == 0) {
@@ -1714,13 +2568,17 @@ class _ChatScreenNewState extends State<ChatScreenNew>
               date.day != now.day) {
             final dateString =
                 "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}";
-            return "Set reminder: ${reminder.title} for $dateString (no time set yet)";
+            return "Set reminder: ${reminder.title} for <b>$dateString</b> (no time set yet)";
           } else {
             return "Set reminder: ${reminder.title} (no time set yet)";
           }
         }
         final timeString = _formatReminderTime(reminder.reminderTime);
-        return "Set reminder: ${reminder.title} for **$timeString**?";
+        String advanceInfo = '';
+        if (reminder.advanceTiming != null) {
+          advanceInfo = " with reminder ${reminder.advanceTiming}";
+        }
+        return "Set reminder: ${reminder.title} for <b>$timeString</b>$advanceInfo?";
       case 'note':
         final note = logEntry as Note;
         return "Save note: ${note.content}?";
@@ -1845,33 +2703,112 @@ class _ChatScreenNewState extends State<ChatScreenNew>
     try {
       // Get all reminders from the service
       final allReminders = await RemindersService.loadReminders();
+      print('DEBUG: _handleReminderQuery - timeframe: $timeframe');
+      print(
+        'DEBUG: _handleReminderQuery - allReminders count: ${allReminders.length}',
+      );
+      print(
+        'DEBUG: _handleReminderQuery - allReminders: ${allReminders.map((r) => '${r.title} (${r.reminderTime})').toList()}',
+      );
+
       List<Reminder> filteredReminders = [];
 
       // Filter reminders based on timeframe
       if (timeframe == 'this week') {
         final now = DateTime.now();
-        final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-        final endOfWeek = startOfWeek.add(Duration(days: 6));
 
-        filteredReminders = allReminders.where((reminder) {
-          return reminder.reminderTime.isAfter(
-                startOfWeek.subtract(Duration(days: 1)),
-              ) &&
-              reminder.reminderTime.isBefore(endOfWeek.add(Duration(days: 1)));
-        }).toList();
-      } else if (timeframe == 'next week') {
+        // Smart context-aware logic: If today is Sunday, "this week" = just today
+        // If today is Monday-Saturday, "this week" = full week (Monday-Sunday)
+        if (now.weekday == 7) {
+          // Sunday
+          // Show only today's reminders
+          final today = DateTime(now.year, now.month, now.day);
+          final tomorrow = today.add(Duration(days: 1));
+
+          print('DEBUG: this week filtering (Sunday) - now: $now');
+          print('DEBUG: this week filtering (Sunday) - today: $today');
+          print('DEBUG: this week filtering (Sunday) - tomorrow: $tomorrow');
+
+          filteredReminders = allReminders.where((reminder) {
+            final isInRange =
+                reminder.reminderTime.isAfter(
+                  today.subtract(Duration(seconds: 1)),
+                ) &&
+                reminder.reminderTime.isBefore(tomorrow);
+            print(
+              'DEBUG: reminder ${reminder.title} (${reminder.reminderTime}) - isInRange: $isInRange',
+            );
+            return isInRange;
+          }).toList();
+
+          print(
+            'DEBUG: this week filteredReminders count (Sunday): ${filteredReminders.length}',
+          );
+        } else {
+          // Show full week (Monday-Sunday)
+          final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+          final endOfWeek = startOfWeek.add(Duration(days: 6));
+
+          print('DEBUG: this week filtering (full week) - now: $now');
+          print(
+            'DEBUG: this week filtering (full week) - startOfWeek: $startOfWeek',
+          );
+          print(
+            'DEBUG: this week filtering (full week) - endOfWeek: $endOfWeek',
+          );
+
+          filteredReminders = allReminders.where((reminder) {
+            final isInRange =
+                reminder.reminderTime.isAfter(
+                  startOfWeek.subtract(Duration(seconds: 1)),
+                ) &&
+                reminder.reminderTime.isBefore(
+                  endOfWeek.add(Duration(days: 1)),
+                );
+            print(
+              'DEBUG: reminder ${reminder.title} (${reminder.reminderTime}) - isInRange: $isInRange',
+            );
+            return isInRange;
+          }).toList();
+
+          print(
+            'DEBUG: this week filteredReminders count (full week): ${filteredReminders.length}',
+          );
+        }
+      } else if (timeframe == 'next week' ||
+          timeframe == 'following week' ||
+          timeframe == 'upcoming week') {
         final now = DateTime.now();
-        final startOfNextWeek = now.add(Duration(days: 8 - now.weekday));
-        final endOfNextWeek = startOfNextWeek.add(Duration(days: 6));
+        // Calculate start of next week (Monday) - set to beginning of day
+        final daysToNextMonday = 8 - now.weekday;
+        final nextMonday = DateTime(
+          now.year,
+          now.month,
+          now.day + daysToNextMonday,
+        );
+        final endOfNextWeek = nextMonday.add(Duration(days: 6));
+
+        print('DEBUG: next week filtering - now: $now');
+        print('DEBUG: next week filtering - nextMonday: $nextMonday');
+        print('DEBUG: next week filtering - endOfNextWeek: $endOfNextWeek');
 
         filteredReminders = allReminders.where((reminder) {
-          return reminder.reminderTime.isAfter(
-                startOfNextWeek.subtract(Duration(days: 1)),
+          final isInRange =
+              reminder.reminderTime.isAfter(
+                nextMonday.subtract(Duration(seconds: 1)),
               ) &&
               reminder.reminderTime.isBefore(
                 endOfNextWeek.add(Duration(days: 1)),
               );
+          print(
+            'DEBUG: reminder ${reminder.title} (${reminder.reminderTime}) - isInRange: $isInRange',
+          );
+          return isInRange;
         }).toList();
+
+        print(
+          'DEBUG: next week filteredReminders count: ${filteredReminders.length}',
+        );
       } else if (timeframe.startsWith('next ') && timeframe.contains('week')) {
         // Handle "next X weeks" format
         final weekMatch = RegExp(r'next (\d+) weeks?').firstMatch(timeframe);
@@ -1883,12 +2820,25 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             Duration(days: weeks * 7 - 1),
           ); // X weeks from start
 
+          print('DEBUG: next X weeks filtering - weeks: $weeks');
+          print('DEBUG: next X weeks filtering - startDate: $startDate');
+          print('DEBUG: next X weeks filtering - endDate: $endDate');
+
           filteredReminders = allReminders.where((reminder) {
-            return reminder.reminderTime.isAfter(
+            final isInRange =
+                reminder.reminderTime.isAfter(
                   startDate.subtract(Duration(seconds: 1)),
                 ) &&
                 reminder.reminderTime.isBefore(endDate.add(Duration(days: 1)));
+            print(
+              'DEBUG: reminder ${reminder.title} (${reminder.reminderTime}) - isInRange: $isInRange',
+            );
+            return isInRange;
           }).toList();
+
+          print(
+            'DEBUG: next X weeks filteredReminders count: ${filteredReminders.length}',
+          );
         } else {
           // Fallback to next week if parsing fails
           final now = DateTime.now();
@@ -1904,52 +2854,197 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                 );
           }).toList();
         }
-      } else if (timeframe == 'this month') {
+      } else if (timeframe == 'this month' || timeframe == 'current month') {
         final now = DateTime.now();
         final startOfMonth = DateTime(now.year, now.month, 1);
         final endOfMonth = DateTime(now.year, now.month + 1, 0);
 
+        print('DEBUG: this month filtering - now: $now');
+        print('DEBUG: this month filtering - startOfMonth: $startOfMonth');
+        print('DEBUG: this month filtering - endOfMonth: $endOfMonth');
+
         filteredReminders = allReminders.where((reminder) {
-          return reminder.reminderTime.isAfter(
+          final isInRange =
+              reminder.reminderTime.isAfter(
                 startOfMonth.subtract(Duration(seconds: 1)),
               ) &&
               reminder.reminderTime.isBefore(endOfMonth.add(Duration(days: 1)));
+          print(
+            'DEBUG: reminder ${reminder.title} (${reminder.reminderTime}) - isInRange: $isInRange',
+          );
+          return isInRange;
         }).toList();
-      } else if (timeframe == 'next month') {
+
+        print(
+          'DEBUG: this month filteredReminders count: ${filteredReminders.length}',
+        );
+      } else if (timeframe == 'next month' ||
+          timeframe == 'following month' ||
+          timeframe == 'upcoming month') {
         final now = DateTime.now();
         final startOfNextMonth = DateTime(now.year, now.month + 1, 1);
-        final endOfNextMonth = DateTime(now.year, now.month + 2, 0);
+        final endOfNextMonth = DateTime(
+          now.year,
+          now.month + 2,
+          1,
+        ).subtract(Duration(days: 1));
+
+        print('DEBUG: next month filtering - now: $now');
+        print(
+          'DEBUG: next month filtering - startOfNextMonth: $startOfNextMonth',
+        );
+        print('DEBUG: next month filtering - endOfNextMonth: $endOfNextMonth');
 
         filteredReminders = allReminders.where((reminder) {
-          return reminder.reminderTime.isAfter(
+          final isInRange =
+              reminder.reminderTime.isAfter(
                 startOfNextMonth.subtract(Duration(seconds: 1)),
               ) &&
               reminder.reminderTime.isBefore(
                 endOfNextMonth.add(Duration(days: 1)),
               );
+          print(
+            'DEBUG: reminder ${reminder.title} (${reminder.reminderTime}) - isInRange: $isInRange',
+          );
+          return isInRange;
         }).toList();
+
+        print(
+          'DEBUG: next month filteredReminders count: ${filteredReminders.length}',
+        );
       } else if (timeframe == 'today') {
         final now = DateTime.now();
         final today = DateTime(now.year, now.month, now.day);
         final tomorrow = today.add(Duration(days: 1));
 
+        print('DEBUG: today filtering - now: $now');
+        print('DEBUG: today filtering - today: $today');
+        print('DEBUG: today filtering - tomorrow: $tomorrow');
+
         filteredReminders = allReminders.where((reminder) {
-          return reminder.reminderTime.isAfter(
+          final isInRange =
+              reminder.reminderTime.isAfter(
                 today.subtract(Duration(seconds: 1)),
               ) &&
               reminder.reminderTime.isBefore(tomorrow);
+          print(
+            'DEBUG: reminder ${reminder.title} (${reminder.reminderTime}) - isInRange: $isInRange',
+          );
+          return isInRange;
         }).toList();
+
+        print(
+          'DEBUG: today filteredReminders count: ${filteredReminders.length}',
+        );
       } else if (timeframe == 'tomorrow') {
         final now = DateTime.now();
         final tomorrow = DateTime(now.year, now.month, now.day + 1);
         final dayAfterTomorrow = tomorrow.add(Duration(days: 1));
 
+        print('DEBUG: tomorrow filtering - now: $now');
+        print('DEBUG: tomorrow filtering - tomorrow: $tomorrow');
+        print(
+          'DEBUG: tomorrow filtering - dayAfterTomorrow: $dayAfterTomorrow',
+        );
+
         filteredReminders = allReminders.where((reminder) {
-          return reminder.reminderTime.isAfter(
+          final isInRange =
+              reminder.reminderTime.isAfter(
                 tomorrow.subtract(Duration(seconds: 1)),
               ) &&
               reminder.reminderTime.isBefore(dayAfterTomorrow);
+          print(
+            'DEBUG: reminder ${reminder.title} (${reminder.reminderTime}) - isInRange: $isInRange',
+          );
+          return isInRange;
         }).toList();
+
+        print(
+          'DEBUG: tomorrow filteredReminders count: ${filteredReminders.length}',
+        );
+      } else if (timeframe.startsWith('this ') ||
+          timeframe.startsWith('next ')) {
+        // Handle day-of-week queries like "this Monday", "next Tuesday"
+        final now = DateTime.now();
+        String targetDay = '';
+        bool isNextWeek = false;
+
+        if (timeframe.startsWith('this ')) {
+          targetDay = timeframe.substring(5); // Remove "this "
+        } else if (timeframe.startsWith('next ')) {
+          targetDay = timeframe.substring(5); // Remove "next "
+          isNextWeek = true;
+        }
+
+        print(
+          'DEBUG: task day-of-week filtering - targetDay: $targetDay, isNextWeek: $isNextWeek',
+        );
+
+        // Convert day name to weekday number (1=Monday, 7=Sunday)
+        int targetWeekday = 0;
+        switch (targetDay.toLowerCase()) {
+          case 'monday':
+            targetWeekday = 1;
+            break;
+          case 'tuesday':
+            targetWeekday = 2;
+            break;
+          case 'wednesday':
+            targetWeekday = 3;
+            break;
+          case 'thursday':
+            targetWeekday = 4;
+            break;
+          case 'friday':
+            targetWeekday = 5;
+            break;
+          case 'saturday':
+            targetWeekday = 6;
+            break;
+          case 'sunday':
+            targetWeekday = 7;
+            break;
+        }
+
+        if (targetWeekday > 0) {
+          final currentWeekday = now.weekday;
+          int daysToAdd = 0;
+
+          if (isNextWeek) {
+            // Next week: calculate days to next occurrence of target day
+            daysToAdd = (targetWeekday - currentWeekday + 7) % 7;
+            if (daysToAdd == 0)
+              daysToAdd = 7; // If it's the same day, go to next week
+          } else {
+            // This week: calculate days to next occurrence of target day
+            daysToAdd = (targetWeekday - currentWeekday + 7) % 7;
+          }
+
+          final targetDate = DateTime(now.year, now.month, now.day + daysToAdd);
+          final nextDay = targetDate.add(Duration(days: 1));
+
+          print('DEBUG: task day-of-week filtering - targetDate: $targetDate');
+          print('DEBUG: task day-of-week filtering - nextDay: $nextDay');
+
+          filteredReminders = allReminders.where((reminder) {
+            final isInRange =
+                reminder.reminderTime.isAfter(
+                  targetDate.subtract(Duration(seconds: 1)),
+                ) &&
+                reminder.reminderTime.isBefore(nextDay);
+            print(
+              'DEBUG: reminder ${reminder.title} (${reminder.reminderTime}) - isInRange: $isInRange',
+            );
+            return isInRange;
+          }).toList();
+
+          print(
+            'DEBUG: day-of-week filteredReminders count: ${filteredReminders.length}',
+          );
+        } else {
+          // Invalid day name, show all reminders
+          filteredReminders = allReminders;
+        }
       } else {
         // Show all reminders (for "all" timeframe)
         filteredReminders = allReminders;
@@ -1981,7 +3076,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
           _messages.add(
             _ChatMessage(
               text:
-                  "📅 Reminders for ${timeframe == 'all' ? 'all time' : timeframe}:",
+                  "📅 Reminders for <b>${timeframe == 'all' ? 'all time' : timeframe}</b>:",
               isUser: false,
               timestamp: DateTime.now(),
             ),
@@ -2053,37 +3148,94 @@ class _ChatScreenNewState extends State<ChatScreenNew>
       // Filter tasks based on timeframe
       if (timeframe == 'this week') {
         final now = DateTime.now();
-        final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-        final endOfWeek = startOfWeek.add(Duration(days: 6));
 
-        print('DEBUG: this week filtering - now: $now');
-        print('DEBUG: this week filtering - startOfWeek: $startOfWeek');
-        print('DEBUG: this week filtering - endOfWeek: $endOfWeek');
+        // Smart context-aware logic: If today is Sunday, "this week" = just today
+        // If today is Monday-Saturday, "this week" = full week (Monday-Sunday)
+        if (now.weekday == 7) {
+          // Sunday
+          // Show only today's tasks
+          final today = DateTime(now.year, now.month, now.day);
+          final tomorrow = today.add(Duration(days: 1));
+
+          print('DEBUG: this week filtering (Sunday) - now: $now');
+          print('DEBUG: this week filtering (Sunday) - today: $today');
+          print('DEBUG: this week filtering (Sunday) - tomorrow: $tomorrow');
+
+          filteredTasks = allTasks.where((task) {
+            if (task.dueDate == null) return false;
+            final isInRange =
+                task.dueDate!.isAfter(today.subtract(Duration(seconds: 1))) &&
+                task.dueDate!.isBefore(tomorrow);
+            print(
+              'DEBUG: task ${task.title} (${task.dueDate}) - isInRange: $isInRange',
+            );
+            return isInRange;
+          }).toList();
+
+          print(
+            'DEBUG: this week filteredTasks count (Sunday): ${filteredTasks.length}',
+          );
+        } else {
+          // Show full week (Monday-Sunday)
+          final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+          final endOfWeek = startOfWeek.add(Duration(days: 6));
+
+          print('DEBUG: this week filtering (full week) - now: $now');
+          print(
+            'DEBUG: this week filtering (full week) - startOfWeek: $startOfWeek',
+          );
+          print(
+            'DEBUG: this week filtering (full week) - endOfWeek: $endOfWeek',
+          );
+
+          filteredTasks = allTasks.where((task) {
+            if (task.dueDate == null) return false;
+            final isInRange =
+                task.dueDate!.isAfter(
+                  startOfWeek.subtract(Duration(seconds: 1)),
+                ) &&
+                task.dueDate!.isBefore(endOfWeek.add(Duration(days: 1)));
+            print(
+              'DEBUG: task ${task.title} (${task.dueDate}) - isInRange: $isInRange',
+            );
+            return isInRange;
+          }).toList();
+
+          print(
+            'DEBUG: this week filteredTasks count (full week): ${filteredTasks.length}',
+          );
+        }
+      } else if (timeframe == 'next week' ||
+          timeframe == 'following week' ||
+          timeframe == 'upcoming week') {
+        final now = DateTime.now();
+        // Calculate start of next week (Monday) - set to beginning of day
+        final daysToNextMonday = 8 - now.weekday;
+        final nextMonday = DateTime(
+          now.year,
+          now.month,
+          now.day + daysToNextMonday,
+        );
+        final endOfNextWeek = nextMonday.add(Duration(days: 6));
+
+        print('DEBUG: next week filtering - now: $now');
+        print('DEBUG: next week filtering - nextMonday: $nextMonday');
+        print('DEBUG: next week filtering - endOfNextWeek: $endOfNextWeek');
 
         filteredTasks = allTasks.where((task) {
           if (task.dueDate == null) return false;
           final isInRange =
-              task.dueDate!.isAfter(startOfWeek.subtract(Duration(days: 1))) &&
-              task.dueDate!.isBefore(endOfWeek.add(Duration(days: 1)));
+              task.dueDate!.isAfter(
+                nextMonday.subtract(Duration(seconds: 1)),
+              ) &&
+              task.dueDate!.isBefore(endOfNextWeek.add(Duration(days: 1)));
           print(
             'DEBUG: task ${task.title} (${task.dueDate}) - isInRange: $isInRange',
           );
           return isInRange;
         }).toList();
 
-        print('DEBUG: this week filteredTasks count: ${filteredTasks.length}');
-      } else if (timeframe == 'next week') {
-        final now = DateTime.now();
-        final startOfNextWeek = now.add(Duration(days: 8 - now.weekday));
-        final endOfNextWeek = startOfNextWeek.add(Duration(days: 6));
-
-        filteredTasks = allTasks.where((task) {
-          if (task.dueDate == null) return false;
-          return task.dueDate!.isAfter(
-                startOfNextWeek.subtract(Duration(days: 1)),
-              ) &&
-              task.dueDate!.isBefore(endOfNextWeek.add(Duration(days: 1)));
-        }).toList();
+        print('DEBUG: next week filteredTasks count: ${filteredTasks.length}');
       } else if (timeframe.startsWith('next ') && timeframe.contains('week')) {
         // Handle "next X weeks" format
         final weekMatch = RegExp(r'next (\d+) weeks?').firstMatch(timeframe);
@@ -2095,38 +3247,94 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             Duration(days: weeks * 7 - 1),
           ); // X weeks from start
 
+          print('DEBUG: next X weeks filtering - weeks: $weeks');
+          print('DEBUG: next X weeks filtering - startDate: $startDate');
+          print('DEBUG: next X weeks filtering - endDate: $endDate');
+
           filteredTasks = allTasks.where((task) {
             if (task.dueDate == null) return false;
-            return task.dueDate!.isAfter(
+            final isInRange =
+                task.dueDate!.isAfter(
                   startDate.subtract(Duration(seconds: 1)),
                 ) &&
                 task.dueDate!.isBefore(endDate.add(Duration(days: 1)));
+            print(
+              'DEBUG: task ${task.title} (${task.dueDate}) - isInRange: $isInRange',
+            );
+            return isInRange;
+          }).toList();
+
+          print(
+            'DEBUG: next X weeks filteredTasks count: ${filteredTasks.length}',
+          );
+        } else {
+          // Fallback to next week if parsing fails
+          final now = DateTime.now();
+          final startOfNextWeek = now.add(Duration(days: 8 - now.weekday));
+          final endOfNextWeek = startOfNextWeek.add(Duration(days: 6));
+
+          filteredTasks = allTasks.where((task) {
+            if (task.dueDate == null) return false;
+            return task.dueDate!.isAfter(
+                  startOfNextWeek.subtract(Duration(days: 1)),
+                ) &&
+                task.dueDate!.isBefore(endOfNextWeek.add(Duration(days: 1)));
           }).toList();
         }
-      } else if (timeframe == 'this month') {
+      } else if (timeframe == 'this month' || timeframe == 'current month') {
         final now = DateTime.now();
         final startOfMonth = DateTime(now.year, now.month, 1);
         final endOfMonth = DateTime(now.year, now.month + 1, 0);
 
-        filteredTasks = allTasks.where((task) {
-          if (task.dueDate == null) return false;
-          return task.dueDate!.isAfter(
-                startOfMonth.subtract(Duration(seconds: 1)),
-              ) &&
-              task.dueDate!.isBefore(endOfMonth.add(Duration(days: 1)));
-        }).toList();
-      } else if (timeframe == 'next month') {
-        final now = DateTime.now();
-        final startOfNextMonth = DateTime(now.year, now.month + 1, 1);
-        final endOfNextMonth = DateTime(now.year, now.month + 2, 0);
+        print('DEBUG: this month filtering - now: $now');
+        print('DEBUG: this month filtering - startOfMonth: $startOfMonth');
+        print('DEBUG: this month filtering - endOfMonth: $endOfMonth');
 
         filteredTasks = allTasks.where((task) {
           if (task.dueDate == null) return false;
-          return task.dueDate!.isAfter(
+          final isInRange =
+              task.dueDate!.isAfter(
+                startOfMonth.subtract(Duration(seconds: 1)),
+              ) &&
+              task.dueDate!.isBefore(endOfMonth.add(Duration(days: 1)));
+          print(
+            'DEBUG: task ${task.title} (${task.dueDate}) - isInRange: $isInRange',
+          );
+          return isInRange;
+        }).toList();
+
+        print('DEBUG: this month filteredTasks count: ${filteredTasks.length}');
+      } else if (timeframe == 'next month' ||
+          timeframe == 'following month' ||
+          timeframe == 'upcoming month') {
+        final now = DateTime.now();
+        final startOfNextMonth = DateTime(now.year, now.month + 1, 1);
+        final endOfNextMonth = DateTime(
+          now.year,
+          now.month + 2,
+          1,
+        ).subtract(Duration(days: 1));
+
+        print('DEBUG: next month filtering - now: $now');
+        print(
+          'DEBUG: next month filtering - startOfNextMonth: $startOfNextMonth',
+        );
+        print('DEBUG: next month filtering - endOfNextMonth: $endOfNextMonth');
+
+        filteredTasks = allTasks.where((task) {
+          if (task.dueDate == null) return false;
+          final isInRange =
+              task.dueDate!.isAfter(
                 startOfNextMonth.subtract(Duration(seconds: 1)),
               ) &&
               task.dueDate!.isBefore(endOfNextMonth.add(Duration(days: 1)));
+          print(
+            'DEBUG: task ${task.title} (${task.dueDate}) - isInRange: $isInRange',
+          );
+          return isInRange;
         }).toList();
+
+        print('DEBUG: next month filteredTasks count: ${filteredTasks.length}');
       } else if (timeframe == 'today') {
         final now = DateTime.now();
         final today = DateTime(now.year, now.month, now.day);
@@ -2149,6 +3357,90 @@ class _ChatScreenNewState extends State<ChatScreenNew>
               ) &&
               task.dueDate!.isBefore(dayAfterTomorrow);
         }).toList();
+      } else if (timeframe.startsWith('this ') ||
+          timeframe.startsWith('next ')) {
+        // Handle day-of-week queries like "this Monday", "next Tuesday"
+        final now = DateTime.now();
+        String targetDay = '';
+        bool isNextWeek = false;
+
+        if (timeframe.startsWith('this ')) {
+          targetDay = timeframe.substring(5); // Remove "this "
+        } else if (timeframe.startsWith('next ')) {
+          targetDay = timeframe.substring(5); // Remove "next "
+          isNextWeek = true;
+        }
+
+        print(
+          'DEBUG: task day-of-week filtering - targetDay: $targetDay, isNextWeek: $isNextWeek',
+        );
+
+        // Convert day name to weekday number (1=Monday, 7=Sunday)
+        int targetWeekday = 0;
+        switch (targetDay.toLowerCase()) {
+          case 'monday':
+            targetWeekday = 1;
+            break;
+          case 'tuesday':
+            targetWeekday = 2;
+            break;
+          case 'wednesday':
+            targetWeekday = 3;
+            break;
+          case 'thursday':
+            targetWeekday = 4;
+            break;
+          case 'friday':
+            targetWeekday = 5;
+            break;
+          case 'saturday':
+            targetWeekday = 6;
+            break;
+          case 'sunday':
+            targetWeekday = 7;
+            break;
+        }
+
+        if (targetWeekday > 0) {
+          final currentWeekday = now.weekday;
+          int daysToAdd = 0;
+
+          if (isNextWeek) {
+            // Next week: calculate days to next occurrence of target day
+            daysToAdd = (targetWeekday - currentWeekday + 7) % 7;
+            if (daysToAdd == 0)
+              daysToAdd = 7; // If it's the same day, go to next week
+          } else {
+            // This week: calculate days to next occurrence of target day
+            daysToAdd = (targetWeekday - currentWeekday + 7) % 7;
+          }
+
+          final targetDate = DateTime(now.year, now.month, now.day + daysToAdd);
+          final nextDay = targetDate.add(Duration(days: 1));
+
+          print('DEBUG: task day-of-week filtering - targetDate: $targetDate');
+          print('DEBUG: task day-of-week filtering - nextDay: $nextDay');
+
+          filteredTasks = allTasks.where((task) {
+            if (task.dueDate == null) return false;
+            final isInRange =
+                task.dueDate!.isAfter(
+                  targetDate.subtract(Duration(seconds: 1)),
+                ) &&
+                task.dueDate!.isBefore(nextDay);
+            print(
+              'DEBUG: task ${task.title} (${task.dueDate}) - isInRange: $isInRange',
+            );
+            return isInRange;
+          }).toList();
+
+          print(
+            'DEBUG: task day-of-week filteredTasks count: ${filteredTasks.length}',
+          );
+        } else {
+          // Invalid day name, show all tasks
+          filteredTasks = allTasks;
+        }
       } else {
         // Show all tasks (for "all" timeframe)
         filteredTasks = allTasks;
@@ -2173,7 +3465,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
           _messages.add(
             _ChatMessage(
               text:
-                  "📋 No tasks found for ${timeframe == 'all' ? 'any time' : timeframe}.",
+                  "📋 No tasks found for <b>${timeframe == 'all' ? 'any time' : timeframe}</b>.",
               isUser: false,
               timestamp: DateTime.now(),
             ),
@@ -2183,7 +3475,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
           _messages.add(
             _ChatMessage(
               text:
-                  "📋 Tasks for ${timeframe == 'all' ? 'all time' : timeframe}:",
+                  "📋 Tasks for <b>${timeframe == 'all' ? 'all time' : timeframe}</b>:",
               isUser: false,
               timestamp: DateTime.now(),
             ),
@@ -2453,17 +3745,21 @@ class _ChatScreenNewState extends State<ChatScreenNew>
               task.timeOfDay!.minute,
             ),
           );
-          return "Task created: ${task.title} due **$timeString**";
+          return "Task created: ${task.title} due <b>$timeString</b>";
         } else if (task.dueDate != null) {
           final dateString =
               "${task.dueDate!.day.toString().padLeft(2, '0')}/${task.dueDate!.month.toString().padLeft(2, '0')}/${task.dueDate!.year}";
-          return "Task created: ${task.title} due **$dateString**";
+          return "Task created: ${task.title} due <b>$dateString</b>";
         }
         return "Task created: ${task.title}";
       case 'reminder':
         final reminder = logEntry as Reminder;
         final dateTimeString = _formatReminderTime(reminder.reminderTime);
-        return "Reminder set: ${reminder.title} on **$dateTimeString**";
+        String advanceInfo = '';
+        if (reminder.advanceTiming != null) {
+          advanceInfo = " with reminder ${reminder.advanceTiming}";
+        }
+        return "Reminder set: ${reminder.title} on <b>$dateTimeString</b>$advanceInfo";
       case 'note':
         final note = logEntry as Note;
         return "Note saved: ${note.content}";
@@ -2477,31 +3773,31 @@ class _ChatScreenNewState extends State<ChatScreenNew>
   }
 
   String _getCancelledMessage(LogEntry? logEntry) {
-    if (logEntry == null) return "Entry cancelled";
+    if (logEntry == null) return "❌ Entry cancelled";
     switch (logEntry.logType) {
       case 'expense':
-        return "Expense cancelled";
+        return "❌ Expense cancelled";
       case 'task':
-        return "Task cancelled";
+        return "❌ Task cancelled";
       case 'reminder':
-        return "Reminder cancelled";
+        return "❌ Reminder cancelled";
       case 'note':
-        return "Note cancelled";
+        return "❌ Note cancelled";
       case 'gym':
-        return "Workout cancelled";
+        return "❌ Workout cancelled";
       default:
-        return "Entry cancelled";
+        return "❌ Entry cancelled";
     }
   }
 
   String _getNoRemindersMessage(String filter, int? day) {
     switch (filter) {
       case 'today':
-        return "You don't have any reminders for today.";
+        return "You don't have any reminders for <b>today</b>.";
       case 'week':
-        return "You don't have any reminders for this week.";
+        return "You don't have any reminders for <b>this week</b>.";
       case 'day':
-        return "You don't have any reminders for the $day${_getDaySuffix(day)}.";
+        return "You don't have any reminders for the <b>$day${_getDaySuffix(day)}</b>.";
       default:
         return "You don't have any reminders.";
     }
@@ -2510,11 +3806,11 @@ class _ChatScreenNewState extends State<ChatScreenNew>
   String _getRemindersListMessage(String filter, int? day) {
     switch (filter) {
       case 'today':
-        return "Here are your reminders for today:";
+        return "Here are your reminders for <b>today</b>:";
       case 'week':
-        return "Here are your reminders for this week:";
+        return "Here are your reminders for <b>this week</b>:";
       case 'day':
-        return "Here are your reminders for the $day${_getDaySuffix(day)}:";
+        return "Here are your reminders for the <b>$day${_getDaySuffix(day)}</b>:";
       default:
         return "Here are all your reminders:";
     }

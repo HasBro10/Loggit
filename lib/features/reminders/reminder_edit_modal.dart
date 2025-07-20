@@ -27,6 +27,38 @@ Future<Reminder?> showReminderEditModal(
   ];
   String selectedAdvanceTime = 'At the time';
 
+  // Set the correct advance time when editing
+  if (isEditing && initial?.advanceTiming != null) {
+    final advanceTiming = initial!.advanceTiming!;
+    print(
+      'DEBUG: Setting advance time dropdown. Stored advanceTiming: "$advanceTiming"',
+    );
+    // Use exact matching to avoid false positives
+    if (advanceTiming == '5 minutes before') {
+      selectedAdvanceTime = '5 minutes before';
+      print('DEBUG: Matched to "5 minutes before"');
+    } else if (advanceTiming == '15 minutes before') {
+      selectedAdvanceTime = '15 minutes before';
+      print('DEBUG: Matched to "15 minutes before"');
+    } else if (advanceTiming == '30 minutes before' ||
+        advanceTiming == 'half an hour before') {
+      selectedAdvanceTime = '30 minutes before';
+      print('DEBUG: Matched to "30 minutes before"');
+    } else if (advanceTiming == '1 hour before' ||
+        advanceTiming == 'one hour before') {
+      selectedAdvanceTime = '1 hour before';
+      print('DEBUG: Matched to "1 hour before"');
+    } else if (advanceTiming == '2 hours before') {
+      selectedAdvanceTime = '2 hours before';
+      print('DEBUG: Matched to "2 hours before"');
+    } else if (advanceTiming == '1 day before') {
+      selectedAdvanceTime = '1 day before';
+      print('DEBUG: Matched to "1 day before"');
+    } else {
+      print('DEBUG: No match found for advanceTiming: "$advanceTiming"');
+    }
+  }
+
   // Validation state variables
   final ValueNotifier<bool> showTitleError = ValueNotifier<bool>(false);
   final ValueNotifier<bool> showDateError = ValueNotifier<bool>(false);
@@ -491,55 +523,22 @@ Future<Reminder?> showReminderEditModal(
                                 }
                                 setModalState(() => error = null);
 
-                                // Calculate actual reminder time based on advance time selection
-                                DateTime actualReminderTime = date!;
-                                switch (selectedAdvanceTime) {
-                                  case '5 minutes before':
-                                    actualReminderTime = date!.subtract(
-                                      Duration(minutes: 5),
-                                    );
-                                    break;
-                                  case '15 minutes before':
-                                    actualReminderTime = date!.subtract(
-                                      Duration(minutes: 15),
-                                    );
-                                    break;
-                                  case '30 minutes before':
-                                    actualReminderTime = date!.subtract(
-                                      Duration(minutes: 30),
-                                    );
-                                    break;
-                                  case '1 hour before':
-                                    actualReminderTime = date!.subtract(
-                                      Duration(hours: 1),
-                                    );
-                                    break;
-                                  case '2 hours before':
-                                    actualReminderTime = date!.subtract(
-                                      Duration(hours: 2),
-                                    );
-                                    break;
-                                  case '1 day before':
-                                    actualReminderTime = date!.subtract(
-                                      Duration(days: 1),
-                                    );
-                                    break;
-                                  case 'At the time':
-                                  default:
-                                    actualReminderTime = date!;
-                                    break;
-                                }
-
+                                // Store the original time, not the calculated time
+                                // The advance timing will be used to determine when to actually trigger the reminder
                                 final reminder = Reminder(
                                   title: title,
                                   description:
                                       descController.text.trim().isEmpty
                                       ? null
                                       : descController.text.trim(),
-                                  reminderTime: actualReminderTime,
+                                  reminderTime: date!, // Store original time
                                   isCompleted: initial?.isCompleted ?? false,
                                   timestamp:
                                       initial?.timestamp ?? DateTime.now(),
+                                  advanceTiming:
+                                      selectedAdvanceTime == 'At the time'
+                                      ? null
+                                      : selectedAdvanceTime,
                                 );
                                 Navigator.pop(context, reminder);
                               },

@@ -17,7 +17,16 @@ enum TaskPriority { low, medium, high }
 
 enum TaskStatus { notStarted, inProgress, completed }
 
-enum ReminderType { none, fifteenMinutes, oneHour, oneDay }
+enum ReminderType {
+  none,
+  fiveMinutes,
+  fifteenMinutes,
+  twentyMinutes,
+  thirtyMinutes,
+  oneHour,
+  twoHours,
+  oneDay,
+}
 
 class Task implements LogEntry {
   final String id;

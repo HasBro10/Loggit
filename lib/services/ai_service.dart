@@ -21,6 +21,8 @@ RULES:
 - IMPORTANT: When user says just "Monday", "Tuesday", etc., interpret as "this Monday", "this Tuesday" (the next occurrence of that day).
 - IMPORTANT: Only use "next Monday" when user explicitly says "next Monday".
 - Always extract the time if mentioned (e.g., "9 pm", "21:00"). For tasks, time is optional - only include timeOfDay if user specifies a time.
+- For priority, detect: "high priority", "urgent", "important", "higher level", "high-level", "critical" as high priority.
+- For reminders, detect reminder timing: "15 minutes before", "30 minutes before", "1 hour before", "2 hours before", "1 day before", "5 minutes before", "20 minutes before" as reminderAdvance.
 - For reminder queries, extract the timeframe (e.g., "this week", "today", "tomorrow", "next month", "this month", "next 2 weeks", "next 3 weeks", "all").
 - Ignore the order of words; the user may say date/time before or after the title.
 - Remove all date/time words from the title.
@@ -84,6 +86,9 @@ Response: {"intent": "create_task", "fields": {"title": "gym", "dueDate": "2025-
 
 User: remind me tomorrow at 8 am to call mum
 Response: {"intent": "create_reminder", "fields": {"title": "call mum", "reminderTime": "tomorrow 08:00"}}
+
+User: remind me tomorrow to call mum
+Response: {"intent": "create_reminder", "fields": {"title": "call mum", "reminderDate": "2025-07-21"}}
 
 User: create a task for August 15th meeting at 3 pm
 Response: {"intent": "create_task", "fields": {"title": "meeting", "dueDate": "2025-08-15", "timeOfDay": "15:00"}}
@@ -156,6 +161,33 @@ Response: {"intent": "create_reminder", "fields": {"title": "reminder", "reminde
 
 User: 9:30am
 Response: {"intent": "create_reminder", "fields": {"title": "reminder", "reminderTime": "today 09:30"}}
+
+User: remind me to buy groceries tomorrow at 5pm 30 minutes before
+Response: {"intent": "create_reminder", "fields": {"title": "buy groceries", "description": "", "reminderDate": "2025-07-21", "reminderTime": "17:00", "reminderAdvance": "30 minutes before"}}
+
+User: remind me tomorrow at 4 pm badminton practice
+Response: {"intent": "create_reminder", "fields": {"title": "badminton practice", "description": "", "reminderDate": "2025-07-21", "reminderTime": "16:00"}}
+
+User: remind me tomorrow at 4 pm badminton practice gonna be playing with five players and set a reminder one hour before
+Response: {"intent": "create_reminder", "fields": {"title": "badminton practice", "description": "gonna be playing with five players", "reminderDate": "2025-07-21", "reminderTime": "16:00", "reminderAdvance": "1 hour before"}}
+
+User: remind me tomorrow at 3:30 pm to play table tennis and we're going to be discussing about the new bets that we bought. Remind me 15 minutes before
+Response: {"intent": "create_reminder", "fields": {"title": "play table tennis", "description": "we're going to be discussing about the new bets that we bought", "reminderDate": "2025-07-21", "reminderTime": "15:30", "reminderAdvance": "15 minutes before"}}
+
+User: set a reminder for Monday meeting 15 minutes before to discuss Q4 planning
+Response: {"intent": "create_reminder", "fields": {"title": "meeting", "description": "discuss Q4 planning", "reminderDate": "2025-07-21", "reminderAdvance": "15 minutes before"}}
+
+User: remind me 1 hour before gym session tomorrow
+Response: {"intent": "create_reminder", "fields": {"title": "gym session", "description": "", "reminderDate": "2025-07-21", "reminderAdvance": "1 hour before"}}
+
+User: create a task for doctor appointment tomorrow at 2pm with reminder 1 hour before
+Response: {"intent": "create_task", "fields": {"title": "doctor appointment", "description": "", "dueDate": "2025-07-21", "timeOfDay": "14:00", "reminderAdvance": "1 hour before"}}
+
+User: task for gym session tomorrow at 6pm 30 minutes before
+Response: {"intent": "create_task", "fields": {"title": "gym session", "description": "", "dueDate": "2025-07-21", "timeOfDay": "18:00", "reminderAdvance": "30 minutes before"}}
+
+User: high priority task for urgent meeting on Monday 15 minutes before
+Response: {"intent": "create_task", "fields": {"title": "urgent meeting", "description": "", "dueDate": "2025-07-21", "priority": "high", "reminderAdvance": "15 minutes before"}}
 ''';
 
   static Future<Map<String, dynamic>> processUserMessage(String message) async {

@@ -955,25 +955,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
                                                       ),
                                                     ],
                                                   ),
-                                                  if (r.description != null &&
-                                                      r
-                                                          .description!
-                                                          .isNotEmpty) ...[
-                                                    SizedBox(height: 6),
-                                                    Text(
-                                                      r.description!,
-                                                      style: TextStyle(
-                                                        fontSize:
-                                                            Responsive.responsiveFont(
-                                                              context,
-                                                              14,
-                                                              min: 11,
-                                                              max: 18,
-                                                            ),
-                                                        color: Colors.grey[700],
-                                                      ),
-                                                    ),
-                                                  ],
+
                                                   SizedBox(height: 10),
                                                   // Status pill aligned to the left
                                                   Container(
