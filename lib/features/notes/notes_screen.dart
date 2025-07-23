@@ -22,18 +22,102 @@ class NotesScreen extends StatefulWidget {
   State<NotesScreen> createState() => _NotesScreenState();
 }
 
-class _NotesScreenState extends State<NotesScreen> {
+class _NotesScreenState extends State<NotesScreen>
+    with SingleTickerProviderStateMixin {
+  final TextEditingController _searchController = TextEditingController();
   List<Note> _notes = [];
   List<Note> _filteredNotes = [];
   bool _isLoading = true;
   String _selectedCategory = 'All';
   String _searchQuery = '';
   List<String> _categories = ['All'];
+  bool _isGridView = false;
+  bool _showCategoryDropdown = false;
+  double _dropdownHeight = 0.0;
+  double _maxDropdownHeight = 320.0;
+  double _minDropdownHeight = 0.0;
+  bool _isDraggingDropdown = false;
+  late AnimationController _dropdownAnimController;
+  late Animation<double> _dropdownAnim;
+  // Minimum height: category bar (44) + minimal vertical padding (4+4) + divider (1) + handle (24)
+  final double _collapsedHeight = 44 + 4 + 4 + 1 + 24;
+  final double _categoryRowHeight = 44; // height of one row of category buttons
+  final double _verticalPadding =
+      32; // estimated total vertical padding (top+between+bottom)
+  final double _handleHeight = 24; // height for the handle area
+  // Calculate dynamic expanded height for overlay to fit all categories (no scroll)
+  double get _dynamicExpandedHeight {
+    // Top bar: 44 (height) + vertical padding (LoggitSpacing.sm*2)
+    final double barHeight = 44 + (LoggitSpacing.sm * 2);
+    final double dividerHeight = 1;
+    final double gapBelowDivider = 12;
+    final double handleHeight = 24;
+    final double gapBelowHandle = 4;
+
+    // Extra categories
+    final int categoriesPerRow = 3; // 3 per row for compactness
+    final int extraCount = (_categories.length > 5)
+        ? _categories.length - 5
+        : 0;
+    final int rows = (extraCount / categoriesPerRow).ceil();
+    final double buttonHeight = 36;
+    final double rowSpacing = 8;
+
+    // If no extra categories, provide minimum height for message
+    final double wrapHeight = extraCount > 0
+        ? (rows * buttonHeight) + ((rows - 1) * rowSpacing) + gapBelowDivider
+        : 80; // Minimum height to show the message
+
+    return barHeight +
+        dividerHeight +
+        wrapHeight +
+        handleHeight +
+        gapBelowHandle +
+        24;
+  }
+  // _expandedHeight is now dynamic, see _dynamicExpandedHeight above
+
+  // Define button size and font for all categories
+  final double categoryButtonWidth = 110;
+  final double categoryButtonHeight = 44;
+  final double categoryFontSize = 15;
 
   @override
   void initState() {
     super.initState();
     _loadNotes();
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.trim();
+      });
+    });
+    _dropdownHeight = _collapsedHeight;
+    _dropdownAnimController = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: 260),
+    );
+    _dropdownAnim =
+        Tween<double>(
+            begin: _collapsedHeight,
+            end: _dynamicExpandedHeight,
+          ).animate(
+            CurvedAnimation(
+              parent: _dropdownAnimController,
+              curve: Curves.easeInOut,
+            ),
+          )
+          ..addListener(() {
+            setState(() {
+              _dropdownHeight = _dropdownAnim.value;
+            });
+          });
+  }
+
+  @override
+  void dispose() {
+    _dropdownAnimController.dispose();
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadNotes() async {
@@ -44,13 +128,41 @@ class _NotesScreenState extends State<NotesScreen> {
     try {
       final notes = await NotesService.getNotes();
       final categories = await NotesService.getCategories();
-
+      // Add default categories if none exist
+      final defaultCategories = [
+        'Personal',
+        'Work',
+        'Ideas',
+        'Archive',
+        'Shopping',
+        'Travel',
+        'Fitness',
+        'Finance',
+      ];
+      final allCategories = categories.isEmpty ? defaultCategories : categories;
       setState(() {
         _notes = notes;
-        _categories = ['All', ...categories];
+        _categories = ['All', ...allCategories];
         _filteredNotes = _notes;
         _isLoading = false;
       });
+
+      // Update animation with new dynamic height
+      _dropdownAnim =
+          Tween<double>(
+              begin: _collapsedHeight,
+              end: _dynamicExpandedHeight,
+            ).animate(
+              CurvedAnimation(
+                parent: _dropdownAnimController,
+                curve: Curves.easeInOut,
+              ),
+            )
+            ..addListener(() {
+              setState(() {
+                _dropdownHeight = _dropdownAnim.value;
+              });
+            });
     } catch (e) {
       print('Error loading notes: $e');
       setState(() {
@@ -157,108 +269,492 @@ class _NotesScreenState extends State<NotesScreen> {
     }
   }
 
+  void _animateTo(double targetHeight) {
+    _dropdownAnim = Tween<double>(begin: _dropdownHeight, end: targetHeight)
+        .animate(
+          CurvedAnimation(
+            parent: _dropdownAnimController,
+            curve: Curves.easeInOut,
+          ),
+        );
+    _dropdownAnimController.forward();
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = widget.currentThemeMode == ThemeMode.dark;
     return Scaffold(
       backgroundColor: isDark ? LoggitColors.darkBg : LoggitColors.pureWhite,
       body: SafeArea(
-        child: Column(
-          children: [
-            // Fixed header - matching tasks screen style
-            Container(
-              padding: const EdgeInsets.all(LoggitSpacing.screenPadding),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      Icons.arrow_back,
-                      color: isDark ? Colors.white : LoggitColors.darkGrayText,
-                    ),
-                    onPressed: () => widget.onBackToChat?.call(),
-                  ),
-                  SizedBox(width: 4),
-                  Text(
-                    'Notes',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 28,
-                      color: isDark ? Colors.white : LoggitColors.darkGrayText,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Category Filter
-            Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: LoggitSpacing.lg,
-                vertical: LoggitSpacing.sm,
-              ),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: _categories.map((category) {
-                    final isSelected = category == _selectedCategory;
-                    return Padding(
-                      padding: EdgeInsets.only(right: LoggitSpacing.xs),
-                      child: FilterChip(
-                        label: Text(category),
-                        selected: isSelected,
-                        onSelected: (_) => _onCategoryChanged(category),
-                        backgroundColor: isDark
-                            ? LoggitColors.darkCard
-                            : Colors.white,
-                        selectedColor: LoggitColors.teal,
-                        labelStyle: TextStyle(
-                          color: isSelected ? Colors.white : null,
-                          fontSize: 14,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            _maxDropdownHeight = constraints.maxHeight;
+            return Column(
+              children: [
+                // Fixed header - matching tasks screen style
+                Container(
+                  padding: const EdgeInsets.all(LoggitSpacing.screenPadding),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          Icons.arrow_back,
+                          color: isDark
+                              ? Colors.white
+                              : LoggitColors.darkGrayText,
+                        ),
+                        onPressed: () => widget.onBackToChat?.call(),
+                      ),
+                      SizedBox(width: 4),
+                      Text(
+                        'Notes',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 28,
+                          color: isDark
+                              ? Colors.white
+                              : LoggitColors.darkGrayText,
                         ),
                       ),
-                    );
-                  }).toList(),
-                ),
-              ),
-            ),
-
-            // Search Bar
-            Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: LoggitSpacing.lg,
-                vertical: LoggitSpacing.xs,
-              ),
-              child: TextField(
-                onChanged: _onSearchChanged,
-                decoration: InputDecoration(
-                  hintText: 'Search notes...',
-                  prefixIcon: const Icon(Icons.search, size: 20),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
+                      const Spacer(),
+                      IconButton(
+                        icon: Icon(
+                          _isGridView ? Icons.view_list : Icons.grid_view,
+                          color: isDark
+                              ? Colors.white
+                              : LoggitColors.darkGrayText,
+                        ),
+                        tooltip: _isGridView ? 'List View' : 'Grid View',
+                        onPressed: () {
+                          setState(() {
+                            _isGridView = !_isGridView;
+                          });
+                        },
+                      ),
+                    ],
                   ),
-                  filled: true,
-                  fillColor: isDark ? LoggitColors.darkCard : Colors.white,
                 ),
-              ),
-            ),
-
-            // Notes List
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _filteredNotes.isEmpty
-                  ? _buildEmptyState()
-                  : ListView.builder(
-                      padding: EdgeInsets.all(LoggitSpacing.lg),
-                      itemCount: _filteredNotes.length,
-                      itemBuilder: (context, index) {
-                        final note = _filteredNotes[index];
-                        return _buildNoteCard(note);
-                      },
-                    ),
-            ),
-          ],
+                // Everything below header is wrapped in a Stack for overlay
+                Expanded(
+                  child: Stack(
+                    children: [
+                      // Main content (search bar, notes) as the base layer (NO category bar here)
+                      Column(
+                        children: [
+                          // Push content down by the height of the collapsed overlay
+                          SizedBox(height: _collapsedHeight + 20),
+                          // Search bar
+                          Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: LoggitSpacing.lg,
+                            ),
+                            child: TextField(
+                              controller: _searchController,
+                              decoration: InputDecoration(
+                                hintText: 'Search notes...',
+                                prefixIcon: Icon(
+                                  Icons.search,
+                                  color: Colors.grey[500],
+                                ),
+                                filled: true,
+                                fillColor: Color(0xFFF1F5F9),
+                                contentPadding: EdgeInsets.symmetric(
+                                  vertical: 0,
+                                  horizontal: 0,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                              style: TextStyle(
+                                color: isDark
+                                    ? Colors.white
+                                    : LoggitColors.darkGrayText,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: LoggitSpacing.lg),
+                          // Notes List
+                          Expanded(
+                            child: _isLoading
+                                ? const Center(
+                                    child: CircularProgressIndicator(),
+                                  )
+                                : _filteredNotes.isEmpty
+                                ? _buildEmptyState()
+                                : _isGridView
+                                ? GridView.count(
+                                    padding: EdgeInsets.all(LoggitSpacing.lg),
+                                    crossAxisCount: 2,
+                                    crossAxisSpacing: LoggitSpacing.lg,
+                                    mainAxisSpacing: LoggitSpacing.lg,
+                                    childAspectRatio: 1,
+                                    children: _filteredNotes
+                                        .map(_buildNoteCard)
+                                        .toList(),
+                                  )
+                                : ListView.builder(
+                                    padding: EdgeInsets.all(LoggitSpacing.lg),
+                                    itemCount: _filteredNotes.length,
+                                    itemBuilder: (context, index) {
+                                      final note = _filteredNotes[index];
+                                      return _buildNoteCard(note);
+                                    },
+                                  ),
+                          ),
+                        ],
+                      ),
+                      // Add a transparent GestureDetector to close overlay when open and clicking outside
+                      if (_dropdownHeight > _collapsedHeight)
+                        Positioned(
+                          top: _dropdownHeight,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.translucent,
+                            onTap: () => _animateTo(_collapsedHeight),
+                            child: Container(),
+                          ),
+                        ),
+                      // Drag-down overlay (blind) as a single AnimatedContainer
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        child: AnimatedContainer(
+                          duration: _isDraggingDropdown
+                              ? Duration.zero
+                              : Duration(milliseconds: 260),
+                          curve: Curves.easeInOut,
+                          height: _dropdownHeight.clamp(
+                            _collapsedHeight,
+                            _dynamicExpandedHeight,
+                          ),
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.vertical(
+                              bottom: Radius.circular(18),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.08),
+                                blurRadius: 8,
+                                offset: Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Stack(
+                            children: [
+                              // Scrollable content
+                              SingleChildScrollView(
+                                physics: ClampingScrollPhysics(),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // Top row: plus button + main categories (always visible in overlay)
+                                    Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: LoggitSpacing.lg,
+                                        vertical: 4,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          // Static plus button
+                                          GestureDetector(
+                                            onTap: _showCreateCategoryDialog,
+                                            child: Container(
+                                              width: 44,
+                                              height: 44,
+                                              margin: EdgeInsets.only(right: 8),
+                                              decoration: BoxDecoration(
+                                                color: Colors.grey[100],
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: Colors.grey[300]!,
+                                                  width: 1,
+                                                ),
+                                              ),
+                                              child: Icon(
+                                                Icons.add,
+                                                color: Colors.black87,
+                                                size: 24,
+                                              ),
+                                            ),
+                                          ),
+                                          // Main categories (first 5)
+                                          Expanded(
+                                            child: SingleChildScrollView(
+                                              scrollDirection: Axis.horizontal,
+                                              child: Row(
+                                                children: _categories.take(5).map((
+                                                  category,
+                                                ) {
+                                                  final isSelected =
+                                                      category ==
+                                                      _selectedCategory;
+                                                  return Padding(
+                                                    padding: EdgeInsets.only(
+                                                      right: 12,
+                                                    ),
+                                                    child: GestureDetector(
+                                                      onTap: () =>
+                                                          _onCategoryChanged(
+                                                            category,
+                                                          ),
+                                                      child: Container(
+                                                        width: 110,
+                                                        height: 44,
+                                                        decoration: BoxDecoration(
+                                                          color: isSelected
+                                                              ? LoggitColors
+                                                                    .teal
+                                                                    .withOpacity(
+                                                                      0.15,
+                                                                    )
+                                                              : Colors
+                                                                    .grey[100],
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                12,
+                                                              ),
+                                                          border: Border.all(
+                                                            color: isSelected
+                                                                ? LoggitColors
+                                                                      .teal
+                                                                : Colors
+                                                                      .grey[300]!,
+                                                            width: isSelected
+                                                                ? 2
+                                                                : 1,
+                                                          ),
+                                                        ),
+                                                        child: Center(
+                                                          child: Text(
+                                                            category,
+                                                            style: TextStyle(
+                                                              color: isSelected
+                                                                  ? LoggitColors
+                                                                        .teal
+                                                                  : Colors
+                                                                        .black87,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                              fontSize: 15,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  );
+                                                }).toList(),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    // Add spacing and a faint divider if expanded and there are extra categories
+                                    if (_dropdownHeight > _collapsedHeight &&
+                                        _categories.length > 5) ...[
+                                      SizedBox(height: 12),
+                                      Divider(
+                                        thickness: 1,
+                                        color: Colors.grey[300],
+                                        height: 1,
+                                        indent: 0,
+                                        endIndent: 0,
+                                      ),
+                                      SizedBox(height: 12),
+                                    ],
+                                    // Extra categories as a wrap below when expanded, all buttons same size
+                                    if (_dropdownHeight > _collapsedHeight &&
+                                        _categories.length > 5)
+                                      Padding(
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: LoggitSpacing.lg,
+                                          vertical: 8,
+                                        ),
+                                        child: Wrap(
+                                          spacing: 12,
+                                          runSpacing: 8,
+                                          children: [
+                                            ..._categories.skip(5).map((
+                                              category,
+                                            ) {
+                                              final isSelected =
+                                                  category == _selectedCategory;
+                                              // Calculate expansion progress (0.0 = collapsed, 1.0 = fully expanded)
+                                              final double expansionProgress =
+                                                  ((_dropdownHeight -
+                                                              _collapsedHeight) /
+                                                          (_dynamicExpandedHeight -
+                                                              _collapsedHeight))
+                                                      .clamp(0.0, 1.0);
+                                              // Animate each category's appearance based on expansionProgress
+                                              return AnimatedBuilder(
+                                                animation:
+                                                    _dropdownAnimController,
+                                                builder: (context, child) {
+                                                  final slideY =
+                                                      (1.0 -
+                                                          expansionProgress) *
+                                                      -24; // Slide from above
+                                                  final opacity =
+                                                      expansionProgress;
+                                                  return Opacity(
+                                                    opacity: opacity,
+                                                    child: Transform.translate(
+                                                      offset: Offset(0, slideY),
+                                                      child: child,
+                                                    ),
+                                                  );
+                                                },
+                                                child: GestureDetector(
+                                                  onTap: () =>
+                                                      _onCategoryChanged(
+                                                        category,
+                                                      ),
+                                                  child: Container(
+                                                    width: 90,
+                                                    height: 36,
+                                                    decoration: BoxDecoration(
+                                                      color: isSelected
+                                                          ? LoggitColors.teal
+                                                                .withOpacity(
+                                                                  0.15,
+                                                                )
+                                                          : Colors.grey[100],
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            12,
+                                                          ),
+                                                      border: Border.all(
+                                                        color: isSelected
+                                                            ? LoggitColors.teal
+                                                            : Colors.grey[300]!,
+                                                        width: isSelected
+                                                            ? 2
+                                                            : 1,
+                                                      ),
+                                                    ),
+                                                    child: Center(
+                                                      child: Text(
+                                                        category,
+                                                        style: TextStyle(
+                                                          color: isSelected
+                                                              ? LoggitColors
+                                                                    .teal
+                                                              : Colors.black87,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          fontSize: 13,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              );
+                                            }),
+                                          ],
+                                        ),
+                                      ),
+                                    // Message shown when overlay is expanded and there are 5 or fewer categories
+                                    if (_dropdownHeight > _collapsedHeight &&
+                                        _categories.length <= 5)
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 16.0,
+                                        ),
+                                        child: AnimatedBuilder(
+                                          animation: _dropdownAnimController,
+                                          builder: (context, child) {
+                                            // Calculate expansion progress (0.0 = collapsed, 1.0 = fully expanded)
+                                            final double expansionProgress =
+                                                ((_dropdownHeight -
+                                                            _collapsedHeight) /
+                                                        (_dynamicExpandedHeight -
+                                                            _collapsedHeight))
+                                                    .clamp(0.0, 1.0);
+                                            final slideY =
+                                                (1.0 - expansionProgress) *
+                                                -24; // Slide from above
+                                            final opacity = expansionProgress;
+                                            return Opacity(
+                                              opacity: opacity,
+                                              child: Transform.translate(
+                                                offset: Offset(0, slideY),
+                                                child: Center(
+                                                  child: Text(
+                                                    'Add more categories to see them here!',
+                                                    style: TextStyle(
+                                                      color: Colors.grey[600],
+                                                      fontSize: 14,
+                                                      fontStyle:
+                                                          FontStyle.italic,
+                                                    ),
+                                                    textAlign: TextAlign.center,
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    SizedBox(height: 48),
+                                  ],
+                                ),
+                              ),
+                              // Handle at the very bottom center, always visible
+                              Positioned(
+                                left: 0,
+                                right: 0,
+                                bottom: 6,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    // Toggle overlay on tap
+                                    if (_dropdownHeight >
+                                        (_collapsedHeight +
+                                                _dynamicExpandedHeight) /
+                                            2) {
+                                      _animateTo(_collapsedHeight);
+                                    } else {
+                                      _animateTo(_dynamicExpandedHeight);
+                                    }
+                                  },
+                                  onVerticalDragStart: _onHandleDragStart,
+                                  onVerticalDragUpdate: _onHandleDragUpdate,
+                                  onVerticalDragEnd: _onHandleDragEnd,
+                                  behavior: HitTestBehavior.translucent,
+                                  child: Container(
+                                    height: 40, // Larger hit area
+                                    alignment: Alignment.bottomCenter,
+                                    child: Container(
+                                      width: 36,
+                                      height: 6,
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey[300],
+                                        borderRadius: BorderRadius.circular(3),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
       floatingActionButton: FloatingActionButton(
@@ -314,194 +810,204 @@ class _NotesScreenState extends State<NotesScreen> {
     return Card(
       margin: EdgeInsets.only(bottom: LoggitSpacing.sm),
       color: isDark ? LoggitColors.darkCard : Colors.white,
-      child: InkWell(
-        onTap: () => _editNote(note),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: EdgeInsets.all(LoggitSpacing.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header with type icon and title
-              Row(
-                children: [
-                  _buildNoteTypeIcon(note),
-                  SizedBox(width: LoggitSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      note.title,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: isDark
-                            ? Colors.white
-                            : LoggitColors.darkGrayText,
+      elevation: 0,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey[300]!, width: 1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: InkWell(
+          onTap: () => _editNote(note),
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: EdgeInsets.all(LoggitSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header with type icon and title
+                Row(
+                  children: [
+                    _buildNoteTypeIcon(note),
+                    SizedBox(width: LoggitSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        note.title,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? Colors.white
+                              : LoggitColors.darkGrayText,
+                        ),
                       ),
                     ),
-                  ),
-                  PopupMenuButton<String>(
-                    onSelected: (value) {
-                      if (value == 'edit') {
-                        _editNote(note);
-                      } else if (value == 'delete') {
-                        _deleteNote(note);
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(Icons.edit, size: 18),
-                            SizedBox(width: 8),
-                            Text('Edit'),
-                          ],
+                    PopupMenuButton<String>(
+                      onSelected: (value) {
+                        if (value == 'edit') {
+                          _editNote(note);
+                        } else if (value == 'delete') {
+                          _deleteNote(note);
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'edit',
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit, size: 18),
+                              SizedBox(width: 8),
+                              Text('Edit'),
+                            ],
+                          ),
                         ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete, size: 18, color: Colors.red),
-                            SizedBox(width: 8),
-                            Text('Delete', style: TextStyle(color: Colors.red)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-
-              SizedBox(height: LoggitSpacing.sm),
-
-              // Content preview
-              if (note.content.isNotEmpty) ...[
-                Text(
-                  note.content,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: isDark
-                        ? LoggitColors.lightGrayDarkMode
-                        : LoggitColors.lighterGraySubtext,
-                  ),
-                ),
-                SizedBox(height: LoggitSpacing.sm),
-              ],
-
-              // Checklist preview
-              if (note.isChecklist && note.checklistItems != null) ...[
-                ...note.checklistItems!
-                    .take(3)
-                    .map(
-                      (item) => Padding(
-                        padding: EdgeInsets.only(bottom: LoggitSpacing.xs),
-                        child: Row(
-                          children: [
-                            Checkbox(
-                              value: item.isCompleted,
-                              onChanged: (_) =>
-                                  _toggleChecklistItem(note, item),
-                              materialTapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            Expanded(
-                              child: Text(
-                                item.text,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  decoration: item.isCompleted
-                                      ? TextDecoration.lineThrough
-                                      : null,
-                                  color: item.isCompleted
-                                      ? (isDark
-                                            ? LoggitColors.lightGrayDarkMode
-                                            : LoggitColors.lighterGraySubtext)
-                                      : (isDark
-                                            ? Colors.white
-                                            : LoggitColors.darkGrayText),
-                                ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete, size: 18, color: Colors.red),
+                              SizedBox(width: 8),
+                              Text(
+                                'Delete',
+                                style: TextStyle(color: Colors.red),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
+                      ],
                     ),
-                if (note.checklistItems!.length > 3) ...[
+                  ],
+                ),
+
+                SizedBox(height: LoggitSpacing.sm),
+
+                // Content preview
+                if (note.content.isNotEmpty) ...[
                   Text(
-                    '... and ${note.checklistItems!.length - 3} more items',
+                    note.content,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 16,
                       color: isDark
                           ? LoggitColors.lightGrayDarkMode
                           : LoggitColors.lighterGraySubtext,
-                      fontStyle: FontStyle.italic,
                     ),
                   ),
                   SizedBox(height: LoggitSpacing.sm),
                 ],
-              ],
 
-              // Footer with metadata
-              Row(
-                children: [
-                  // Category chip
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: LoggitSpacing.sm,
-                      vertical: LoggitSpacing.xs,
-                    ),
-                    decoration: BoxDecoration(
-                      color: note.color.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      note.noteCategory,
+                // Checklist preview
+                if (note.isChecklist && note.checklistItems != null) ...[
+                  ...note.checklistItems!
+                      .take(3)
+                      .map(
+                        (item) => Padding(
+                          padding: EdgeInsets.only(bottom: LoggitSpacing.xs),
+                          child: Row(
+                            children: [
+                              Checkbox(
+                                value: item.isCompleted,
+                                onChanged: (_) =>
+                                    _toggleChecklistItem(note, item),
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              Expanded(
+                                child: Text(
+                                  item.text,
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    decoration: item.isCompleted
+                                        ? TextDecoration.lineThrough
+                                        : null,
+                                    color: item.isCompleted
+                                        ? (isDark
+                                              ? LoggitColors.lightGrayDarkMode
+                                              : LoggitColors.lighterGraySubtext)
+                                        : (isDark
+                                              ? Colors.white
+                                              : LoggitColors.darkGrayText),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  if (note.checklistItems!.length > 3) ...[
+                    Text(
+                      '... and ${note.checklistItems!.length - 3} more items',
                       style: TextStyle(
                         fontSize: 14,
-                        color: note.color,
-                        fontWeight: FontWeight.w500,
+                        color: isDark
+                            ? LoggitColors.lightGrayDarkMode
+                            : LoggitColors.lighterGraySubtext,
+                        fontStyle: FontStyle.italic,
                       ),
                     ),
-                  ),
+                    SizedBox(height: LoggitSpacing.sm),
+                  ],
+                ],
 
-                  const Spacer(),
-
-                  // Date
-                  Text(
-                    note.formattedCreatedDate,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: isDark
-                          ? LoggitColors.lightGrayDarkMode
-                          : LoggitColors.lighterGraySubtext,
+                // Footer with metadata
+                Row(
+                  children: [
+                    // Category chip
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: LoggitSpacing.sm,
+                        vertical: LoggitSpacing.xs,
+                      ),
+                      decoration: BoxDecoration(
+                        color: note.color.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        note.noteCategory,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: note.color,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
+
+                    const Spacer(),
+
+                    // Date
+                    Text(
+                      note.formattedCreatedDate,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isDark
+                            ? LoggitColors.lightGrayDarkMode
+                            : LoggitColors.lighterGraySubtext,
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Tags
+                if (note.tags.isNotEmpty) ...[
+                  SizedBox(height: LoggitSpacing.sm),
+                  Wrap(
+                    spacing: LoggitSpacing.xs,
+                    runSpacing: LoggitSpacing.xs,
+                    children: note.tags
+                        .map(
+                          (tag) => Chip(
+                            label: Text(tag, style: TextStyle(fontSize: 12)),
+                            backgroundColor: LoggitColors.lighterGraySubtext
+                                .withOpacity(0.1),
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        )
+                        .toList(),
                   ),
                 ],
-              ),
-
-              // Tags
-              if (note.tags.isNotEmpty) ...[
-                SizedBox(height: LoggitSpacing.sm),
-                Wrap(
-                  spacing: LoggitSpacing.xs,
-                  runSpacing: LoggitSpacing.xs,
-                  children: note.tags
-                      .map(
-                        (tag) => Chip(
-                          label: Text(tag, style: TextStyle(fontSize: 12)),
-                          backgroundColor: LoggitColors.lighterGraySubtext
-                              .withOpacity(0.1),
-                          materialTapTargetSize:
-                              MaterialTapTargetSize.shrinkWrap,
-                        ),
-                      )
-                      .toList(),
-                ),
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -543,5 +1049,155 @@ class _NotesScreenState extends State<NotesScreen> {
       ),
       child: Icon(iconData, size: 18, color: iconColor),
     );
+  }
+
+  void _showCreateCategoryDialog() async {
+    String? newCategory;
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          backgroundColor: Colors.white,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  'Create Category',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: LoggitColors.darkGrayText,
+                  ),
+                ),
+                SizedBox(height: 24),
+                TextField(
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    hintText: 'Category name',
+                    filled: true,
+                    fillColor: Colors.grey[100],
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  style: TextStyle(fontSize: 16),
+                  onChanged: (value) => newCategory = value.trim(),
+                ),
+                SizedBox(height: 28),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.black,
+                      ),
+                      child: Text('Cancel', style: TextStyle(fontSize: 16)),
+                    ),
+                    SizedBox(width: 12),
+                    ElevatedButton(
+                      onPressed: () {
+                        if (newCategory != null &&
+                            newCategory!.isNotEmpty &&
+                            !_categories.contains(newCategory)) {
+                          setState(() {
+                            _categories.add(newCategory!);
+                          });
+
+                          // Update animation with new dynamic height
+                          _dropdownAnim =
+                              Tween<double>(
+                                  begin: _collapsedHeight,
+                                  end: _dynamicExpandedHeight,
+                                ).animate(
+                                  CurvedAnimation(
+                                    parent: _dropdownAnimController,
+                                    curve: Curves.easeInOut,
+                                  ),
+                                )
+                                ..addListener(() {
+                                  setState(() {
+                                    _dropdownHeight = _dropdownAnim.value;
+                                  });
+                                });
+                        }
+                        Navigator.of(context).pop();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: LoggitColors.teal,
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: Text(
+                        'Add',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _onHandleDragStart(DragStartDetails details) {
+    setState(() {
+      _isDraggingDropdown = true;
+    });
+    _dropdownAnimController.stop();
+  }
+
+  void _onHandleDragUpdate(DragUpdateDetails details) {
+    setState(() {
+      final newHeight = _dropdownHeight + details.delta.dy;
+      if (newHeight >= _collapsedHeight &&
+          newHeight <= _dynamicExpandedHeight) {
+        _dropdownHeight = newHeight;
+      } else if (newHeight < _collapsedHeight) {
+        _dropdownHeight = _collapsedHeight;
+      } else {
+        _dropdownHeight = _dynamicExpandedHeight;
+      }
+    });
+  }
+
+  void _onHandleDragEnd(DragEndDetails details) {
+    setState(() {
+      _isDraggingDropdown = false;
+    });
+    final velocity = details.primaryVelocity ?? 0.0;
+    if (velocity > 200) {
+      // Flick down - reduced threshold for easier opening
+      _animateTo(_dynamicExpandedHeight);
+    } else if (velocity < -200) {
+      // Flick up - reduced threshold for easier closing
+      _animateTo(_collapsedHeight);
+    } else {
+      // Snap to nearest
+      if (_dropdownHeight > (_collapsedHeight + _dynamicExpandedHeight) / 2) {
+        _animateTo(_dynamicExpandedHeight);
+      } else {
+        _animateTo(_collapsedHeight);
+      }
+    }
   }
 }

@@ -293,187 +293,478 @@ class _NoteViewScreenState extends State<NoteViewScreen> {
 
   Widget _buildFormattingToolbar() {
     final screenWidth = MediaQuery.of(context).size.width;
-    final toolbarHeight = screenWidth < 400 ? 60.0 : 70.0;
-    final buttonSpacing = screenWidth < 400 ? 8.0 : 12.0;
+    final isSmallScreen = screenWidth < 400;
+    final toolbarHeight = isSmallScreen ? 68.0 : 80.0;
+    final buttonSpacing = isSmallScreen ? 12.0 : 20.0;
+    final floatingPadding = isSmallScreen ? 10.0 : 20.0;
 
-    return Container(
-      height: toolbarHeight,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          top: BorderSide(color: Colors.grey.withOpacity(0.2), width: 1),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 4,
-            offset: Offset(0, -2),
-          ),
-        ],
+    return Padding(
+      padding: EdgeInsets.only(
+        left: floatingPadding,
+        right: floatingPadding,
+        bottom: floatingPadding,
       ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: screenWidth < 400 ? LoggitSpacing.sm : LoggitSpacing.md,
-          vertical: screenWidth < 400 ? 8.0 : LoggitSpacing.sm,
+      child: Container(
+        height: toolbarHeight,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(32),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.10),
+              blurRadius: 16,
+              offset: Offset(0, 4),
+            ),
+          ],
         ),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              // Plus button (Insert) - prominent on the left
-              _buildToolbarButton(
-                icon: Icons.add,
-                isActive: false,
-                onPressed: _showInsertModal,
-                tooltip: 'Insert',
+        child: Row(
+          children: [
+            // Static Plus button
+            _buildFloatingToolbarButton(
+              icon: Icons.add,
+              isActive: false,
+              onPressed: _showInsertModal,
+              tooltip: 'Insert',
+              isSmallScreen: isSmallScreen,
+            ),
+            SizedBox(width: buttonSpacing),
+            // Scrollable toolbar buttons
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(32),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _buildFloatingToolbarButton(
+                        icon: Icons.check_box,
+                        isActive: false,
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Checklist coming soon!'),
+                            ),
+                          );
+                        },
+                        tooltip: 'Checklist',
+                        isSmallScreen: isSmallScreen,
+                      ),
+                      SizedBox(width: buttonSpacing),
+                      _buildFloatingToolbarButton(
+                        icon: Icons.format_bold,
+                        isActive: _isBold,
+                        onPressed: _toggleBold,
+                        tooltip: 'Bold',
+                        isSmallScreen: isSmallScreen,
+                      ),
+                      SizedBox(width: buttonSpacing),
+                      _buildFloatingToolbarButton(
+                        icon: Icons.format_italic,
+                        isActive: _isItalic,
+                        onPressed: _toggleItalic,
+                        tooltip: 'Italic',
+                        isSmallScreen: isSmallScreen,
+                      ),
+                      SizedBox(width: buttonSpacing),
+                      _buildFloatingToolbarButton(
+                        icon: Icons.format_underline,
+                        isActive: _isUnderlined,
+                        onPressed: _toggleUnderline,
+                        tooltip: 'Underline',
+                        isSmallScreen: isSmallScreen,
+                      ),
+                      SizedBox(width: buttonSpacing),
+                      _buildFloatingToolbarButton(
+                        icon: Icons.format_list_bulleted,
+                        isActive: _isBulletList,
+                        onPressed: _toggleBulletList,
+                        tooltip: 'Bullet List',
+                        isSmallScreen: isSmallScreen,
+                      ),
+                      SizedBox(width: buttonSpacing),
+                      _buildFloatingToolbarButton(
+                        icon: Icons.format_list_numbered,
+                        isActive: _isNumberedList,
+                        onPressed: _toggleNumberedList,
+                        tooltip: 'Numbered List',
+                        isSmallScreen: isSmallScreen,
+                      ),
+                      SizedBox(width: buttonSpacing),
+                      _buildFloatingToolbarButton(
+                        icon: Icons.more_horiz,
+                        isActive: false,
+                        onPressed: () {
+                          showModalBottomSheet(
+                            context: context,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.vertical(
+                                top: Radius.circular(24),
+                              ),
+                            ),
+                            backgroundColor: Colors.white,
+                            builder: (context) {
+                              return Container(
+                                height: 380,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.vertical(
+                                    top: Radius.circular(28),
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.08),
+                                      blurRadius: 20,
+                                      offset: Offset(0, -2),
+                                    ),
+                                  ],
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 20,
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceEvenly,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        'Format',
+                                        style: TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.bold,
+                                          color: LoggitColors.darkGrayText,
+                                        ),
+                                      ),
+                                      // Alignment buttons row
+                                      SingleChildScrollView(
+                                        scrollDirection: Axis.horizontal,
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            _buildAlignmentButton(
+                                              Icons.format_align_left,
+                                              'Left',
+                                            ),
+                                            SizedBox(width: 12),
+                                            _buildAlignmentButton(
+                                              Icons.format_align_center,
+                                              'Center',
+                                            ),
+                                            SizedBox(width: 12),
+                                            _buildAlignmentButton(
+                                              Icons.format_align_right,
+                                              'Right',
+                                            ),
+                                            SizedBox(width: 12),
+                                            _buildAlignmentButton(
+                                              Icons.format_align_justify,
+                                              'Justify',
+                                            ),
+                                            SizedBox(width: 12),
+                                            _buildAlignmentButton(
+                                              Icons.format_indent_increase,
+                                              'Increase Indent',
+                                            ),
+                                            SizedBox(width: 12),
+                                            _buildAlignmentButton(
+                                              Icons.format_indent_decrease,
+                                              'Decrease Indent',
+                                            ),
+                                            SizedBox(width: 12),
+                                            _buildAlignmentButton(
+                                              Icons.format_line_spacing,
+                                              'Line Spacing',
+                                            ),
+                                            SizedBox(width: 12),
+                                            _buildAlignmentButton(
+                                              Icons.format_clear,
+                                              'Clear Formatting',
+                                            ),
+                                            SizedBox(width: 12),
+                                            _buildAlignmentButton(
+                                              Icons.highlight,
+                                              'Highlight',
+                                            ),
+                                            SizedBox(width: 12),
+                                            _buildAlignmentButton(
+                                              Icons.format_color_text,
+                                              'Text Color',
+                                            ),
+                                            SizedBox(width: 12),
+                                            _buildAlignmentButton(
+                                              Icons.undo,
+                                              'Undo',
+                                            ),
+                                            SizedBox(width: 12),
+                                            _buildAlignmentButton(
+                                              Icons.redo,
+                                              'Redo',
+                                            ),
+                                            SizedBox(width: 12),
+                                            _buildAlignmentButton(
+                                              Icons.link,
+                                              'Insert Link',
+                                            ),
+                                            SizedBox(width: 12),
+                                            _buildAlignmentButton(
+                                              Icons.link_off,
+                                              'Remove Link',
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Divider(
+                                        thickness: 1.2,
+                                        color: Colors.grey[200],
+                                      ),
+                                      // Styles row
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                Icons.text_fields,
+                                                color:
+                                                    LoggitColors.darkGrayText,
+                                                size: 22,
+                                              ),
+                                              SizedBox(width: 8),
+                                              Text(
+                                                'Styles',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 16,
+                                                  color:
+                                                      LoggitColors.darkGrayText,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          Row(
+                                            children: [
+                                              Text(
+                                                'Normal',
+                                                style: TextStyle(fontSize: 16),
+                                              ),
+                                              SizedBox(width: 4),
+                                              Icon(
+                                                Icons.chevron_right,
+                                                size: 20,
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                      Divider(
+                                        thickness: 1.2,
+                                        color: Colors.grey[200],
+                                      ),
+                                      // Font row
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                Icons.font_download,
+                                                color:
+                                                    LoggitColors.darkGrayText,
+                                                size: 22,
+                                              ),
+                                              SizedBox(width: 8),
+                                              Text(
+                                                'Font',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 16,
+                                                  color:
+                                                      LoggitColors.darkGrayText,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          Row(
+                                            children: [
+                                              Text(
+                                                'Calibri',
+                                                style: TextStyle(fontSize: 16),
+                                              ),
+                                              SizedBox(width: 4),
+                                              Icon(
+                                                Icons.chevron_right,
+                                                size: 20,
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                      Divider(
+                                        thickness: 1.2,
+                                        color: Colors.grey[200],
+                                      ),
+                                      // Size row
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                Icons.format_size,
+                                                color:
+                                                    LoggitColors.darkGrayText,
+                                                size: 22,
+                                              ),
+                                              SizedBox(width: 8),
+                                              Text(
+                                                'Size',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 16,
+                                                  color:
+                                                      LoggitColors.darkGrayText,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          Row(
+                                            children: [
+                                              GestureDetector(
+                                                onTap: _decreaseFontSize,
+                                                child: Container(
+                                                  width: 36,
+                                                  height: 36,
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.grey[200],
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          8,
+                                                        ),
+                                                  ),
+                                                  child: Icon(
+                                                    Icons.remove,
+                                                    size: 20,
+                                                    color: Colors.black87,
+                                                  ),
+                                                ),
+                                              ),
+                                              SizedBox(width: 8),
+                                              Container(
+                                                width: 36,
+                                                height: 36,
+                                                alignment: Alignment.center,
+                                                decoration: BoxDecoration(
+                                                  color: Colors.grey[100],
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                  border: Border.all(
+                                                    color: Colors.grey[300]!,
+                                                  ),
+                                                ),
+                                                child: Text(
+                                                  _fontSize.toInt().toString(),
+                                                  style: TextStyle(
+                                                    fontSize: 18,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.black87,
+                                                  ),
+                                                ),
+                                              ),
+                                              SizedBox(width: 8),
+                                              GestureDetector(
+                                                onTap: _increaseFontSize,
+                                                child: Container(
+                                                  width: 36,
+                                                  height: 36,
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.grey[200],
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          8,
+                                                        ),
+                                                  ),
+                                                  child: Icon(
+                                                    Icons.add,
+                                                    size: 20,
+                                                    color: Colors.black87,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                        tooltip: 'More',
+                        isSmallScreen: isSmallScreen,
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              SizedBox(width: buttonSpacing),
-
-              // Checklist button
-              _buildToolbarButton(
-                icon: Icons.check_box,
-                isActive: false,
-                onPressed: () {
-                  // TODO: Implement checklist
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Checklist coming soon!')),
-                  );
-                },
-                tooltip: 'Checklist',
-              ),
-              SizedBox(width: buttonSpacing),
-
-              // Bullet list
-              _buildToolbarButton(
-                icon: Icons.format_list_bulleted,
-                isActive: _isBulletList,
-                onPressed: _toggleBulletList,
-                tooltip: 'Bullet List',
-              ),
-              SizedBox(width: buttonSpacing),
-
-              // Numbered list
-              _buildToolbarButton(
-                icon: Icons.format_list_numbered,
-                isActive: _isNumberedList,
-                onPressed: _toggleNumberedList,
-                tooltip: 'Numbered List',
-              ),
-              SizedBox(width: buttonSpacing),
-
-              // Text alignment buttons
-              _buildToolbarButton(
-                icon: Icons.format_align_left,
-                isActive: false,
-                onPressed: () {
-                  // TODO: Implement left align
-                },
-                tooltip: 'Align Left',
-              ),
-              SizedBox(width: 8),
-
-              _buildToolbarButton(
-                icon: Icons.format_align_center,
-                isActive: false,
-                onPressed: () {
-                  // TODO: Implement center align
-                },
-                tooltip: 'Align Center',
-              ),
-              SizedBox(width: 8),
-
-              _buildToolbarButton(
-                icon: Icons.format_align_right,
-                isActive: false,
-                onPressed: () {
-                  // TODO: Implement right align
-                },
-                tooltip: 'Align Right',
-              ),
-              SizedBox(width: buttonSpacing),
-
-              // Drawing tool
-              _buildToolbarButton(
-                icon: Icons.brush,
-                isActive: false,
-                onPressed: () {
-                  // TODO: Implement drawing
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Drawing coming soon!')),
-                  );
-                },
-                tooltip: 'Drawing',
-              ),
-              SizedBox(width: buttonSpacing),
-
-              // Bold
-              _buildToolbarButton(
-                icon: Icons.format_bold,
-                isActive: _isBold,
-                onPressed: _toggleBold,
-                tooltip: 'Bold',
-              ),
-              SizedBox(width: buttonSpacing),
-
-              // Italic
-              _buildToolbarButton(
-                icon: Icons.format_italic,
-                isActive: _isItalic,
-                onPressed: _toggleItalic,
-                tooltip: 'Italic',
-              ),
-              SizedBox(width: buttonSpacing),
-
-              // Underline
-              _buildToolbarButton(
-                icon: Icons.format_underline,
-                isActive: _isUnderlined,
-                onPressed: _toggleUnderline,
-                tooltip: 'Underline',
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildToolbarButton({
+  Widget _buildFloatingToolbarButton({
     required IconData icon,
     required bool isActive,
     required VoidCallback onPressed,
     required String tooltip,
+    bool isSmallScreen = false,
   }) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final buttonSize = screenWidth < 400 ? 36.0 : 40.0;
-    final iconSize = screenWidth < 400 ? 18.0 : 20.0;
-
+    final buttonSize = isSmallScreen ? 52.0 : 64.0;
+    final iconSize = isSmallScreen ? 26.0 : 32.0;
     return Tooltip(
       message: tooltip,
-      child: Container(
-        width: buttonSize,
-        height: buttonSize,
-        decoration: BoxDecoration(
-          color: isActive ? const Color(0xFF6B46C1) : Colors.white,
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: Colors.grey.withOpacity(0.2), width: 1),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 2,
-              offset: Offset(0, 1),
-            ),
-          ],
-        ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2.0),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(24),
             onTap: onPressed,
-            child: Icon(
-              icon,
-              size: iconSize,
-              color: isActive ? Colors.white : Colors.black87,
+            child: Container(
+              width: buttonSize,
+              height: buttonSize,
+              decoration: BoxDecoration(
+                color: isActive
+                    ? LoggitColors.teal.withOpacity(0.15)
+                    : Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  if (isActive)
+                    BoxShadow(
+                      color: LoggitColors.teal.withOpacity(0.10),
+                      blurRadius: 8,
+                      offset: Offset(0, 2),
+                    ),
+                ],
+                border: Border.all(
+                  color: Colors.grey.withOpacity(0.15),
+                  width: 1,
+                ),
+              ),
+              child: Icon(
+                icon,
+                size: iconSize,
+                color: isActive ? LoggitColors.teal : Colors.black87,
+              ),
             ),
           ),
         ),
@@ -491,7 +782,13 @@ class _NoteViewScreenState extends State<NoteViewScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () async {
+            if (_hasChanges) {
+              await _saveNote();
+            } else {
+              Navigator.of(context).pop();
+            }
+          },
           icon: Icon(Icons.arrow_back, color: LoggitColors.darkGrayText),
         ),
         title: Text(
@@ -503,34 +800,10 @@ class _NoteViewScreenState extends State<NoteViewScreen> {
           ),
         ),
         actions: [
-          if (widget.note != null) // Only show detailed edit for existing notes
-            IconButton(
-              onPressed: _openDetailedModal,
-              icon: Icon(Icons.settings, color: LoggitColors.darkGrayText),
-              tooltip: 'Advanced Settings',
-            ),
           IconButton(
-            onPressed: _hasChanges ? _saveNote : null,
-            icon: _isLoading
-                ? SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        _hasChanges
-                            ? LoggitColors.teal
-                            : LoggitColors.lighterGraySubtext,
-                      ),
-                    ),
-                  )
-                : Icon(
-                    Icons.check,
-                    color: _hasChanges
-                        ? LoggitColors.teal
-                        : LoggitColors.lighterGraySubtext,
-                  ),
-            tooltip: 'Save',
+            onPressed: _openDetailedModal,
+            icon: Icon(Icons.settings, color: LoggitColors.darkGrayText),
+            tooltip: 'Advanced Settings',
           ),
         ],
       ),
@@ -612,4 +885,50 @@ class _NoteViewScreenState extends State<NoteViewScreen> {
       ),
     );
   }
+}
+
+Widget _buildPrettyColorCircle(Color color, bool isSelected) {
+  return Container(
+    width: 36,
+    height: 36,
+    decoration: BoxDecoration(
+      color: color,
+      shape: BoxShape.circle,
+      border: Border.all(
+        color: isSelected ? Colors.white : Colors.grey[200]!,
+        width: 3,
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: color.withOpacity(0.18),
+          blurRadius: 8,
+          offset: Offset(0, 2),
+        ),
+      ],
+    ),
+    child: isSelected ? Icon(Icons.check, color: Colors.white, size: 20) : null,
+  );
+}
+
+Widget _buildAlignmentButton(IconData icon, String tooltip) {
+  return Tooltip(
+    message: tooltip,
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () {}, // TODO: Implement alignment logic
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: Colors.grey[200],
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey[300]!),
+          ),
+          child: Icon(icon, color: Colors.black87, size: 26),
+        ),
+      ),
+    ),
+  );
 }
