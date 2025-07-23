@@ -48,14 +48,18 @@ class _NoteEditModalState extends State<NoteEditModal> {
   ];
 
   final List<Color> _colorOptions = [
-    const Color(0xFF2563eb), // Blue
-    const Color(0xFFdc2626), // Red
-    const Color(0xFF16a34a), // Green
-    const Color(0xFFca8a04), // Yellow
-    const Color(0xFF9333ea), // Purple
-    const Color(0xFFea580c), // Orange
-    const Color(0xFF0891b2), // Cyan
-    const Color(0xFFbe185d), // Pink
+    const Color(0xFF3B82F6), // Modern Blue
+    const Color(0xFFF472B6), // Pink
+    const Color(0xFFF59E42), // Coral/Orange
+    const Color(0xFFFACC15), // Yellow
+    const Color(0xFF8B5CF6), // Purple
+    const Color(0xFF10B981), // Mint/Green
+    const Color(0xFF64748B), // Modern Gray
+    const Color(0xFFFB7185), // Rose
+    const Color(0xFF38BDF8), // Sky Blue
+    const Color(0xFFFFFFFF), // White
+    const Color(0xFF000000), // Black
+    const Color(0xFFE5E7EB), // Light Grey
   ];
 
   @override
@@ -190,36 +194,43 @@ class _NoteEditModalState extends State<NoteEditModal> {
     final isDark = false; // Always use light mode for modal
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.9,
-        maxWidth: 500,
+        maxHeight: MediaQuery.of(context).size.height * 0.8,
+        maxWidth: 440,
       ),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Handle bar
-          Container(
-            margin: EdgeInsets.only(top: LoggitSpacing.sm),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: LoggitColors.lighterGraySubtext,
-              borderRadius: BorderRadius.circular(2),
-            ),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 20,
+            offset: Offset(0, -2),
           ),
-
-          // Header
-          Padding(
-            padding: EdgeInsets.all(LoggitSpacing.lg),
-            child: Row(
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Handle bar
+            Container(
+              margin: EdgeInsets.only(bottom: 18),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: LoggitColors.lighterGraySubtext,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // Header
+            Row(
               children: [
                 Text(
                   widget.note == null ? 'New Note' : 'Edit Note',
                   style: TextStyle(
-                    fontSize: 24,
+                    fontSize: 22,
                     fontWeight: FontWeight.bold,
                     color: LoggitColors.darkGrayText,
                   ),
@@ -231,128 +242,192 @@ class _NoteEditModalState extends State<NoteEditModal> {
                 ),
               ],
             ),
-          ),
-
-          // Form
-          Flexible(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.all(LoggitSpacing.lg),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Title
-                    Text(
-                      'Title',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    SizedBox(height: LoggitSpacing.xs),
-                    TextFormField(
-                      controller: _titleController,
-                      decoration: InputDecoration(
-                        hintText: 'Enter note title',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
+            SizedBox(height: 10),
+            Divider(thickness: 1.2, color: Colors.grey[200]),
+            // Form
+            Expanded(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.only(top: 8, bottom: 8),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Note Type
+                      _buildSectionHeader('Type'),
+                      SizedBox(height: 8),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: NoteType.values.map((type) {
+                            final isSelected = type == _selectedType;
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 12),
+                              child: GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _selectedType = type;
+                                    if (type != NoteType.checklist) {
+                                      _checklistItems.clear();
+                                    }
+                                  });
+                                },
+                                child: Container(
+                                  width: 90,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? LoggitColors.teal.withOpacity(0.15)
+                                        : Colors.grey[100],
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? LoggitColors.teal
+                                          : Colors.grey[300]!,
+                                      width: isSelected ? 2 : 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        _getTypeLabel(type),
+                                        style: TextStyle(
+                                          color: isSelected
+                                              ? LoggitColors.teal
+                                              : Colors.black87,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
                         ),
-                        filled: true,
-                        fillColor: LoggitColors.lightGray,
                       ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Title is required';
-                        }
-                        return null;
-                      },
-                    ),
-
-                    SizedBox(height: LoggitSpacing.md),
-
-                    // Note Type
-                    Text(
-                      'Type',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                      Divider(
+                        thickness: 1,
+                        color: Colors.grey[200],
+                        height: 32,
                       ),
-                    ),
-                    SizedBox(height: LoggitSpacing.xs),
-                    Wrap(
-                      spacing: LoggitSpacing.sm,
-                      children: NoteType.values.map((type) {
-                        final isSelected = type == _selectedType;
-                        return ChoiceChip(
-                          label: Text(_getTypeLabel(type)),
-                          selected: isSelected,
-                          onSelected: (selected) {
-                            if (selected) {
-                              setState(() {
-                                _selectedType = type;
-                                if (type != NoteType.checklist) {
-                                  _checklistItems.clear();
-                                }
-                              });
-                            }
-                          },
-                          backgroundColor: LoggitColors.lightGray,
-                          selectedColor: LoggitColors.teal,
-                          labelStyle: TextStyle(
-                            color: isSelected ? Colors.white : null,
-                            fontSize: 14,
+                      // Checklist Items
+                      if (_selectedType == NoteType.checklist) ...[
+                        _buildSectionHeader('Checklist Items'),
+                        SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextFormField(
+                                controller: _tagController,
+                                decoration: InputDecoration(
+                                  hintText: 'Add checklist item',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  filled: true,
+                                  fillColor: LoggitColors.lightGray,
+                                ),
+                                onFieldSubmitted: _addChecklistItem,
+                              ),
+                            ),
+                            SizedBox(width: LoggitSpacing.sm),
+                            IconButton(
+                              onPressed: () =>
+                                  _addChecklistItem(_tagController.text),
+                              icon: const Icon(Icons.add),
+                              style: IconButton.styleFrom(
+                                backgroundColor: LoggitColors.teal,
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (_checklistItems.isNotEmpty) ...[
+                          SizedBox(height: 8),
+                          ..._checklistItems.map(
+                            (item) => Card(
+                              margin: EdgeInsets.only(bottom: LoggitSpacing.xs),
+                              child: ListTile(
+                                leading: Checkbox(
+                                  value: item.isCompleted,
+                                  onChanged: (_) =>
+                                      _toggleChecklistItem(item.id),
+                                ),
+                                title: Text(
+                                  item.text,
+                                  style: TextStyle(
+                                    decoration: item.isCompleted
+                                        ? TextDecoration.lineThrough
+                                        : null,
+                                    color: item.isCompleted
+                                        ? LoggitColors.lighterGraySubtext
+                                        : null,
+                                  ),
+                                ),
+                                trailing: IconButton(
+                                  onPressed: () =>
+                                      _removeChecklistItem(item.id),
+                                  icon: const Icon(
+                                    Icons.delete,
+                                    color: Colors.red,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
-                        );
-                      }).toList(),
-                    ),
-
-                    SizedBox(height: LoggitSpacing.md),
-
-                    // Content
-                    Text(
-                      'Content',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    SizedBox(height: LoggitSpacing.xs),
-                    TextFormField(
-                      controller: _contentController,
-                      decoration: InputDecoration(
-                        hintText: 'Enter note content',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
+                        ],
+                        Divider(
+                          thickness: 1,
+                          color: Colors.grey[200],
+                          height: 32,
                         ),
-                        filled: true,
-                        fillColor: LoggitColors.lightGray,
-                      ),
-                      maxLines: 5,
-                    ),
-
-                    // Checklist Items
-                    if (_selectedType == NoteType.checklist) ...[
-                      SizedBox(height: LoggitSpacing.md),
-                      Text(
-                        'Checklist Items',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
+                      ],
+                      // Category
+                      _buildSectionHeader('Category'),
+                      SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        value: _selectedCategory,
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          filled: true,
+                          fillColor: LoggitColors.lightGray,
                         ),
+                        items: _categories.map((category) {
+                          return DropdownMenuItem(
+                            value: category,
+                            child: Text(category),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() {
+                              _selectedCategory = value;
+                            });
+                          }
+                        },
                       ),
-                      SizedBox(height: LoggitSpacing.xs),
-
-                      // Add new item
+                      Divider(
+                        thickness: 1,
+                        color: Colors.grey[200],
+                        height: 32,
+                      ),
+                      // Tags
+                      _buildSectionHeader('Tags'),
+                      SizedBox(height: 8),
                       Row(
                         children: [
                           Expanded(
                             child: TextFormField(
                               controller: _tagController,
                               decoration: InputDecoration(
-                                hintText: 'Add checklist item',
+                                hintText: 'Add tag',
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
                                   borderSide: BorderSide.none,
@@ -360,13 +435,12 @@ class _NoteEditModalState extends State<NoteEditModal> {
                                 filled: true,
                                 fillColor: LoggitColors.lightGray,
                               ),
-                              onFieldSubmitted: _addChecklistItem,
+                              onFieldSubmitted: _addTag,
                             ),
                           ),
                           SizedBox(width: LoggitSpacing.sm),
                           IconButton(
-                            onPressed: () =>
-                                _addChecklistItem(_tagController.text),
+                            onPressed: () => _addTag(_tagController.text),
                             icon: const Icon(Icons.add),
                             style: IconButton.styleFrom(
                               backgroundColor: LoggitColors.teal,
@@ -375,300 +449,163 @@ class _NoteEditModalState extends State<NoteEditModal> {
                           ),
                         ],
                       ),
-
-                      // Checklist items list
-                      if (_checklistItems.isNotEmpty) ...[
-                        SizedBox(height: LoggitSpacing.sm),
-                        ..._checklistItems.map(
-                          (item) => Card(
-                            margin: EdgeInsets.only(bottom: LoggitSpacing.xs),
-                            child: ListTile(
-                              leading: Checkbox(
-                                value: item.isCompleted,
-                                onChanged: (_) => _toggleChecklistItem(item.id),
-                              ),
-                              title: Text(
-                                item.text,
-                                style: TextStyle(
-                                  decoration: item.isCompleted
-                                      ? TextDecoration.lineThrough
-                                      : null,
-                                  color: item.isCompleted
-                                      ? LoggitColors.lighterGraySubtext
-                                      : null,
+                      if (_tags.isNotEmpty) ...[
+                        SizedBox(height: 8),
+                        Wrap(
+                          spacing: LoggitSpacing.xs,
+                          runSpacing: LoggitSpacing.xs,
+                          children: _tags
+                              .map(
+                                (tag) => Chip(
+                                  label: Text(tag),
+                                  onDeleted: () => _removeTag(tag),
+                                  deleteIcon: const Icon(Icons.close, size: 18),
                                 ),
-                              ),
-                              trailing: IconButton(
-                                onPressed: () => _removeChecklistItem(item.id),
-                                icon: const Icon(
-                                  Icons.delete,
-                                  color: Colors.red,
-                                ),
-                              ),
-                            ),
-                          ),
+                              )
+                              .toList(),
                         ),
                       ],
-                    ],
-
-                    SizedBox(height: LoggitSpacing.md),
-
-                    // Category
-                    Text(
-                      'Category',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                      Divider(
+                        thickness: 1,
+                        color: Colors.grey[200],
+                        height: 32,
                       ),
-                    ),
-                    SizedBox(height: LoggitSpacing.xs),
-                    DropdownButtonFormField<String>(
-                      value: _selectedCategory,
-                      decoration: InputDecoration(
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        filled: true,
-                        fillColor: LoggitColors.lightGray,
+                      // Color
+                      _buildSectionHeader('Color'),
+                      SizedBox(height: 8),
+                      _buildColorGrid(_colorOptions, _selectedColor, (color) {
+                        setState(() {
+                          _selectedColor = color;
+                        });
+                      }),
+                      Divider(
+                        thickness: 1,
+                        color: Colors.grey[200],
+                        height: 32,
                       ),
-                      items: _categories.map((category) {
-                        return DropdownMenuItem(
-                          value: category,
-                          child: Text(category),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            _selectedCategory = value;
-                          });
-                        }
-                      },
-                    ),
-
-                    SizedBox(height: LoggitSpacing.md),
-
-                    // Tags
-                    Text(
-                      'Tags',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    SizedBox(height: LoggitSpacing.xs),
-
-                    // Add tag
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _tagController,
-                            decoration: InputDecoration(
-                              hintText: 'Add tag',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide.none,
-                              ),
-                              filled: true,
-                              fillColor: LoggitColors.lightGray,
-                            ),
-                            onFieldSubmitted: _addTag,
-                          ),
-                        ),
-                        SizedBox(width: LoggitSpacing.sm),
-                        IconButton(
-                          onPressed: () => _addTag(_tagController.text),
-                          icon: const Icon(Icons.add),
-                          style: IconButton.styleFrom(
-                            backgroundColor: LoggitColors.teal,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    // Tags list
-                    if (_tags.isNotEmpty) ...[
-                      SizedBox(height: LoggitSpacing.sm),
-                      Wrap(
-                        spacing: LoggitSpacing.xs,
-                        runSpacing: LoggitSpacing.xs,
-                        children: _tags
-                            .map(
-                              (tag) => Chip(
-                                label: Text(tag),
-                                onDeleted: () => _removeTag(tag),
-                                deleteIcon: const Icon(Icons.close, size: 18),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                    ],
-
-                    SizedBox(height: LoggitSpacing.md),
-
-                    // Color
-                    Text(
-                      'Color',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    SizedBox(height: LoggitSpacing.xs),
-                    Wrap(
-                      spacing: LoggitSpacing.sm,
-                      children: _colorOptions.map((color) {
-                        final isSelected = color == _selectedColor;
-                        return GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _selectedColor = color;
-                            });
-                          },
-                          child: Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: color,
-                              shape: BoxShape.circle,
-                              border: isSelected
-                                  ? Border.all(color: Colors.white, width: 3)
-                                  : null,
-                              boxShadow: isSelected
-                                  ? [
-                                      BoxShadow(
-                                        color: color.withOpacity(0.3),
-                                        blurRadius: 8,
-                                        spreadRadius: 2,
+                      // Priority
+                      _buildSectionHeader('Priority'),
+                      SizedBox(height: 8),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: NotePriority.values.map((priority) {
+                            final isSelected = priority == _selectedPriority;
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 12),
+                              child: GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _selectedPriority = priority;
+                                  });
+                                },
+                                child: Container(
+                                  width: 90,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? LoggitColors.teal.withOpacity(0.15)
+                                        : Colors.grey[100],
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? LoggitColors.teal
+                                          : Colors.grey[300]!,
+                                      width: isSelected ? 2 : 1,
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      _getPriorityLabel(priority),
+                                      style: TextStyle(
+                                        color: isSelected
+                                            ? LoggitColors.teal
+                                            : Colors.black87,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
                                       ),
-                                    ]
-                                  : null,
-                            ),
-                            child: isSelected
-                                ? const Icon(Icons.check, color: Colors.white)
-                                : null,
-                          ),
-                        );
-                      }).toList(),
-                    ),
-
-                    SizedBox(height: LoggitSpacing.md),
-
-                    // Priority
-                    Text(
-                      'Priority',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
                       ),
-                    ),
-                    SizedBox(height: LoggitSpacing.xs),
-                    Wrap(
-                      spacing: LoggitSpacing.sm,
-                      children: NotePriority.values.map((priority) {
-                        final isSelected = priority == _selectedPriority;
-                        return ChoiceChip(
-                          label: Text(_getPriorityLabel(priority)),
-                          selected: isSelected,
-                          onSelected: (selected) {
-                            if (selected) {
-                              setState(() {
-                                _selectedPriority = priority;
-                              });
-                            }
-                          },
-                          backgroundColor: LoggitColors.lightGray,
-                          selectedColor: _getPriorityColor(priority),
-                          labelStyle: TextStyle(
-                            color: isSelected ? Colors.white : null,
-                            fontSize: 14,
-                          ),
-                        );
-                      }).toList(),
-                    ),
-
-                    SizedBox(height: LoggitSpacing.md),
-
-                    // Status
-                    Text(
-                      'Status',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                      Divider(
+                        thickness: 1,
+                        color: Colors.grey[200],
+                        height: 32,
                       ),
-                    ),
-                    SizedBox(height: LoggitSpacing.xs),
-                    Wrap(
-                      spacing: LoggitSpacing.sm,
-                      children: NoteStatus.values.map((status) {
-                        final isSelected = status == _selectedStatus;
-                        return ChoiceChip(
-                          label: Text(_getStatusLabel(status)),
-                          selected: isSelected,
-                          onSelected: (selected) {
-                            if (selected) {
-                              setState(() {
-                                _selectedStatus = status;
-                              });
-                            }
-                          },
-                          backgroundColor: LoggitColors.lightGray,
-                          selectedColor: LoggitColors.teal,
-                          labelStyle: TextStyle(
-                            color: isSelected ? Colors.white : null,
-                            fontSize: 14,
-                          ),
-                        );
-                      }).toList(),
-                    ),
-
-                    SizedBox(height: LoggitSpacing.xl),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // Save button
-          Container(
-            padding: EdgeInsets.all(LoggitSpacing.lg),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _saveNote,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: LoggitColors.teal,
-                  foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(vertical: LoggitSpacing.md),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                      // Status
+                      _buildSectionHeader('Status'),
+                      SizedBox(height: 8),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: NoteStatus.values.map((status) {
+                            final isSelected = status == _selectedStatus;
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 12),
+                              child: GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _selectedStatus = status;
+                                  });
+                                },
+                                child: Container(
+                                  width: 90,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? LoggitColors.teal.withOpacity(0.15)
+                                        : Colors.grey[100],
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? LoggitColors.teal
+                                          : Colors.grey[300]!,
+                                      width: isSelected ? 2 : 1,
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      _getStatusLabel(status),
+                                      style: TextStyle(
+                                        color: isSelected
+                                            ? LoggitColors.teal
+                                            : Colors.black87,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      SizedBox(height: 18),
+                    ],
                   ),
                 ),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
-                          ),
-                        ),
-                      )
-                    : Text(
-                        widget.note == null ? 'Create Note' : 'Save Changes',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String label) {
+    return Text(
+      label,
+      style: TextStyle(
+        fontWeight: FontWeight.w600,
+        fontSize: 15,
+        color: LoggitColors.darkGrayText,
+        letterSpacing: 0.1,
       ),
     );
   }
@@ -685,6 +622,21 @@ class _NoteEditModalState extends State<NoteEditModal> {
         return 'Quick';
       case NoteType.linked:
         return 'Linked';
+    }
+  }
+
+  IconData _getTypeIcon(NoteType type) {
+    switch (type) {
+      case NoteType.text:
+        return Icons.text_fields;
+      case NoteType.checklist:
+        return Icons.check_box;
+      case NoteType.media:
+        return Icons.image;
+      case NoteType.quick:
+        return Icons.flash_on;
+      case NoteType.linked:
+        return Icons.link;
     }
   }
 
@@ -720,4 +672,65 @@ class _NoteEditModalState extends State<NoteEditModal> {
         return 'Archived';
     }
   }
+}
+
+Widget _buildColorGrid(
+  List<Color> colors,
+  Color selectedColor,
+  Function(Color) onSelect,
+) {
+  const int colorsPerRow = 6;
+  final rows = <Widget>[];
+  for (int i = 0; i < colors.length; i += colorsPerRow) {
+    final rowColors = colors.skip(i).take(colorsPerRow).toList();
+    rows.add(
+      Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: rowColors.map((color) {
+          final isSelected = color == selectedColor;
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: GestureDetector(
+              onTap: () => onSelect(color),
+              child: Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isSelected
+                        ? Colors.deepPurple
+                        : Colors.black.withOpacity(0.18),
+                    width: isSelected ? 3 : 1.2,
+                  ),
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color: color.withOpacity(0.18),
+                            blurRadius: 8,
+                            offset: Offset(0, 2),
+                          ),
+                        ]
+                      : [],
+                ),
+                child: isSelected
+                    ? Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.deepPurple,
+                            width: 2,
+                          ),
+                        ),
+                      )
+                    : null,
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+  return Column(crossAxisAlignment: CrossAxisAlignment.start, children: rows);
 }
