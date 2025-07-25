@@ -46,7 +46,18 @@ This app uses the Groq API for natural language processing. You need to set up y
    flutter run
    ```
 
+   **Method 4: Using the start script (Recommended)**
+   ```bash
+   export GROQ_API_KEY=your_actual_key_here
+   ./start_app.sh
+   ```
+
 ⚠️ **Security**: Never commit your API key to version control. The key is excluded from git via `.gitignore`.
+
+**Important Security Notes:**
+- The `start_app.sh` file is already in `.gitignore` to prevent API key exposure
+- Always use environment variables instead of hardcoding API keys in files
+- If you accidentally commit an API key, immediately revoke it and generate a new one
 
 ## Getting Started
 

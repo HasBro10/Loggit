@@ -5,6 +5,15 @@ import '../../features/notes/note_insert_modal.dart';
 import '../../services/notes_service.dart';
 import '../../shared/design/color_guide.dart';
 import '../../shared/design/spacing.dart';
+import '../../features/notes/note_settings_modal.dart'; // Added import for NoteSettingsModal
+import '../../services/notes_service.dart' show PersistentCategory;
+
+// Category model (move to top level)
+class Category {
+  final String name;
+  final Color color;
+  Category({required this.name, required this.color});
+}
 
 class NoteViewScreen extends StatefulWidget {
   final Note? note; // null for new note, existing note for editing
@@ -29,10 +38,440 @@ class _NoteViewScreenState extends State<NoteViewScreen> {
   bool _isNumberedList = false;
   double _fontSize = 16.0;
 
+  late Color _noteColor;
+  NoteType _selectedType = NoteType.text;
+  List<NoteItem> _checklistItems = [];
+  List<Category> _categories = [];
+  String _selectedCategory = 'Quick';
+  Color _selectedCategoryColor = Colors.yellow;
+  List<String> _tags = [];
+  NotePriority _selectedPriority = NotePriority.medium;
+  NoteStatus _selectedStatus = NoteStatus.final_;
+
+  Future<Map<String, dynamic>?> _showAddCategoryDialog() async {
+    String newCategoryName = '';
+    Color? tempSelectedColor;
+    bool showColorError = false;
+    final colorOptions = [
+      const Color(0xFFFFFFFF), // White
+      const Color(0xFFE5E7EB), // Light Grey
+      const Color(0xFF64748B), // Grey
+      const Color(0xFF000000), // Black
+      const Color(0xFFFACC15), // Yellow
+      const Color(0xFFF59E42), // Orange
+      const Color(0xFF3B82F6), // Blue
+      const Color(0xFF38BDF8), // Light Blue
+      const Color(0xFF8B5CF6), // Purple
+      const Color(0xFFF472B6), // Pink
+      const Color(0xFFFB7185), // Red
+      const Color(0xFF10B981), // Teal/Green
+    ];
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 24,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Add Category',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                      ),
+                    ),
+                    SizedBox(height: 18),
+                    TextField(
+                      autofocus: true,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: InputDecoration(
+                        hintText: 'Category name',
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey[100],
+                      ),
+                      onChanged: (val) => newCategoryName = val,
+                    ),
+                    SizedBox(height: 20),
+                    Text(
+                      'Pick a color:',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    SizedBox(height: 10),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: colorOptions.map((color) {
+                        final isSelected = tempSelectedColor == color;
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              tempSelectedColor = color;
+                              showColorError = false;
+                            });
+                          },
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isSelected
+                                    ? Colors.deepPurple
+                                    : showColorError &&
+                                          tempSelectedColor == null
+                                    ? Colors.red
+                                    : Colors.grey[300]!,
+                                width: isSelected ? 3 : 1.2,
+                              ),
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: color.withOpacity(0.18),
+                                        blurRadius: 8,
+                                        offset: Offset(0, 2),
+                                      ),
+                                    ]
+                                  : [],
+                            ),
+                            child: isSelected
+                                ? Icon(
+                                    Icons.check,
+                                    color: Colors.white,
+                                    size: 20,
+                                  )
+                                : null,
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    if (showColorError && tempSelectedColor == null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Text(
+                          'Assign a color to this category.',
+                          style: TextStyle(color: Colors.red, fontSize: 13),
+                        ),
+                      ),
+                    SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: Text(
+                            'Cancel',
+                            style: TextStyle(color: Colors.black),
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () {
+                            if (newCategoryName.trim().isEmpty ||
+                                tempSelectedColor == null) {
+                              setState(() {
+                                showColorError = tempSelectedColor == null;
+                              });
+                              return;
+                            }
+                            Navigator.of(context).pop({
+                              'name': newCategoryName.trim(),
+                              'color': tempSelectedColor,
+                            });
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: LoggitColors.teal,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                          ),
+                          child: Text(
+                            'Add',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (result != null && result['name'] != null && result['color'] != null) {
+      final newCat = Category(name: result['name'], color: result['color']);
+      setState(() {
+        if (!_categories.any((cat) => cat.name == newCat.name)) {
+          _categories.add(newCat);
+        }
+        _selectedCategory = newCat.name;
+        _selectedCategoryColor = newCat.color;
+        _noteColor = newCat.color;
+      });
+      // Save to persistent storage
+      await NotesService.addOrUpdateCategory(
+        PersistentCategory(name: newCat.name, colorValue: newCat.color.value),
+      );
+      return result;
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> _showEditCategoryDialog(
+    String categoryName,
+    Color categoryColor,
+  ) async {
+    String newCategoryName = categoryName;
+    Color? tempSelectedColor = categoryColor;
+    bool showColorError = false;
+    final colorOptions = [
+      const Color(0xFFFFFFFF), // White
+      const Color(0xFFE5E7EB), // Light Grey
+      const Color(0xFF64748B), // Grey
+      const Color(0xFF000000), // Black
+      const Color(0xFFFACC15), // Yellow
+      const Color(0xFFF59E42), // Orange
+      const Color(0xFF3B82F6), // Blue
+      const Color(0xFF38BDF8), // Light Blue
+      const Color(0xFF8B5CF6), // Purple
+      const Color(0xFFF472B6), // Pink
+      const Color(0xFFFB7185), // Red
+      const Color(0xFF10B981), // Teal/Green
+    ];
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 24,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Edit Category',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                      ),
+                    ),
+                    SizedBox(height: 18),
+                    TextField(
+                      autofocus: true,
+                      controller: TextEditingController(text: newCategoryName),
+                      textCapitalization: TextCapitalization.words,
+                      decoration: InputDecoration(
+                        hintText: 'Category name',
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey[100],
+                      ),
+                      onChanged: (val) => newCategoryName = val,
+                    ),
+                    SizedBox(height: 20),
+                    Text(
+                      'Pick a color:',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    SizedBox(height: 10),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: colorOptions.map((color) {
+                        final isSelected = tempSelectedColor == color;
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              tempSelectedColor = color;
+                              showColorError = false;
+                            });
+                          },
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isSelected
+                                    ? Colors.deepPurple
+                                    : showColorError &&
+                                          tempSelectedColor == null
+                                    ? Colors.red
+                                    : Colors.grey[300]!,
+                                width: isSelected ? 3 : 1.2,
+                              ),
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: color.withOpacity(0.18),
+                                        blurRadius: 8,
+                                        offset: Offset(0, 2),
+                                      ),
+                                    ]
+                                  : [],
+                            ),
+                            child: isSelected
+                                ? Icon(
+                                    Icons.check,
+                                    color: Colors.white,
+                                    size: 20,
+                                  )
+                                : null,
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    if (showColorError && tempSelectedColor == null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Text(
+                          'Assign a color to this category.',
+                          style: TextStyle(color: Colors.red, fontSize: 13),
+                        ),
+                      ),
+                    SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () async {
+                            final confirmed = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: Text('Delete Category'),
+                                content: Text(
+                                  'All notes in this category will be moved to the "Quick" category. Are you sure you want to delete "${newCategoryName}"?',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(false),
+                                    child: Text('Cancel'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(true),
+                                    child: Text(
+                                      'Delete',
+                                      style: TextStyle(color: Colors.red),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirmed == true) {
+                              Navigator.of(context).pop({'action': 'delete'});
+                            }
+                          },
+                          child: Text(
+                            'Delete',
+                            style: TextStyle(color: Colors.red),
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () {
+                            if (newCategoryName.trim().isEmpty ||
+                                tempSelectedColor == null) {
+                              setState(() {
+                                showColorError = tempSelectedColor == null;
+                              });
+                              return;
+                            }
+                            Navigator.of(context).pop({
+                              'action': 'save',
+                              'name': newCategoryName.trim(),
+                              'color': tempSelectedColor,
+                            });
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: LoggitColors.teal,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                          ),
+                          child: Text(
+                            'Save',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    return result;
+  }
+
   @override
   void initState() {
     super.initState();
     _initializeForm();
+    _loadPersistentCategories();
+    _noteColor = widget.note?.color ?? Colors.white;
+    if (widget.note != null) {
+      _selectedType = widget.note!.type;
+      _checklistItems = widget.note!.checklistItems ?? [];
+      _selectedCategory = widget.note!.noteCategory;
+      final foundCat = _categories.firstWhere(
+        (cat) => cat.name == _selectedCategory,
+        orElse: () => Category(name: 'Quick', color: Colors.yellow),
+      );
+      _selectedCategoryColor = foundCat.color;
+      _tags = List.from(widget.note!.tags);
+      _selectedPriority = widget.note!.priority;
+      _selectedStatus = widget.note!.status;
+    }
   }
 
   void _initializeForm() {
@@ -195,12 +634,12 @@ class _NoteViewScreenState extends State<NoteViewScreen> {
     );
   }
 
-  Future<void> _saveNote() async {
-    if (_titleController.text.trim().isEmpty) {
+  Future<Note?> _saveNote({bool allowEmptyTitle = false}) async {
+    if (_titleController.text.trim().isEmpty && !allowEmptyTitle) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Title is required')));
-      return;
+      return null;
     }
 
     setState(() {
@@ -208,38 +647,72 @@ class _NoteViewScreenState extends State<NoteViewScreen> {
     });
 
     try {
+      // If no category is selected, assign to Quick
+      String categoryToUse = _selectedCategory.isEmpty
+          ? 'Quick'
+          : _selectedCategory;
+      Color colorToUse = _noteColor;
+      if (_selectedCategory.isEmpty ||
+          !_categories.any((c) => c.name == _selectedCategory)) {
+        // Use persistent Quick color
+        final persistent = await NotesService.getPersistentCategories();
+        final quick = persistent.firstWhere(
+          (c) => c.name == 'Quick',
+          orElse: () =>
+              PersistentCategory(name: 'Quick', colorValue: 0xFFFFEB3B),
+        );
+        colorToUse = Color(quick.colorValue);
+        categoryToUse = 'Quick';
+      }
       if (widget.note == null) {
         // Create new note
         final newNote = Note(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           title: _titleController.text.trim(),
           content: _contentController.text.trim(),
-          type: NoteType.text,
-          noteCategory: 'Personal',
-          color: const Color(0xFF2563eb),
-          priority: NotePriority.medium,
-          status: NoteStatus.final_,
-          tags: [],
-          checklistItems: null,
+          type: _selectedType,
+          noteCategory: categoryToUse,
+          color: colorToUse,
+          priority: _selectedPriority,
+          status: _selectedStatus,
+          tags: _tags,
+          checklistItems: _selectedType == NoteType.checklist
+              ? _checklistItems
+              : null,
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );
 
         final success = await NotesService.createNote(newNote);
         if (success && mounted) {
-          Navigator.of(context).pop(newNote);
+          Navigator.of(
+            context,
+          ).pop({'note': newNote, 'categories': _categories});
+          return newNote;
         }
       } else {
         // Update existing note
         final updatedNote = widget.note!.copyWith(
           title: _titleController.text.trim(),
           content: _contentController.text.trim(),
+          type: _selectedType,
+          noteCategory: categoryToUse,
+          color: colorToUse,
+          priority: _selectedPriority,
+          status: _selectedStatus,
+          tags: _tags,
+          checklistItems: _selectedType == NoteType.checklist
+              ? _checklistItems
+              : null,
           updatedAt: DateTime.now(),
         );
 
         final success = await NotesService.updateNote(updatedNote);
         if (success && mounted) {
-          Navigator.of(context).pop(updatedNote);
+          Navigator.of(
+            context,
+          ).pop({'note': updatedNote, 'categories': _categories});
+          return updatedNote;
         }
       }
     } catch (e) {
@@ -255,6 +728,16 @@ class _NoteViewScreenState extends State<NoteViewScreen> {
         });
       }
     }
+    return null;
+  }
+
+  Future<void> _loadPersistentCategories() async {
+    final persistent = await NotesService.getPersistentCategories();
+    setState(() {
+      _categories = persistent
+          .map((c) => Category(name: c.name, color: Color(c.colorValue)))
+          .toList();
+    });
   }
 
   Future<void> _openDetailedModal() async {
@@ -389,327 +872,6 @@ class _NoteViewScreenState extends State<NoteViewScreen> {
                         tooltip: 'Numbered List',
                         isSmallScreen: isSmallScreen,
                       ),
-                      SizedBox(width: buttonSpacing),
-                      _buildFloatingToolbarButton(
-                        icon: Icons.more_horiz,
-                        isActive: false,
-                        onPressed: () {
-                          showModalBottomSheet(
-                            context: context,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.vertical(
-                                top: Radius.circular(24),
-                              ),
-                            ),
-                            backgroundColor: Colors.white,
-                            builder: (context) {
-                              return Container(
-                                height: 380,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.vertical(
-                                    top: Radius.circular(28),
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.08),
-                                      blurRadius: 20,
-                                      offset: Offset(0, -2),
-                                    ),
-                                  ],
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 24,
-                                    vertical: 20,
-                                  ),
-                                  child: Column(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceEvenly,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        'Format',
-                                        style: TextStyle(
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.bold,
-                                          color: LoggitColors.darkGrayText,
-                                        ),
-                                      ),
-                                      // Alignment buttons row
-                                      SingleChildScrollView(
-                                        scrollDirection: Axis.horizontal,
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            _buildAlignmentButton(
-                                              Icons.format_align_left,
-                                              'Left',
-                                            ),
-                                            SizedBox(width: 12),
-                                            _buildAlignmentButton(
-                                              Icons.format_align_center,
-                                              'Center',
-                                            ),
-                                            SizedBox(width: 12),
-                                            _buildAlignmentButton(
-                                              Icons.format_align_right,
-                                              'Right',
-                                            ),
-                                            SizedBox(width: 12),
-                                            _buildAlignmentButton(
-                                              Icons.format_align_justify,
-                                              'Justify',
-                                            ),
-                                            SizedBox(width: 12),
-                                            _buildAlignmentButton(
-                                              Icons.format_indent_increase,
-                                              'Increase Indent',
-                                            ),
-                                            SizedBox(width: 12),
-                                            _buildAlignmentButton(
-                                              Icons.format_indent_decrease,
-                                              'Decrease Indent',
-                                            ),
-                                            SizedBox(width: 12),
-                                            _buildAlignmentButton(
-                                              Icons.format_line_spacing,
-                                              'Line Spacing',
-                                            ),
-                                            SizedBox(width: 12),
-                                            _buildAlignmentButton(
-                                              Icons.format_clear,
-                                              'Clear Formatting',
-                                            ),
-                                            SizedBox(width: 12),
-                                            _buildAlignmentButton(
-                                              Icons.highlight,
-                                              'Highlight',
-                                            ),
-                                            SizedBox(width: 12),
-                                            _buildAlignmentButton(
-                                              Icons.format_color_text,
-                                              'Text Color',
-                                            ),
-                                            SizedBox(width: 12),
-                                            _buildAlignmentButton(
-                                              Icons.undo,
-                                              'Undo',
-                                            ),
-                                            SizedBox(width: 12),
-                                            _buildAlignmentButton(
-                                              Icons.redo,
-                                              'Redo',
-                                            ),
-                                            SizedBox(width: 12),
-                                            _buildAlignmentButton(
-                                              Icons.link,
-                                              'Insert Link',
-                                            ),
-                                            SizedBox(width: 12),
-                                            _buildAlignmentButton(
-                                              Icons.link_off,
-                                              'Remove Link',
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Divider(
-                                        thickness: 1.2,
-                                        color: Colors.grey[200],
-                                      ),
-                                      // Styles row
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Icon(
-                                                Icons.text_fields,
-                                                color:
-                                                    LoggitColors.darkGrayText,
-                                                size: 22,
-                                              ),
-                                              SizedBox(width: 8),
-                                              Text(
-                                                'Styles',
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.w600,
-                                                  fontSize: 16,
-                                                  color:
-                                                      LoggitColors.darkGrayText,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          Row(
-                                            children: [
-                                              Text(
-                                                'Normal',
-                                                style: TextStyle(fontSize: 16),
-                                              ),
-                                              SizedBox(width: 4),
-                                              Icon(
-                                                Icons.chevron_right,
-                                                size: 20,
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                      Divider(
-                                        thickness: 1.2,
-                                        color: Colors.grey[200],
-                                      ),
-                                      // Font row
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Icon(
-                                                Icons.font_download,
-                                                color:
-                                                    LoggitColors.darkGrayText,
-                                                size: 22,
-                                              ),
-                                              SizedBox(width: 8),
-                                              Text(
-                                                'Font',
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.w600,
-                                                  fontSize: 16,
-                                                  color:
-                                                      LoggitColors.darkGrayText,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          Row(
-                                            children: [
-                                              Text(
-                                                'Calibri',
-                                                style: TextStyle(fontSize: 16),
-                                              ),
-                                              SizedBox(width: 4),
-                                              Icon(
-                                                Icons.chevron_right,
-                                                size: 20,
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                      Divider(
-                                        thickness: 1.2,
-                                        color: Colors.grey[200],
-                                      ),
-                                      // Size row
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Icon(
-                                                Icons.format_size,
-                                                color:
-                                                    LoggitColors.darkGrayText,
-                                                size: 22,
-                                              ),
-                                              SizedBox(width: 8),
-                                              Text(
-                                                'Size',
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.w600,
-                                                  fontSize: 16,
-                                                  color:
-                                                      LoggitColors.darkGrayText,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          Row(
-                                            children: [
-                                              GestureDetector(
-                                                onTap: _decreaseFontSize,
-                                                child: Container(
-                                                  width: 36,
-                                                  height: 36,
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.grey[200],
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          8,
-                                                        ),
-                                                  ),
-                                                  child: Icon(
-                                                    Icons.remove,
-                                                    size: 20,
-                                                    color: Colors.black87,
-                                                  ),
-                                                ),
-                                              ),
-                                              SizedBox(width: 8),
-                                              Container(
-                                                width: 36,
-                                                height: 36,
-                                                alignment: Alignment.center,
-                                                decoration: BoxDecoration(
-                                                  color: Colors.grey[100],
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                  border: Border.all(
-                                                    color: Colors.grey[300]!,
-                                                  ),
-                                                ),
-                                                child: Text(
-                                                  _fontSize.toInt().toString(),
-                                                  style: TextStyle(
-                                                    fontSize: 18,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Colors.black87,
-                                                  ),
-                                                ),
-                                              ),
-                                              SizedBox(width: 8),
-                                              GestureDetector(
-                                                onTap: _increaseFontSize,
-                                                child: Container(
-                                                  width: 36,
-                                                  height: 36,
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.grey[200],
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          8,
-                                                        ),
-                                                  ),
-                                                  child: Icon(
-                                                    Icons.add,
-                                                    size: 20,
-                                                    color: Colors.black87,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          );
-                        },
-                        tooltip: 'More',
-                        isSmallScreen: isSmallScreen,
-                      ),
                     ],
                   ),
                 ),
@@ -783,11 +945,16 @@ class _NoteViewScreenState extends State<NoteViewScreen> {
         elevation: 0,
         leading: IconButton(
           onPressed: () async {
-            if (_hasChanges) {
-              await _saveNote();
-            } else {
-              Navigator.of(context).pop();
+            final hasTitle = _titleController.text.trim().isNotEmpty;
+            final hasContent = _contentController.text.trim().isNotEmpty;
+            if (!hasTitle && !hasContent) {
+              // Nothing typed, just go back without saving
+              if (mounted) Navigator.of(context).pop();
+              return;
             }
+            // Otherwise, save (even if title is empty)
+            final note = await _saveNote(allowEmptyTitle: true);
+            // _saveNote already pops with the correct value, so do not pop again here
           },
           icon: Icon(Icons.arrow_back, color: LoggitColors.darkGrayText),
         ),
@@ -801,9 +968,139 @@ class _NoteViewScreenState extends State<NoteViewScreen> {
         ),
         actions: [
           IconButton(
-            onPressed: _openDetailedModal,
             icon: Icon(Icons.settings, color: LoggitColors.darkGrayText),
-            tooltip: 'Advanced Settings',
+            tooltip: 'Settings',
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                builder: (context) {
+                  return NoteSettingsModal(
+                    selectedType: _selectedType,
+                    onTypeChanged: (type) =>
+                        setState(() => _selectedType = type),
+                    checklistItems: _checklistItems
+                        .map((item) => item.text)
+                        .toList(),
+                    onAddChecklistItem: (text) {
+                      if (text.trim().isNotEmpty) {
+                        setState(() {
+                          _checklistItems.add(
+                            NoteItem(id: DateTime.now().toString(), text: text),
+                          );
+                        });
+                      }
+                    },
+                    onRemoveChecklistItem: (index) {
+                      setState(() {
+                        _checklistItems.removeAt(index);
+                      });
+                    },
+                    selectedCategory: _selectedCategory,
+                    categories: _categories.map((cat) => cat.name).toList(),
+                    onCategoryChanged: (cat) {
+                      setState(() {
+                        _selectedCategory = cat;
+                        final foundCat = _categories.firstWhere(
+                          (c) => c.name == cat,
+                          orElse: () =>
+                              Category(name: 'Quick', color: Colors.yellow),
+                        );
+                        _selectedCategoryColor = foundCat.color;
+                      });
+                    },
+                    tags: _tags,
+                    onAddTag: (tag) {
+                      final trimmed = tag.trim();
+                      if (trimmed.isNotEmpty && !_tags.contains(trimmed)) {
+                        setState(() {
+                          _tags.add(trimmed);
+                        });
+                      }
+                    },
+                    onRemoveTag: (tag) => setState(() => _tags.remove(tag)),
+                    selectedColor: _noteColor,
+                    colorOptions: [
+                      const Color(0xFF3B82F6),
+                      const Color(0xFFF472B6),
+                      const Color(0xFFF59E42),
+                      const Color(0xFFFACC15),
+                      const Color(0xFF8B5CF6),
+                      const Color(0xFF10B981),
+                      const Color(0xFF64748B),
+                      const Color(0xFFFB7185),
+                      const Color(0xFF38BDF8),
+                      const Color(0xFFFFFFFF),
+                      const Color(0xFF000000),
+                      const Color(0xFFE5E7EB),
+                    ],
+                    onColorSelected: (color) {
+                      setState(() {
+                        _noteColor = color;
+                      });
+                      Navigator.of(context).pop();
+                    },
+                    selectedPriority: _selectedPriority,
+                    onPriorityChanged: (priority) =>
+                        setState(() => _selectedPriority = priority),
+                    selectedStatus: _selectedStatus,
+                    onStatusChanged: (status) =>
+                        setState(() => _selectedStatus = status),
+                    onAddCategory: () async => await _showAddCategoryDialog(),
+                    onEditCategory: (categoryName, categoryColor) async {
+                      final result = await _showEditCategoryDialog(
+                        categoryName,
+                        categoryColor,
+                      );
+                      if (result != null) {
+                        if (result['action'] == 'save') {
+                          // Update category in persistent storage
+                          final newCat = Category(
+                            name: result['name'],
+                            color: result['color'],
+                          );
+                          setState(() {
+                            final idx = _categories.indexWhere(
+                              (c) => c.name == categoryName,
+                            );
+                            if (idx >= 0) {
+                              _categories[idx] = newCat;
+                              if (_selectedCategory == categoryName) {
+                                _selectedCategory = newCat.name;
+                                _selectedCategoryColor = newCat.color;
+                                _noteColor = newCat.color;
+                              }
+                            }
+                          });
+                          await NotesService.addOrUpdateCategory(
+                            PersistentCategory(
+                              name: newCat.name,
+                              colorValue: newCat.color.value,
+                            ),
+                          );
+                        } else if (result['action'] == 'delete') {
+                          // Remove category from persistent storage and reassign notes
+                          await NotesService.deleteCategory(categoryName);
+                          setState(() {
+                            _categories.removeWhere(
+                              (c) => c.name == categoryName,
+                            );
+                            if (_selectedCategory == categoryName) {
+                              _selectedCategory = 'Quick';
+                              _selectedCategoryColor = Colors.yellow;
+                              _noteColor = Colors.yellow;
+                            }
+                          });
+                        }
+                      }
+                      return result;
+                    },
+                  );
+                },
+              );
+            },
           ),
         ],
       ),
@@ -842,7 +1139,7 @@ class _NoteViewScreenState extends State<NoteViewScreen> {
           Expanded(
             child: Container(
               width: double.infinity,
-              color: Colors.white,
+              color: _noteColor,
               child: Padding(
                 padding: EdgeInsets.all(LoggitSpacing.lg),
                 child: TextField(
@@ -867,7 +1164,7 @@ class _NoteViewScreenState extends State<NoteViewScreen> {
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.zero,
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: Colors.transparent,
                     hoverColor: Colors.transparent,
                     focusColor: Colors.transparent,
                   ),

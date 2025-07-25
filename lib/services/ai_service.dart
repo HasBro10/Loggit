@@ -256,4 +256,16 @@ Response: {"intent": "create_task", "fields": {"title": "urgent meeting", "descr
       return false;
     }
   }
+
+  static Future<bool> testGroqConnection() async {
+    try {
+      final response = await http.get(
+        Uri.parse(_groqEndpoint),
+        headers: {'Authorization': 'Bearer $_groqApiKey'},
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
 }
