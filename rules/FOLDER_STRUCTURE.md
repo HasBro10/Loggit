@@ -250,3 +250,41 @@ These rules ensure consistent, maintainable, and high-quality code development f
 - Always ensure alignment and organization, so elements do not disappear, overlap, or become unaligned on any device.
 - Use Flexible, Expanded, Wrap, or other responsive layout widgets as needed.
 - This is mandatory for all new UI code. 
+
+# Guidelines for Maintainable Features and Pages (AI & Human Friendly)
+
+When building any new features, functions, or pages, follow these rules to avoid issues that make editing and maintenance difficult for both humans and AI assistants:
+
+## 1. Split Large Widgets and Modals
+- Do **not** keep all modal/page/widget code in a single file if it grows beyond 200 lines or has multiple responsibilities.
+- Move complex sections (e.g., color pickers, checklists, forms) into their own widgets/files.
+- Use clear, descriptive names for each widget/component.
+
+## 2. Separate Logic from UI
+- Keep business logic (parsing, calculations, data manipulation) in service or utility files, not mixed with UI code.
+- Use models and services for data, and keep UI files focused on layout and interaction.
+
+## 3. Avoid Large Functions
+- Break up long functions (>40 lines) into smaller helper functions.
+- Each function should do one thing only.
+
+## 4. Use Consistent Folder Structure
+- Place each feature in its own folder (e.g., notes, expenses, gym).
+- Keep shared widgets and utilities in a shared folder.
+
+## 5. Watch for These Common Pitfalls
+- Large files (>300 lines) are hard to edit and maintain.
+- Deeply nested widget trees are difficult to update.
+- Repeated code blocks (copy-paste) make bugs and changes harder to manage.
+- Mixing unrelated logic (e.g., UI and data parsing) in one file causes confusion.
+
+## 6. AI Assistant Limitations
+- Automated tools may fail to edit or update large files or blocks with many similar widgets.
+- Refactoring is much easier when code is modular and split into smaller files.
+- If a feature is getting complex, ask the AI to help you split it up before it becomes a problem.
+
+**Summary:**
+- Keep files and widgets small and focused.
+- Split up complex modals, pages, and logic early.
+- Use clear folder and file organization.
+- This will make your project easier for both you and the AI to maintain and update. 

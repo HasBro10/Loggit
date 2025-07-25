@@ -476,6 +476,9 @@ class _NoteEditModalState extends State<NoteEditModal> {
                       _buildColorGrid(_colorOptions, _selectedColor, (color) {
                         setState(() {
                           _selectedColor = color;
+                          print(
+                            'Selected color:  [32m [1m [4m$_selectedColor\u001b[0m',
+                          );
                         });
                       }),
                       Divider(

@@ -2,6 +2,19 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../features/notes/note_model.dart';
 
+class PersistentCategory {
+  final String name;
+  final int colorValue;
+  PersistentCategory({required this.name, required this.colorValue});
+
+  Map<String, dynamic> toJson() => {'name': name, 'color': colorValue};
+
+  factory PersistentCategory.fromJson(Map<String, dynamic> json) =>
+      PersistentCategory(name: json['name'], colorValue: json['color']);
+}
+
+const String _categoriesKey = 'loggit_categories';
+
 class NotesService {
   static const String _storageKey = 'notes';
 
@@ -217,5 +230,76 @@ class NotesService {
           ? completedChecklistItems / totalChecklistItems
           : 0.0,
     };
+  }
+
+  // Ensure Quick category is always present
+  static Future<void> ensureQuickCategory() async {
+    final quick = PersistentCategory(
+      name: 'Quick',
+      colorValue: 0xFFFFEB3B,
+    ); // Yellow
+    await addOrUpdateCategory(quick);
+  }
+
+  // Modified getPersistentCategories to always include Quick
+  static Future<List<PersistentCategory>> getPersistentCategories() async {
+    await ensureQuickCategory();
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_categoriesKey) ?? [];
+    final categories = list
+        .map((str) => PersistentCategory.fromJson(json.decode(str)))
+        .toList();
+    // Ensure Quick is first
+    categories.removeWhere((c) => c.name == 'Quick');
+    categories.insert(
+      0,
+      PersistentCategory(name: 'Quick', colorValue: 0xFFFFEB3B),
+    );
+    return categories;
+  }
+
+  // Add or update a persistent category
+  static Future<void> addOrUpdateCategory(PersistentCategory category) async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_categoriesKey) ?? [];
+    final categories = list
+        .map((str) => PersistentCategory.fromJson(json.decode(str)))
+        .toList();
+    final idx = categories.indexWhere((c) => c.name == category.name);
+    if (idx >= 0) {
+      categories[idx] = category;
+    } else {
+      categories.add(category);
+    }
+    final newList = categories.map((c) => json.encode(c.toJson())).toList();
+    await prefs.setStringList(_categoriesKey, newList);
+  }
+
+  static Future<void> deleteCategory(String categoryName) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // Get current categories
+    final list = prefs.getStringList(_categoriesKey) ?? [];
+    final categories = list
+        .map((str) => PersistentCategory.fromJson(json.decode(str)))
+        .where((cat) => cat.name != categoryName) // Remove the category
+        .toList();
+
+    // Save updated categories
+    final newList = categories.map((c) => json.encode(c.toJson())).toList();
+    await prefs.setStringList(_categoriesKey, newList);
+
+    // Update all notes that use this category to use 'Quick'
+    final notes = await getNotes();
+    final updatedNotes = notes.map((note) {
+      if (note.noteCategory == categoryName) {
+        return note.copyWith(noteCategory: 'Quick');
+      }
+      return note;
+    }).toList();
+
+    // Save updated notes
+    final notesJson = updatedNotes.map((n) => json.encode(n.toJson())).toList();
+    await prefs.setStringList(_storageKey, notesJson);
   }
 }

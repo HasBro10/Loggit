@@ -5,6 +5,7 @@ import '../../shared/design/color_guide.dart';
 import '../../shared/design/spacing.dart';
 import '../../shared/design/widgets/header.dart';
 import 'note_view_screen.dart';
+import '../../services/notes_service.dart' show PersistentCategory;
 
 class NotesScreen extends StatefulWidget {
   final VoidCallback? onThemeToggle;
@@ -81,6 +82,7 @@ class _NotesScreenState extends State<NotesScreen>
   final double categoryButtonWidth = 110;
   final double categoryButtonHeight = 44;
   final double categoryFontSize = 15;
+  final GlobalKey _overlayKey = GlobalKey();
 
   @override
   void initState() {
@@ -127,22 +129,11 @@ class _NotesScreenState extends State<NotesScreen>
 
     try {
       final notes = await NotesService.getNotes();
-      final categories = await NotesService.getCategories();
-      // Add default categories if none exist
-      final defaultCategories = [
-        'Personal',
-        'Work',
-        'Ideas',
-        'Archive',
-        'Shopping',
-        'Travel',
-        'Fitness',
-        'Finance',
-      ];
-      final allCategories = categories.isEmpty ? defaultCategories : categories;
+      final persistent = await NotesService.getPersistentCategories();
+      final categories = persistent.map((c) => c.name).toList();
       setState(() {
         _notes = notes;
-        _categories = ['All', ...allCategories];
+        _categories = ['All', ...categories];
         _filteredNotes = _notes;
         _isLoading = false;
       });
@@ -208,21 +199,19 @@ class _NotesScreenState extends State<NotesScreen>
   }
 
   Future<void> _createNote() async {
-    final result = await Navigator.of(context).push<Note>(
-      MaterialPageRoute(builder: (context) => const NoteViewScreen()),
-    );
-    if (result != null) {
-      await _loadNotes();
-    }
+    final result = await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const NoteViewScreen()));
+    // Always refresh notes and categories when returning from note creation/editing
+    await _loadNotes();
   }
 
   Future<void> _editNote(Note note) async {
-    final result = await Navigator.of(context).push<Note>(
-      MaterialPageRoute(builder: (context) => NoteViewScreen(note: note)),
-    );
-    if (result != null) {
-      await _loadNotes();
-    }
+    final result = await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => NoteViewScreen(note: note)));
+    // Always refresh notes and categories when returning from note creation/editing
+    await _loadNotes();
   }
 
   Future<void> _deleteNote(Note note) async {
@@ -408,11 +397,7 @@ class _NotesScreenState extends State<NotesScreen>
                       ),
                       // Add a transparent GestureDetector to close overlay when open and clicking outside
                       if (_dropdownHeight > _collapsedHeight)
-                        Positioned(
-                          top: _dropdownHeight,
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
+                        Positioned.fill(
                           child: GestureDetector(
                             behavior: HitTestBehavior.translucent,
                             onTap: () => _animateTo(_collapsedHeight),
@@ -425,6 +410,7 @@ class _NotesScreenState extends State<NotesScreen>
                         left: 0,
                         right: 0,
                         child: AnimatedContainer(
+                          key: _overlayKey,
                           duration: _isDraggingDropdown
                               ? Duration.zero
                               : Duration(milliseconds: 260),
@@ -463,29 +449,6 @@ class _NotesScreenState extends State<NotesScreen>
                                       ),
                                       child: Row(
                                         children: [
-                                          // Static plus button
-                                          GestureDetector(
-                                            onTap: _showCreateCategoryDialog,
-                                            child: Container(
-                                              width: 44,
-                                              height: 44,
-                                              margin: EdgeInsets.only(right: 8),
-                                              decoration: BoxDecoration(
-                                                color: Colors.grey[100],
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                                border: Border.all(
-                                                  color: Colors.grey[300]!,
-                                                  width: 1,
-                                                ),
-                                              ),
-                                              child: Icon(
-                                                Icons.add,
-                                                color: Colors.black87,
-                                                size: 24,
-                                              ),
-                                            ),
-                                          ),
                                           // Main categories (first 5)
                                           Expanded(
                                             child: SingleChildScrollView(
@@ -821,191 +784,205 @@ class _NotesScreenState extends State<NotesScreen>
           borderRadius: BorderRadius.circular(12),
           child: Padding(
             padding: EdgeInsets.all(LoggitSpacing.md),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Stack(
               children: [
-                // Header with type icon and title
-                Row(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildNoteTypeIcon(note),
-                    SizedBox(width: LoggitSpacing.sm),
-                    Expanded(
-                      child: Text(
-                        note.title,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: isDark
-                              ? Colors.white
-                              : LoggitColors.darkGrayText,
-                        ),
-                      ),
-                    ),
-                    PopupMenuButton<String>(
-                      onSelected: (value) {
-                        if (value == 'edit') {
-                          _editNote(note);
-                        } else if (value == 'delete') {
-                          _deleteNote(note);
-                        }
-                      },
-                      itemBuilder: (context) => [
-                        const PopupMenuItem(
-                          value: 'edit',
-                          child: Row(
-                            children: [
-                              Icon(Icons.edit, size: 18),
-                              SizedBox(width: 8),
-                              Text('Edit'),
-                            ],
+                    // Header with type icon and title
+                    Row(
+                      children: [
+                        _buildNoteTypeIcon(note),
+                        SizedBox(width: LoggitSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            note.title.isNotEmpty
+                                ? note.title[0].toUpperCase() +
+                                      note.title.substring(1)
+                                : '',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                              color: isDark
+                                  ? Colors.white
+                                  : LoggitColors.darkGrayText,
+                            ),
                           ),
                         ),
-                        const PopupMenuItem(
-                          value: 'delete',
-                          child: Row(
-                            children: [
-                              Icon(Icons.delete, size: 18, color: Colors.red),
-                              SizedBox(width: 8),
-                              Text(
-                                'Delete',
-                                style: TextStyle(color: Colors.red),
+                        PopupMenuButton<String>(
+                          onSelected: (value) {
+                            if (value == 'edit') {
+                              _editNote(note);
+                            } else if (value == 'delete') {
+                              _deleteNote(note);
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'edit',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.edit, size: 18),
+                                  SizedBox(width: 8),
+                                  Text('Edit'),
+                                ],
                               ),
-                            ],
-                          ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.delete,
+                                    size: 18,
+                                    color: Colors.red,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Delete',
+                                    style: TextStyle(color: Colors.red),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
-                ),
-
-                SizedBox(height: LoggitSpacing.sm),
-
-                // Content preview
-                if (note.content.isNotEmpty) ...[
-                  Text(
-                    note.content,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: isDark
-                          ? LoggitColors.lightGrayDarkMode
-                          : LoggitColors.lighterGraySubtext,
-                    ),
-                  ),
-                  SizedBox(height: LoggitSpacing.sm),
-                ],
-
-                // Checklist preview
-                if (note.isChecklist && note.checklistItems != null) ...[
-                  ...note.checklistItems!
-                      .take(3)
-                      .map(
-                        (item) => Padding(
-                          padding: EdgeInsets.only(bottom: LoggitSpacing.xs),
-                          child: Row(
-                            children: [
-                              Checkbox(
-                                value: item.isCompleted,
-                                onChanged: (_) =>
-                                    _toggleChecklistItem(note, item),
+                    if (note.content.isNotEmpty) ...[
+                      Text(
+                        note.content,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: isDark
+                              ? LoggitColors.lightGrayDarkMode
+                              : LoggitColors.lighterGraySubtext,
+                        ),
+                      ),
+                      SizedBox(height: LoggitSpacing.sm),
+                    ],
+                    if (note.isChecklist && note.checklistItems != null) ...[
+                      ...note.checklistItems!
+                          .take(3)
+                          .map(
+                            (item) => Padding(
+                              padding: EdgeInsets.only(
+                                bottom: LoggitSpacing.xs,
+                              ),
+                              child: Row(
+                                children: [
+                                  Checkbox(
+                                    value: item.isCompleted,
+                                    onChanged: (_) =>
+                                        _toggleChecklistItem(note, item),
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      item.text,
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        decoration: item.isCompleted
+                                            ? TextDecoration.lineThrough
+                                            : null,
+                                        color: item.isCompleted
+                                            ? (isDark
+                                                  ? LoggitColors
+                                                        .lightGrayDarkMode
+                                                  : LoggitColors
+                                                        .lighterGraySubtext)
+                                            : (isDark
+                                                  ? Colors.white
+                                                  : LoggitColors.darkGrayText),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ],
+                    if (note.checklistItems != null &&
+                        note.checklistItems!.length > 3) ...[
+                      Text(
+                        '... and ${note.checklistItems!.length - 3} more items',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: isDark
+                              ? LoggitColors.lightGrayDarkMode
+                              : LoggitColors.lighterGraySubtext,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                      SizedBox(height: LoggitSpacing.sm),
+                    ],
+                    if (note.tags.isNotEmpty) ...[
+                      SizedBox(height: LoggitSpacing.sm),
+                      Wrap(
+                        spacing: LoggitSpacing.xs,
+                        runSpacing: LoggitSpacing.xs,
+                        children: note.tags
+                            .map(
+                              (tag) => Chip(
+                                label: Text(
+                                  tag,
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                                backgroundColor: LoggitColors.lighterGraySubtext
+                                    .withOpacity(0.1),
                                 materialTapTargetSize:
                                     MaterialTapTargetSize.shrinkWrap,
                               ),
-                              Expanded(
-                                child: Text(
-                                  item.text,
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    decoration: item.isCompleted
-                                        ? TextDecoration.lineThrough
-                                        : null,
-                                    color: item.isCompleted
-                                        ? (isDark
-                                              ? LoggitColors.lightGrayDarkMode
-                                              : LoggitColors.lighterGraySubtext)
-                                        : (isDark
-                                              ? Colors.white
-                                              : LoggitColors.darkGrayText),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                            )
+                            .toList(),
                       ),
-                  if (note.checklistItems!.length > 3) ...[
-                    Text(
-                      '... and ${note.checklistItems!.length - 3} more items',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: isDark
-                            ? LoggitColors.lightGrayDarkMode
-                            : LoggitColors.lighterGraySubtext,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                    SizedBox(height: LoggitSpacing.sm),
-                  ],
-                ],
-
-                // Footer with metadata
-                Row(
-                  children: [
-                    // Category chip
-                    Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: LoggitSpacing.sm,
-                        vertical: LoggitSpacing.xs,
-                      ),
-                      decoration: BoxDecoration(
-                        color: note.color.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        note.noteCategory,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: note.color,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-
-                    const Spacer(),
-
-                    // Date
-                    Text(
-                      note.formattedCreatedDate,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: isDark
-                            ? LoggitColors.lightGrayDarkMode
-                            : LoggitColors.lighterGraySubtext,
-                      ),
-                    ),
+                    ],
+                    SizedBox(height: 32), // leave space for footer
                   ],
                 ),
-
-                // Tags
-                if (note.tags.isNotEmpty) ...[
-                  SizedBox(height: LoggitSpacing.sm),
-                  Wrap(
-                    spacing: LoggitSpacing.xs,
-                    runSpacing: LoggitSpacing.xs,
-                    children: note.tags
-                        .map(
-                          (tag) => Chip(
-                            label: Text(tag, style: TextStyle(fontSize: 12)),
-                            backgroundColor: LoggitColors.lighterGraySubtext
-                                .withOpacity(0.1),
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
+                // Footer pinned to bottom left
+                Positioned(
+                  left: 0,
+                  bottom: 0,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: LoggitSpacing.sm,
+                          vertical: LoggitSpacing.xs,
+                        ),
+                        decoration: BoxDecoration(
+                          color: note.color.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          note.noteCategory,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: note.color,
+                            fontWeight: FontWeight.w500,
                           ),
-                        )
-                        .toList(),
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        note.formattedCreatedDate,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: isDark
+                              ? LoggitColors.lightGrayDarkMode
+                              : LoggitColors.lighterGraySubtext,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ],
             ),
           ),
@@ -1051,114 +1028,6 @@ class _NotesScreenState extends State<NotesScreen>
     );
   }
 
-  void _showCreateCategoryDialog() async {
-    String? newCategory;
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          backgroundColor: Colors.white,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text(
-                  'Create Category',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: LoggitColors.darkGrayText,
-                  ),
-                ),
-                SizedBox(height: 24),
-                TextField(
-                  autofocus: true,
-                  decoration: InputDecoration(
-                    hintText: 'Category name',
-                    filled: true,
-                    fillColor: Colors.grey[100],
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                  style: TextStyle(fontSize: 16),
-                  onChanged: (value) => newCategory = value.trim(),
-                ),
-                SizedBox(height: 28),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.black,
-                      ),
-                      child: Text('Cancel', style: TextStyle(fontSize: 16)),
-                    ),
-                    SizedBox(width: 12),
-                    ElevatedButton(
-                      onPressed: () {
-                        if (newCategory != null &&
-                            newCategory!.isNotEmpty &&
-                            !_categories.contains(newCategory)) {
-                          setState(() {
-                            _categories.add(newCategory!);
-                          });
-
-                          // Update animation with new dynamic height
-                          _dropdownAnim =
-                              Tween<double>(
-                                  begin: _collapsedHeight,
-                                  end: _dynamicExpandedHeight,
-                                ).animate(
-                                  CurvedAnimation(
-                                    parent: _dropdownAnimController,
-                                    curve: Curves.easeInOut,
-                                  ),
-                                )
-                                ..addListener(() {
-                                  setState(() {
-                                    _dropdownHeight = _dropdownAnim.value;
-                                  });
-                                });
-                        }
-                        Navigator.of(context).pop();
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: LoggitColors.teal,
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 12,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      child: Text(
-                        'Add',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   void _onHandleDragStart(DragStartDetails details) {
     setState(() {
       _isDraggingDropdown = true;
@@ -1186,10 +1055,10 @@ class _NotesScreenState extends State<NotesScreen>
     });
     final velocity = details.primaryVelocity ?? 0.0;
     if (velocity > 200) {
-      // Flick down - reduced threshold for easier opening
+      // Flick down - open
       _animateTo(_dynamicExpandedHeight);
     } else if (velocity < -200) {
-      // Flick up - reduced threshold for easier closing
+      // Flick up - close
       _animateTo(_collapsedHeight);
     } else {
       // Snap to nearest
@@ -1199,5 +1068,6 @@ class _NotesScreenState extends State<NotesScreen>
         _animateTo(_collapsedHeight);
       }
     }
+    // Do NOT set _dropdownHeight directly here; always use _animateTo
   }
 }
