@@ -1,3 +1,123 @@
+# Latest Session Summary (July 2024) - Limited Duration Repeats & Auto-Scroll
+
+## Session Overview
+This session focused on implementing limited duration repeat functionality for tasks and improving the user experience with auto-scroll in the task modal.
+
+## Major Improvements Made
+
+### 1. Limited Duration Repeat Functionality
+
+#### Task Model Updates (`lib/features/tasks/task_model.dart`)
+- **Added new fields** for limited duration repeats:
+  - `final DateTime? repeatEndDate;`
+  - `final int? repeatDuration;`
+  - `final String? repeatDurationType;`
+- **Updated constructor, copyWith, toJson, and fromJson** methods to include these fields
+- **Changed default TaskStatus** from `notStarted` to `inProgress`
+
+#### AI Service Updates (`lib/services/ai_service.dart`)
+- **Added rules and examples** for AI to recognize limited duration patterns:
+  - "for the next 4 weeks"
+  - "repeat daily for 5 days"
+  - "every Monday for the next 3 months"
+- **Enhanced parsing** to extract `repeatDuration` and `repeatDurationType` from user input
+
+#### Task Modal UI Improvements (`lib/features/tasks/tasks_screen_new.dart`)
+- **Added duration controls** that appear when repeat type is selected
+- **Smart duration type display** - automatically shows "Days", "Weeks", or "Months" based on repeat type
+- **Removed dropdown confusion** - duration type is now a simple text label that matches the repeat type
+- **Auto-sets duration type** when user enters a number
+- **Balanced layout** - duration input and text label have equal space (flex: 1 each)
+
+### 2. Auto-Scroll Implementation
+
+#### Modal Scroll Controller
+- **Added dedicated ScrollController** (`modalScrollController`) for the task modal
+- **Connected controller** to the `SingleChildScrollView` in the modal
+- **Direct scroll control** - no need to search for scrollable context
+
+#### Auto-Scroll Logic
+- **Triggers on repeat selection** - when user selects Daily/Weekly/Monthly
+- **100ms delay** for UI to update before scrolling
+- **200px scroll distance** - scrolls just enough to show duration controls
+- **Smooth animation** - 300ms duration with easeInOut curve
+- **Safety checks** - ensures controller has clients before scrolling
+
+### 3. User Experience Improvements
+
+#### Duration Controls Design
+- **Proportional sizing** - duration input field and text label are balanced
+- **Automatic type matching** - no confusion about duration type
+- **Clean layout** - number input + text label (e.g., [4] [Weeks])
+- **Responsive design** - adapts to different screen sizes
+
+#### Auto-Scroll Benefits
+- **No missed controls** - duration section automatically becomes visible
+- **Smooth transition** - not jarring or abrupt
+- **Intuitive flow** - user selects repeat type → automatically sees duration options
+
+## Current Status
+
+### Working Features
+✅ **Limited duration repeats** via AI chat (e.g., "repeat weekly for 4 weeks")  
+✅ **Manual duration controls** in task modal with smart type display  
+✅ **Auto-scroll to duration section** when repeat type is selected  
+✅ **Balanced UI layout** for duration controls  
+✅ **Automatic duration type matching** based on repeat selection  
+✅ **Task status default** changed to "In Progress"  
+✅ **AI parsing** for limited duration patterns  
+
+### Technical Implementation
+- **Task model** supports both indefinite and limited duration repeats
+- **AI service** recognizes and parses duration patterns
+- **Modal UI** provides intuitive duration controls
+- **Auto-scroll** ensures visibility of new controls
+- **Data persistence** includes duration fields
+
+## Key Technical Decisions
+
+### 1. Smart Duration Type Display
+- **No dropdown confusion** - duration type automatically matches repeat type
+- **Cleaner UX** - user doesn't need to select duration type separately
+- **Reduced complexity** - fewer UI elements to manage
+
+### 2. Direct Scroll Control
+- **Dedicated controller** - more reliable than searching for scrollable context
+- **Better performance** - no context searching overhead
+- **Cleaner code** - direct controller access
+
+### 3. Progressive Enhancement
+- **Backward compatibility** - existing tasks without duration still work
+- **Optional fields** - duration is only required when repeat is selected
+- **Graceful degradation** - no breaking changes to existing functionality
+
+## Files Modified
+- `lib/features/tasks/task_model.dart` - Added duration fields and updated defaults
+- `lib/services/ai_service.dart` - Added limited duration parsing rules
+- `lib/features/tasks/tasks_screen_new.dart` - Added duration UI and auto-scroll
+- `lib/services/log_parser_service.dart` - Updated default task status
+
+## Next Steps for Future Sessions
+
+### Potential Enhancements
+1. **Calendar integration** - Show limited duration repeats on calendar
+2. **Notification handling** - Manage notifications for limited duration tasks
+3. **Bulk operations** - Edit/delete all instances of limited duration repeats
+4. **Visual indicators** - Show remaining duration on task cards
+5. **Export/import** - Handle duration fields in data export
+
+### Code Organization
+- Consider adding validation for duration values
+- Add unit tests for duration parsing logic
+- Consider adding duration templates (e.g., "next 4 weeks", "this month")
+
+## Architecture Notes
+The limited duration repeat functionality extends the existing recurring task system without breaking changes. The duration controls are conditionally displayed and automatically adapt to the selected repeat type, providing a seamless user experience.
+
+The auto-scroll implementation uses a dedicated controller for reliable scrolling behavior, ensuring that new UI elements are always visible to the user.
+
+---
+
 # Task Management Debugging Summary (July 2024)
 
 ## What’s Working

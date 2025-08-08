@@ -1,225 +1,157 @@
-# Loggit - Current Status Report
+# CURRENT STATUS - December 2024
 
-## AI Integration Status
+## 🎯 RECENT COMPLETED WORK
 
-### Current Setup
-- **Server:** Digital Ocean droplet (8GB RAM, CPU-only)
-- **AI Model:** Phi-3 Mini (3.8B parameters, ~2.2GB RAM usage)
-- **AI Service:** Ollama running on server
-- **Response Time:** 10-11 seconds per request
-- **System Prompt:** Strict, minimal JSON-only response
+### ✅ Tasks Page View Options Implementation
+- **View Options**: Successfully implemented List, Compact, and Grid views on Tasks page
+- **Unified Design**: Applied consistent card design across all views
+- **All Tabs**: View options work on Week, Calendar, and All tabs
+- **Calendar Integration**: Preserved existing calendar functionality
+- **Taskbar**: Maintained existing taskbar features
 
-### AI Configuration
-- **Model Name:** `phi3:mini`
-- **Server URL:** `http://161.35.43.246:11434`
-- **System Prompt:** Minimal JSON extraction only
-- **JSON Extraction:** Handles extra text before/after JSON automatically
+### ✅ Delete Overlay System
+- **Swipe-to-Delete**: Implemented smooth swipe animations for all views
+- **Global Tap-to-Close**: Delete overlay disappears when tapping anywhere else
+- **Consistent Behavior**: Applied to both Tasks and Reminders pages
+- **Animation Refinements**: Smooth, contained animations within card boundaries
 
-### Performance Analysis
-- **Current Speed:** 10-11 seconds per request (acceptable for development)
-- **Bottleneck:** CPU-only server (no GPU acceleration)
-- **Network:** Adds 2-3 seconds round-trip time
-- **Model Size:** Optimized for speed vs. accuracy balance
+### ✅ Reminders Page Enhancements
+- **View Options**: Applied same view system (List, Compact, Grid)
+- **Delete Overlay**: Consistent swipe-to-delete behavior
+- **Card Styling**: White background, priority-based borders, subtle shadows
+- **Animation Consistency**: Smooth delete animations across all views
 
-## App Features Status
+### ✅ Notes Page Major Enhancements
 
-### Working Features
-- ✅ AI-powered task creation via chat
-- ✅ AI-powered reminder creation via chat
-- ✅ Confirmation messages with Yes/No/Edit buttons
-- ✅ Task modal opens only when Edit is pressed
-- ✅ Tasks are saved to persistent storage
-- ✅ JSON parsing handles malformed responses gracefully
-- ✅ Fallback to local parser if AI fails
-- ✅ **NEW: Reminder advance timing system** (15 minutes before, 1 hour before, etc.)
-- ✅ **NEW: Success notifications show advance timing information**
-- ✅ **NEW: Reminder edit modal with advance timing dropdown**
+#### **Formatting System**
+- **Active Button Styling**: Formatting buttons (Bold, Italic, Underline) show transparent teal background when active
+- **Toggle Functionality**: Buttons can be activated and deactivated properly
+- **Modal Integration**: Formatting buttons work in the settings modal
+- **Button Rearrangement**: Checkbox next to strike, alignment buttons next to bullet/numbered
+- **Custom Highlighter Icon**: Implemented luminous yellow highlighter with black border
 
-### Chat Flow
-1. User types natural language request
-2. AI extracts intent and fields (JSON)
-3. App shows confirmation message with buttons
-4. User can confirm, deny, or edit
-5. Task/reminder is created and saved
+#### **Category Management**
+- **Default Category Display**: "Quick" category shows by default in title area
+- **Clickable Category Button**: Opens settings modal (not add category dialog)
+- **Category Persistence**: Categories persist after app refresh
+- **Category Editing**: Long-press to edit existing categories (name and color)
+- **Color Picker**: Removed white/light grey colors from category picker
+- **Category Chip Styling**: Black text color for better readability
 
-### Reminder System Features
-- **Advance Timing Support:** "15 minutes before", "1 hour before", "30 minutes before"
-- **Original Time Preservation:** Reminder time stored as user specified (not adjusted)
-- **Separate Advance Field:** `advanceTiming` field stores advance timing separately
-- **UI Consistency:** Dropdown shows correct advance timing in edit modal
-- **Success Messages:** Include advance timing information
+#### **Tag System**
+- **Tag Display**: Tags appear on note cards in footer area
+- **Tag Styling**: Transparent teal background with solid teal border and black text
+- **Immediate Updates**: Tags appear/disappear immediately when added/deleted
+- **Tag Button**: Solid teal circular button for adding tags
+- **View-Specific Display**: 
+  - Main view: Shows all tags
+  - Grid view: Shows first letter of first tag only
+  - Compact view: Shows one tag with truncated title
 
-## Technical Implementation
+#### **Export Features**
+- **Export Options**: Text, PDF, and email sharing
+- **Export Button Styling**: Flat rectangles (not pill-shaped)
+- **Settings Modal**: Export section added to settings
 
-### Key Files Modified
-- `lib/services/ai_service.dart` - AI integration and JSON parsing
-- `lib/features/chat/chat_screen_new.dart` - Chat logic and confirmation flow
-- `lib/features/tasks/task_model.dart` - Task data structure
-- `lib/features/reminders/reminder_model.dart` - **NEW: Added advanceTiming field**
-- `lib/features/reminders/reminder_edit_modal.dart` - **NEW: Advance timing dropdown logic**
+#### **Search and Filtering**
+- **Search Functionality**: Filters by title, content, tags, and category name
+- **Search Override**: Search overrides category filter and deselects to "All"
+- **Category Filtering**: Filter notes by selected category
 
-### AI Response Handling
-- Extracts first valid JSON object from AI response
-- Maps AI string fields to app enums (e.g., priority)
-- Handles missing or invalid fields gracefully
-- Falls back to local parser if AI response fails
-- **NEW: Parses advance timing from user input**
+#### **UI Refinements**
+- **Note Card Spacing**: Extended main card height with proper spacing
+- **Title Truncation**: Grid view titles truncate to prevent overflow
+- **FAB Overlap Fix**: Added padding to prevent Floating Action Button overlap
+- **Modal Spacing**: Increased spacing between sections in settings modal
 
-### Reminder Model Structure
-```dart
-class Reminder {
-  final String title;
-  final String? description;
-  final DateTime reminderTime;  // Original time (e.g., 4:00 PM)
-  final String? advanceTiming;  // "15 minutes before", "1 hour before"
-  final DateTime timestamp;
-  final bool isCompleted;
-}
-```
+### ✅ Technical Fixes
+- **Web Icons**: Fixed missing Material Icons in web mode
+- **Project Files**: Resolved missing package_config.json issues
+- **Compilation Errors**: Fixed various compilation and linter errors
 
-## Recent Development Progress
+## 🔄 CURRENT ISSUES & LIMITATIONS
 
-### Reminder Advance Timing System (Current Session)
-1. **✅ Fixed AI Intent Recognition**
-   - Added specific examples for "Remind me..." vs "Create task..."
-   - AI now correctly distinguishes between reminders and tasks
-   - Added example for "3:30 pm" time parsing
+### ❌ Grid View Spacing Issue
+- **Problem**: Insufficient space between content and chips in grid view
+- **Attempted Solutions**: 
+  - Added bottom padding to content area
+  - Increased minHeight constraints
+  - Modified footer positioning
+- **Status**: Unable to resolve - footer absolute positioning conflicts with content spacing
+- **Impact**: Functional but not visually optimal
 
-2. **✅ Implemented Advance Timing Storage**
-   - Added `advanceTiming` field to Reminder model
-   - Updated JSON serialization/deserialization
-   - Preserved original reminder time separately from advance timing
+### 📊 Large File Concerns
+- **Identified Large Files**:
+  - `tasks_screen_new.dart`: 7,045 lines
+  - `chat_screen_new.dart`: 6,747 lines
+  - `reminders_screen.dart`: 1,363 lines
+  - `note_view_screen.dart`: 1,909 lines
+  - `log_parser_service.dart`: Large size
+- **Rule Added**: File size limits enforced in `rules/FOLDER_STRUCTURE.md`
+- **Strategy**: Defer refactoring to avoid breaking working code
 
-3. **✅ Updated UI Components**
-   - Success notifications show advance timing info
-   - Confirmation messages include advance timing
-   - Reminder edit modal has advance timing dropdown
+## 🚀 AI ENHANCEMENT PLANS (Documented)
 
-4. **✅ Fixed Dropdown Matching Logic**
-   - Changed from `contains()` to exact matching
-   - Prevents false matches (e.g., "15 minutes" matching "5 minutes")
-   - Added debug logging for troubleshooting
+### **Smart Conversation Improvements**
+- **Progressive Guidance**: AI asks follow-up questions for missing fields
+- **Contextual Help**: Provides suggestions based on user experience level
+- **Error Handling**: Better error messages for failed operations
+- **Learning System**: AI learns from user patterns and preferences
 
-### Current Issues Being Debugged
-1. **AI Time Parsing Issue**
-   - "3:30 pm" being parsed as "15:15" instead of "15:30"
-   - Added specific example to AI service
-   - Need to test with new examples
+### **Voice Command Implementation**
+- **Speech-to-Text**: Integrate `speech_to_text` package
+- **Voice Processing**: Use existing AI service for voice input
+- **Confirmation System**: Voice confirmation for critical actions
+- **Progressive Enhancement**: Start with basic commands, expand functionality
 
-2. **Dropdown Display Issue**
-   - Sometimes shows "5 minutes before" instead of "15 minutes before"
-   - Added debug logging to track stored values
-   - Fixed matching logic, need to verify with testing
+## 📁 PROJECT STRUCTURE
 
-## Performance Optimization Attempted
+### **Working Features**
+- ✅ Tasks (with view options, delete overlays)
+- ✅ Reminders (with view options, delete overlays)
+- ✅ Notes (comprehensive feature set)
+- ✅ Chat (AI integration for tasks/reminders)
+- ✅ Dashboard
+- ✅ Expenses (basic structure)
+- ✅ Gym (basic structure)
 
-### What Was Tried
-1. **Model Switch:** Mistral 7B → Phi-3 Mini (faster, smaller)
-2. **Prompt Optimization:** Detailed → Minimal (reduced response size)
-3. **JSON Extraction:** Improved parsing to handle extra text
-4. **System Prompt:** Strict JSON-only responses
+### **File Organization**
+- **Rules**: `rules/FOLDER_STRUCTURE.md` - Enforces code quality standards
+- **Scope**: `scope/` - Project requirements and design system
+- **Notes**: `notes/` - Development progress and plans
+- **AI Integration**: `notes/AI_INTEGRATION_PROGRESS.md` - AI enhancement plans
 
-### Results
-- **Speed Improvement:** 30-50% faster than Mistral 7B
-- **Reliability:** More consistent JSON parsing
-- **Still Slow:** 10-11 seconds due to CPU-only server
+## 🎯 NEXT PRIORITIES
 
-## Future Optimization Options
+### **Immediate Focus Areas**
+1. **Complete Notes Feature**: Finalize any remaining notes functionality
+2. **AI Enhancement**: Implement smart conversation improvements
+3. **Voice Commands**: Add voice input capability
+4. **Code Quality**: Address large file concerns when safe
 
-### GPU Options (When Ready)
-- **RunPod L4:** $0.43/hour (~$310/month 24/7, ~$50-100/month part-time)
-- **RunPod T4:** $0.25-0.35/hour (~$180-250/month 24/7)
-- **Expected Speed:** 1-3 seconds per request (5-10x faster)
+### **Future Enhancements**
+1. **Expenses Feature**: Expand beyond basic structure
+2. **Gym Feature**: Develop comprehensive gym logging
+3. **Advanced AI**: Implement progressive learning and contextual help
+4. **Performance**: Optimize large files and improve app performance
 
-### Alternative Models
-- **Gemma 2B:** Even smaller, faster (4-8 seconds)
-- **TinyLlama:** Smallest, fastest (2-4 seconds)
-- **Trade-off:** Less accuracy for more speed
+## 📝 DEVELOPMENT NOTES
 
-## Next Steps for AI Optimization
+### **User Preferences**
+- Prefers professional, concise UI wording
+- Avoids technical jargon in explanations
+- Prefers step-by-step instructions
+- Values working functionality over perfect UI
+- Prefers running commands in chat terminal space
 
-### Immediate (Next Chat Session)
-1. **Test reminder advance timing system** with various inputs
-2. **Verify AI time parsing** for "3:30 pm" and similar formats
-3. **Check dropdown behavior** with debug logging
-4. **Add support for more AI intents** (expenses, gym logs)
-5. **Improve error handling** for malformed responses
-
-### Medium Term
-1. **Consider smaller model** (Gemma 2B) for speed
-2. **Implement request caching** for common queries
-3. **Add typing indicators** during AI processing
-4. **Optimize network requests** and response handling
-
-### Long Term
-1. **Evaluate GPU server** when app is complete
-2. **Consider managed AI services** for production
-3. **Implement advanced features** (OCR, voice input)
-
-## Current Limitations
-
-### Technical
-- CPU-only server limits speed
-- Network latency adds delay
-- Model size vs. speed trade-off
-- JSON parsing edge cases
-- **NEW: AI time parsing inconsistencies**
-
-### User Experience
-- 10-11 second response time
-- No real-time feedback during processing
-- Limited to text-based input
-- No voice or image input
-- **NEW: Dropdown may show incorrect advance timing**
-
-## Success Metrics
-
-### Achieved
-- ✅ AI understands natural language task creation
-- ✅ Reliable JSON parsing and field extraction
-- ✅ Proper confirmation flow with edit options
-- ✅ Tasks save correctly to persistent storage
-- ✅ Graceful fallback when AI fails
-- ✅ **NEW: Reminder advance timing system working**
-- ✅ **NEW: AI distinguishes between reminders and tasks**
-- ✅ **NEW: Success notifications show advance timing**
-
-### Target (Future)
-- ⏳ 1-3 second response times
-- ⏳ Support for all log types (expenses, gym, notes)
-- ⏳ Voice input support
-- ⏳ Image/OCR input support
-- ⏳ Multi-user support
-- ⏳ **NEW: Consistent AI time parsing**
-- ⏳ **NEW: Reliable dropdown behavior**
-
-## Debug Status
-
-### Current Debugging
-- **Added debug logging** to reminder edit modal
-- **Testing AI time parsing** for "3:30 pm" format
-- **Verifying dropdown matching logic** with exact matching
-- **Monitoring stored advanceTiming values**
-
-### Debug Output Expected
-```
-DEBUG: Setting advance time dropdown. Stored advanceTiming: "15 minutes before"
-DEBUG: Matched to "15 minutes before"
-```
-
-## Notes for Next Session
-
-- Test reminder creation with "15 minutes before" to verify dropdown behavior
-- Check debug output for stored advanceTiming values
-- Verify AI time parsing for "3:30 pm" format
-- Consider adding more AI examples for edge cases
-- Document any remaining issues with advance timing system
-- Continue optimizing AI prompts for better accuracy
-- Test edge cases in user input
-- Consider implementing typing indicators
-- Evaluate smaller models for speed improvement
+### **Code Quality Standards**
+- File size limits enforced
+- Responsive design required for all form fields
+- Consistent UI patterns across features
+- Error handling and user feedback prioritized
 
 ---
 
-*Last Updated: Current session - Reminder advance timing system implementation*
-*Next Session Focus: Debugging and testing reminder advance timing system* 
+**Last Updated**: December 2024
+**Status**: Active development with comprehensive feature set
+**Next Session**: Continue with AI enhancements or complete remaining features 

@@ -3,11 +3,6 @@ import '../../features/notes/note_model.dart';
 import '../../shared/design/color_guide.dart';
 
 class NoteSettingsModal extends StatefulWidget {
-  final NoteType selectedType;
-  final ValueChanged<NoteType> onTypeChanged;
-  final List<String> checklistItems;
-  final ValueChanged<String> onAddChecklistItem;
-  final ValueChanged<int> onRemoveChecklistItem;
   final String selectedCategory;
   final List<String> categories;
   final ValueChanged<String> onCategoryChanged;
@@ -17,20 +12,13 @@ class NoteSettingsModal extends StatefulWidget {
   final Color selectedColor;
   final List<Color> colorOptions;
   final ValueChanged<Color> onColorSelected;
-  final NotePriority selectedPriority;
-  final ValueChanged<NotePriority> onPriorityChanged;
-  final NoteStatus selectedStatus;
-  final ValueChanged<NoteStatus> onStatusChanged;
   final Future<Map<String, dynamic>?> Function()? onAddCategory;
   final Future<Map<String, dynamic>?> Function(String, Color)? onEditCategory;
+  final Map<String, Color>
+  categoryColors; // Map of category names to their colors
 
   const NoteSettingsModal({
-    Key? key,
-    required this.selectedType,
-    required this.onTypeChanged,
-    required this.checklistItems,
-    required this.onAddChecklistItem,
-    required this.onRemoveChecklistItem,
+    super.key,
     required this.selectedCategory,
     required this.categories,
     required this.onCategoryChanged,
@@ -40,118 +28,97 @@ class NoteSettingsModal extends StatefulWidget {
     required this.selectedColor,
     required this.colorOptions,
     required this.onColorSelected,
-    required this.selectedPriority,
-    required this.onPriorityChanged,
-    required this.selectedStatus,
-    required this.onStatusChanged,
     this.onAddCategory,
     this.onEditCategory,
-  }) : super(key: key);
+    required this.categoryColors, // Map of category names to their colors
+  });
 
   @override
   State<NoteSettingsModal> createState() => _NoteSettingsModalState();
 }
 
 class _NoteSettingsModalState extends State<NoteSettingsModal> {
-  late NoteType _internalSelectedType;
-  late List<String> _internalCategories;
   late String _internalSelectedCategory;
+  late List<String> _internalCategories;
+  late ScrollController _categoryScrollController;
+  String? _categoryToFocus; // Track which category to focus on
+
+  // Internal tag state
+  late List<String> _internalTags;
+  final TextEditingController tagController = TextEditingController();
+  final checklistController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _internalSelectedType = widget.selectedType;
-    _internalCategories = List<String>.from(widget.categories);
     _internalSelectedCategory = widget.selectedCategory;
+    _internalCategories = List<String>.from(widget.categories);
+    _internalTags = List<String>.from(widget.tags);
+    _categoryScrollController = ScrollController();
+
+    // Focus on the selected category when modal opens
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_internalSelectedCategory != 'Quick') {
+        _scrollToCategory(_internalSelectedCategory);
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(NoteSettingsModal oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Update internal categories when widget categories change
+    if (widget.categories != oldWidget.categories) {
+      setState(() {
+        _internalCategories = List<String>.from(widget.categories);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _categoryScrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToCategory(String categoryName) {
+    // Calculate the position to scroll to based on category index
+    final categoryIndex = _internalCategories.indexOf(categoryName);
+    if (categoryIndex >= 0) {
+      // Each category takes approximately 98px (90px width + 8px padding)
+      final scrollPosition = categoryIndex * 98.0;
+      _categoryScrollController.animateTo(
+        scrollPosition,
+        duration: Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  void _focusOnCategory(String categoryName) {
+    // Set the category as selected and scroll to it
+    setState(() {
+      _internalSelectedCategory = categoryName;
+    });
+    widget.onCategoryChanged(categoryName);
+    // Scroll to the category
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToCategory(categoryName);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final tagController = TextEditingController();
-    final checklistController = TextEditingController();
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Handle bar
-        Container(
-          margin: const EdgeInsets.only(top: 12, bottom: 16),
-          width: 40,
-          height: 4,
-          decoration: BoxDecoration(
-            color: Colors.grey[300],
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Note Type
-                Text(
-                  'Type',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 8),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: NoteType.values.map((type) {
-                      final isSelected = type == _internalSelectedType;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 12),
-                        child: ChoiceChip(
-                          label: Text(_getTypeLabel(type)),
-                          selected: isSelected,
-                          onSelected: (_) {
-                            setState(() {
-                              _internalSelectedType = type;
-                            });
-                            widget.onTypeChanged(type);
-                          },
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-                if (_internalSelectedType == NoteType.checklist) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    'Checklist Items',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: checklistController,
-                          decoration: InputDecoration(
-                            hintText: 'Add checklist item',
-                          ),
-                          onSubmitted: widget.onAddChecklistItem,
-                        ),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.add),
-                        onPressed: () =>
-                            widget.onAddChecklistItem(checklistController.text),
-                      ),
-                    ],
-                  ),
-                  ...widget.checklistItems.asMap().entries.map(
-                    (entry) => ListTile(
-                      title: Text(entry.value),
-                      trailing: IconButton(
-                        icon: Icon(Icons.delete),
-                        onPressed: () =>
-                            widget.onRemoveChecklistItem(entry.key),
-                      ),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
                 // Category
                 Text(
                   'Category',
@@ -171,9 +138,9 @@ class _NoteSettingsModalState extends State<NoteSettingsModal> {
                               )) {
                                 _internalCategories.add(result['name']);
                               }
-                              _internalSelectedCategory = result['name'];
                             });
-                            widget.onCategoryChanged(result['name']);
+                            // Focus on the newly created category
+                            _focusOnCategory(result['name']);
                           }
                         }
                       },
@@ -194,6 +161,7 @@ class _NoteSettingsModalState extends State<NoteSettingsModal> {
                     ),
                     Expanded(
                       child: SingleChildScrollView(
+                        controller: _categoryScrollController,
                         scrollDirection: Axis.horizontal,
                         child: Row(
                           children: _internalCategories.map((cat) {
@@ -230,9 +198,8 @@ class _NoteSettingsModalState extends State<NoteSettingsModal> {
                                             }
                                           }
                                         });
-                                        widget.onCategoryChanged(
-                                          result['name'],
-                                        );
+                                        // Focus on the edited category
+                                        _focusOnCategory(result['name']);
                                       } else if (result['action'] == 'delete') {
                                         // Remove category from internal list
                                         setState(() {
@@ -251,13 +218,16 @@ class _NoteSettingsModalState extends State<NoteSettingsModal> {
                                   width: 90,
                                   height: 38,
                                   decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? LoggitColors.teal.withOpacity(0.15)
-                                        : Colors.grey[100],
+                                    color:
+                                        (widget.categoryColors[cat] ??
+                                                Colors.grey)
+                                            .withOpacity(0.15),
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
                                       color: isSelected
-                                          ? LoggitColors.teal
+                                          ? (widget.categoryColors[cat] ??
+                                                    Colors.grey)
+                                                .withOpacity(0.8)
                                           : Colors.grey[300]!,
                                       width: isSelected ? 2 : 1,
                                     ),
@@ -266,9 +236,7 @@ class _NoteSettingsModalState extends State<NoteSettingsModal> {
                                     child: Text(
                                       cat,
                                       style: TextStyle(
-                                        color: isSelected
-                                            ? LoggitColors.teal
-                                            : Colors.black87,
+                                        color: Colors.black,
                                         fontWeight: FontWeight.w600,
                                         fontSize: 14,
                                       ),
@@ -283,7 +251,7 @@ class _NoteSettingsModalState extends State<NoteSettingsModal> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
                 // Tags
                 Text(
                   'Tags',
@@ -296,65 +264,172 @@ class _NoteSettingsModalState extends State<NoteSettingsModal> {
                       child: TextField(
                         controller: tagController,
                         decoration: InputDecoration(hintText: 'Add tag'),
-                        onSubmitted: widget.onAddTag,
+                        onSubmitted: (tag) {
+                          final trimmed = tag.trim();
+                          if (trimmed.isNotEmpty &&
+                              !_internalTags.contains(trimmed)) {
+                            setState(() {
+                              _internalTags.add(trimmed);
+                            });
+                            widget.onAddTag(trimmed);
+                            tagController.clear();
+                          }
+                        },
                       ),
                     ),
                     IconButton(
-                      icon: Icon(Icons.add),
-                      onPressed: () => widget.onAddTag(tagController.text),
+                      icon: Icon(Icons.add, color: Colors.white),
+                      onPressed: () {
+                        final tag = tagController.text.trim();
+                        if (tag.isNotEmpty && !_internalTags.contains(tag)) {
+                          setState(() {
+                            _internalTags.add(tag);
+                          });
+                          widget.onAddTag(tag);
+                          tagController.clear();
+                        }
+                      },
+                      style: IconButton.styleFrom(
+                        backgroundColor: LoggitColors.teal,
+                        shape: CircleBorder(),
+                      ),
                     ),
                   ],
                 ),
                 Wrap(
                   spacing: 8,
-                  children: widget.tags
+                  children: _internalTags
                       .map(
                         (tag) => Chip(
                           label: Text(tag),
-                          onDeleted: () => widget.onRemoveTag(tag),
+                          onDeleted: () {
+                            setState(() {
+                              _internalTags.remove(tag);
+                            });
+                            widget.onRemoveTag(tag);
+                          },
                         ),
                       )
                       .toList(),
                 ),
-                const SizedBox(height: 16),
-                // Priority
+                const SizedBox(height: 24),
+                // Export
                 Text(
-                  'Priority',
+                  'Export',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 const SizedBox(height: 8),
                 Row(
-                  children: NotePriority.values.map((priority) {
-                    final isSelected = priority == widget.selectedPriority;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: ChoiceChip(
-                        label: Text(_getPriorityLabel(priority)),
-                        selected: isSelected,
-                        onSelected: (_) => widget.onPriorityChanged(priority),
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          // Export as text
+                          Navigator.of(context).pop('export_text');
+                        },
+                        child: Container(
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.blue[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.blue[300]!,
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.description,
+                                size: 18,
+                                color: Colors.blue[700],
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'Export as Text',
+                                style: TextStyle(
+                                  color: Colors.blue[700],
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-                // Status
-                Text(
-                  'Status',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: NoteStatus.values.map((status) {
-                    final isSelected = status == widget.selectedStatus;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: ChoiceChip(
-                        label: Text(_getStatusLabel(status)),
-                        selected: isSelected,
-                        onSelected: (_) => widget.onStatusChanged(status),
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          // Export as PDF
+                          Navigator.of(context).pop('export_pdf');
+                        },
+                        child: Container(
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.red[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.red[300]!,
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.picture_as_pdf,
+                                size: 18,
+                                color: Colors.red[700],
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'Export as PDF',
+                                style: TextStyle(
+                                  color: Colors.red[700],
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    );
-                  }).toList(),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () {
+                    // Share via email
+                    Navigator.of(context).pop('share_email');
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.green[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.green[300]!, width: 1),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.email, size: 18, color: Colors.green[700]),
+                        SizedBox(width: 8),
+                        Text(
+                          'Share via Email',
+                          style: TextStyle(
+                            color: Colors.green[700],
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -362,42 +437,5 @@ class _NoteSettingsModalState extends State<NoteSettingsModal> {
         ),
       ],
     );
-  }
-
-  String _getTypeLabel(NoteType type) {
-    switch (type) {
-      case NoteType.text:
-        return 'Text';
-      case NoteType.checklist:
-        return 'Checklist';
-      case NoteType.media:
-        return 'Media';
-      case NoteType.quick:
-        return 'Quick';
-      case NoteType.linked:
-        return 'Linked';
-    }
-  }
-
-  String _getPriorityLabel(NotePriority priority) {
-    switch (priority) {
-      case NotePriority.low:
-        return 'Low';
-      case NotePriority.medium:
-        return 'Medium';
-      case NotePriority.high:
-        return 'High';
-    }
-  }
-
-  String _getStatusLabel(NoteStatus status) {
-    switch (status) {
-      case NoteStatus.draft:
-        return 'Draft';
-      case NoteStatus.final_:
-        return 'Final';
-      case NoteStatus.archived:
-        return 'Archived';
-    }
   }
 }

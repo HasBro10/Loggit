@@ -27,9 +27,16 @@ Future<Reminder?> showReminderEditModal(
   ];
   String selectedAdvanceTime = 'At the time';
 
+  // Recurrence variables
+  RecurrenceType recurrenceType = isEditing
+      ? (initial.recurrenceType ?? RecurrenceType.none)
+      : RecurrenceType.none;
+  int? repeatDuration = isEditing ? initial.repeatDuration : null;
+  String? repeatDurationType = isEditing ? initial.repeatDurationType : null;
+
   // Set the correct advance time when editing
-  if (isEditing && initial?.advanceTiming != null) {
-    final advanceTiming = initial!.advanceTiming!;
+  if (isEditing && initial.advanceTiming != null) {
+    final advanceTiming = initial.advanceTiming!;
     print(
       'DEBUG: Setting advance time dropdown. Stored advanceTiming: "$advanceTiming"',
     );
@@ -63,6 +70,7 @@ Future<Reminder?> showReminderEditModal(
   final ValueNotifier<bool> showTitleError = ValueNotifier<bool>(false);
   final ValueNotifier<bool> showDateError = ValueNotifier<bool>(false);
   final ValueNotifier<bool> showTimeError = ValueNotifier<bool>(false);
+  final ScrollController modalScrollController = ScrollController();
 
   return showModalBottomSheet<Reminder>(
     context: context,
@@ -112,6 +120,7 @@ Future<Reminder?> showReminderEditModal(
                   // Scrollable content below
                   Expanded(
                     child: SingleChildScrollView(
+                      controller: modalScrollController,
                       keyboardDismissBehavior:
                           ScrollViewKeyboardDismissBehavior.onDrag,
                       physics: const AlwaysScrollableScrollPhysics(),
@@ -418,6 +427,211 @@ Future<Reminder?> showReminderEditModal(
                               ),
                             ),
                             SizedBox(height: 14),
+                            // Recurrence section
+                            Text(
+                              'Repeat',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                              ),
+                            ),
+                            SizedBox(height: 6),
+                            Container(
+                              width: double.infinity,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.transparent),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<RecurrenceType>(
+                                  value: recurrenceType,
+                                  isExpanded: true,
+                                  icon: Icon(
+                                    Icons.keyboard_arrow_down,
+                                    color: Colors.grey[600],
+                                  ),
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.normal,
+                                    color: Colors.black,
+                                  ),
+                                  dropdownColor: Color(0xFFF1F5F9),
+                                  borderRadius: BorderRadius.circular(12),
+                                  selectedItemBuilder: (context) =>
+                                      [
+                                            RecurrenceType.none,
+                                            RecurrenceType.daily,
+                                            RecurrenceType.weekly,
+                                            RecurrenceType.monthly,
+                                          ]
+                                          .map(
+                                            (type) => Padding(
+                                              padding: const EdgeInsets.only(
+                                                left: 14.0,
+                                              ),
+                                              child: Align(
+                                                alignment: Alignment.centerLeft,
+                                                child: Text(
+                                                  _getRecurrenceTypeText(type),
+                                                ),
+                                              ),
+                                            ),
+                                          )
+                                          .toList(),
+                                  items:
+                                      [
+                                        RecurrenceType.none,
+                                        RecurrenceType.daily,
+                                        RecurrenceType.weekly,
+                                        RecurrenceType.monthly,
+                                      ].map((RecurrenceType type) {
+                                        return DropdownMenuItem<RecurrenceType>(
+                                          value: type,
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(
+                                              left: 14.0,
+                                            ),
+                                            child: Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: Text(
+                                                _getRecurrenceTypeText(type),
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                  onChanged: (RecurrenceType? newValue) {
+                                    if (newValue != null) {
+                                      setModalState(() {
+                                        recurrenceType = newValue;
+                                        // Reset duration when changing recurrence type
+                                        repeatDuration = null;
+                                        repeatDurationType = null;
+                                      });
+
+                                      // Auto-scroll to show the duration field when it appears
+                                      if (newValue != RecurrenceType.none) {
+                                        WidgetsBinding.instance
+                                            .addPostFrameCallback((_) {
+                                              if (modalScrollController
+                                                  .hasClients) {
+                                                modalScrollController.animateTo(
+                                                  modalScrollController
+                                                      .position
+                                                      .maxScrollExtent,
+                                                  duration: Duration(
+                                                    milliseconds: 300,
+                                                  ),
+                                                  curve: Curves.easeInOut,
+                                                );
+                                              }
+                                            });
+                                      }
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                            // Duration dropdown (only show if recurrence is selected)
+                            if (recurrenceType != RecurrenceType.none) ...[
+                              SizedBox(height: 12),
+                              Container(
+                                width: double.infinity,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: Color(0xFFF1F5F9),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.transparent),
+                                ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButtonFormField<String>(
+                                    value:
+                                        repeatDuration == null ||
+                                            repeatDurationType == null
+                                        ? 'infinite'
+                                        : '$repeatDuration $repeatDurationType',
+                                    hint: Text('Select duration'),
+                                    decoration: InputDecoration(
+                                      filled: true,
+                                      fillColor: Color(0xFFF1F5F9),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: BorderSide.none,
+                                      ),
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 12,
+                                      ),
+                                    ),
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      color: Colors.black,
+                                    ),
+                                    items: () {
+                                      final durationType =
+                                          recurrenceType == RecurrenceType.daily
+                                          ? 'days'
+                                          : recurrenceType ==
+                                                RecurrenceType.weekly
+                                          ? 'weeks'
+                                          : 'months';
+
+                                      final items =
+                                          <DropdownMenuItem<String>>[];
+
+                                      // Add specific duration options (1 to 12)
+                                      for (int i = 1; i <= 12; i++) {
+                                        items.add(
+                                          DropdownMenuItem(
+                                            value: '$i $durationType',
+                                            child: Text(
+                                              '$i ${durationType == 'days'
+                                                  ? 'day'
+                                                  : durationType == 'weeks'
+                                                  ? 'week'
+                                                  : 'month'}${i == 1
+                                                  ? ''
+                                                  : durationType == 'days'
+                                                  ? 's'
+                                                  : durationType == 'weeks'
+                                                  ? 's'
+                                                  : 's'}',
+                                            ),
+                                          ),
+                                        );
+                                      }
+
+                                      // Add "Until further notice" option
+                                      items.add(
+                                        DropdownMenuItem(
+                                          value: 'infinite',
+                                          child: Text('Until further notice'),
+                                        ),
+                                      );
+
+                                      return items;
+                                    }(),
+                                    onChanged: (value) {
+                                      setModalState(() {
+                                        if (value == 'infinite') {
+                                          repeatDuration = null;
+                                          repeatDurationType = null;
+                                        } else if (value != null) {
+                                          final parts = value.split(' ');
+                                          repeatDuration = int.tryParse(
+                                            parts[0],
+                                          );
+                                          repeatDurationType = parts[1];
+                                        }
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ],
+                            SizedBox(height: 14),
                             if (error != null)
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 8),
@@ -539,6 +753,9 @@ Future<Reminder?> showReminderEditModal(
                                       selectedAdvanceTime == 'At the time'
                                       ? null
                                       : selectedAdvanceTime,
+                                  recurrenceType: recurrenceType,
+                                  repeatDuration: repeatDuration,
+                                  repeatDurationType: repeatDurationType,
                                 );
                                 Navigator.pop(context, reminder);
                               },
@@ -1346,4 +1563,35 @@ Future<void> _showTimePicker(
       );
     },
   );
+}
+
+String _getRecurrenceTypeText(RecurrenceType type) {
+  switch (type) {
+    case RecurrenceType.none:
+      return 'No repeat';
+    case RecurrenceType.daily:
+      return 'Daily';
+    case RecurrenceType.weekly:
+      return 'Weekly';
+    case RecurrenceType.monthly:
+      return 'Monthly';
+    case RecurrenceType.custom:
+      return 'Custom';
+    case RecurrenceType.everyNDays:
+      return 'Every N days';
+    case RecurrenceType.everyNWeeks:
+      return 'Every N weeks';
+    case RecurrenceType.everyNMonths:
+      return 'Every N months';
+  }
+}
+
+// Get only the simple, essential recurrence types
+List<RecurrenceType> _getSimpleRecurrenceTypes() {
+  return [
+    RecurrenceType.none,
+    RecurrenceType.daily,
+    RecurrenceType.weekly,
+    RecurrenceType.monthly,
+  ];
 }

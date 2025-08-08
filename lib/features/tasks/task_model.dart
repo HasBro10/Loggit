@@ -45,6 +45,10 @@ class Task implements LogEntry {
   final TaskPriority priority;
   final TaskStatus status;
   final ReminderType reminder;
+  // Limited duration repeat fields
+  final DateTime? repeatEndDate; // When to stop repeating
+  final int? repeatDuration; // Number of occurrences
+  final String? repeatDurationType; // "days", "weeks", "months"
 
   Task({
     String? id,
@@ -59,8 +63,11 @@ class Task implements LogEntry {
     this.interval,
     this.timeOfDay,
     this.priority = TaskPriority.medium,
-    this.status = TaskStatus.notStarted,
+    this.status = TaskStatus.inProgress,
     this.reminder = ReminderType.none,
+    this.repeatEndDate,
+    this.repeatDuration,
+    this.repeatDurationType,
   }) : id = id ?? Uuid().v4();
 
   Task copyWith({
@@ -78,6 +85,9 @@ class Task implements LogEntry {
     TaskPriority? priority,
     TaskStatus? status,
     ReminderType? reminder,
+    DateTime? repeatEndDate,
+    int? repeatDuration,
+    String? repeatDurationType,
   }) {
     return Task(
       id: id ?? this.id,
@@ -94,6 +104,9 @@ class Task implements LogEntry {
       priority: priority ?? this.priority,
       status: status ?? this.status,
       reminder: reminder ?? this.reminder,
+      repeatEndDate: repeatEndDate ?? this.repeatEndDate,
+      repeatDuration: repeatDuration ?? this.repeatDuration,
+      repeatDurationType: repeatDurationType ?? this.repeatDurationType,
     );
   }
 
@@ -116,6 +129,9 @@ class Task implements LogEntry {
       'priority': priority.name,
       'status': status.name,
       'reminder': reminder.name,
+      'repeatEndDate': repeatEndDate?.toIso8601String(),
+      'repeatDuration': repeatDuration,
+      'repeatDurationType': repeatDurationType,
     };
   }
 
@@ -173,6 +189,11 @@ class Task implements LogEntry {
       priority: priority,
       status: status,
       reminder: reminder,
+      repeatEndDate: json['repeatEndDate'] != null
+          ? DateTime.parse(json['repeatEndDate'])
+          : null,
+      repeatDuration: json['repeatDuration'],
+      repeatDurationType: json['repeatDurationType'],
     );
   }
 

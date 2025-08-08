@@ -253,7 +253,7 @@ class NotesService {
     categories.removeWhere((c) => c.name == 'Quick');
     categories.insert(
       0,
-      PersistentCategory(name: 'Quick', colorValue: 0xFFFFEB3B),
+      PersistentCategory(name: 'Quick', colorValue: 0xFF9CA3AF),
     );
     return categories;
   }

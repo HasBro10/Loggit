@@ -7,6 +7,7 @@ import '../../models/log_entry.dart';
 import '../../services/ai_service.dart';
 import '../../services/favorites_service.dart';
 import '../../services/reminders_service.dart';
+import '../../services/tasks_service.dart';
 // import '../../services/log_parser_service.dart'; // DISCONNECTED: Keeping for future Phase 5 implementation
 import '../../shared/design/color_guide.dart';
 import '../../shared/design/fonts.dart';
@@ -23,7 +24,8 @@ import '../notes/note_model.dart';
 import '../../services/notes_service.dart';
 import '../reminders/reminder_edit_modal.dart';
 import '../reminders/reminder_model.dart';
-import '../tasks/task_model.dart';
+import '../tasks/task_model.dart' hide RecurrenceType;
+import '../tasks/task_model.dart' as task_model show RecurrenceType;
 import '../tasks/tasks_screen_new.dart';
 import 'chat_message.dart';
 
@@ -205,9 +207,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
       final ampm = standardMatch.group(4)?.toLowerCase();
       if (ampm == 'pm' && hour < 12) hour += 12;
       if (ampm == 'am' && hour == 12) hour = 0;
-      print(
-        'DEBUG: _extractTimeFromMessage - standard match: ${hour}:${minute}',
-      );
+      print('DEBUG: _extractTimeFromMessage - standard match: $hour:$minute');
       return TimeOfDay(hour: hour, minute: minute);
     }
 
@@ -221,7 +221,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
           ? int.parse(simpleMatch.group(3)!)
           : 0;
       if (hour < 12) hour += 12; // Assume PM
-      print('DEBUG: _extractTimeFromMessage - simple match: ${hour}:${minute}');
+      print('DEBUG: _extractTimeFromMessage - simple match: $hour:$minute');
       return TimeOfDay(hour: hour, minute: minute);
     }
 
@@ -236,7 +236,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
       final ampm = typoMatch.group(2)?.toLowerCase().replaceAll('.', '');
       if (ampm == 'pm' && hour < 12) hour += 12;
       if (ampm == 'am' && hour == 12) hour = 0;
-      print('DEBUG: _extractTimeFromMessage - typo match: ${hour}:0');
+      print('DEBUG: _extractTimeFromMessage - typo match: $hour:0');
       return TimeOfDay(hour: hour, minute: 0);
     }
 
@@ -251,7 +251,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
       final ampm = noSpaceTypoMatch.group(2)?.toLowerCase().replaceAll('.', '');
       if (ampm == 'pm' && hour < 12) hour += 12;
       if (ampm == 'am' && hour == 12) hour = 0;
-      print('DEBUG: _extractTimeFromMessage - no space typo match: ${hour}:0');
+      print('DEBUG: _extractTimeFromMessage - no space typo match: $hour:0');
       return TimeOfDay(hour: hour, minute: 0);
     }
 
@@ -261,7 +261,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
       if (hour >= 1 && hour <= 12) {
         // Assume PM for single digit hours
         if (hour < 12) hour += 12;
-        print('DEBUG: _extractTimeFromMessage - short number match: ${hour}:0');
+        print('DEBUG: _extractTimeFromMessage - short number match: $hour:0');
         return TimeOfDay(hour: hour, minute: 0);
       }
     }
@@ -481,6 +481,58 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             return;
           }
 
+          // --- NEW: Focused Conversation Logic for Errors ---
+          // Check if there's a pending confirmation when AI returns an error
+          if (_pendingLog != null && _hasPendingConfirmation()) {
+            print(
+              'DEBUG: Focused conversation check for error - pending log: ${_pendingLog?.logType}',
+            );
+            print(
+              'DEBUG: Focused conversation check for error - AI error: ${result['error']}',
+            );
+
+            setState(() {
+              // Remove loading message
+              if (_messages.isNotEmpty &&
+                  _messages.last.text == "🤖 Processing...") {
+                _messages.removeLast();
+              }
+
+              // Convert previous confirmation messages to regular messages (remove buttons)
+              for (int i = 0; i < _messages.length; i++) {
+                if (_messages[i].isConfirmation &&
+                    _messages[i].pendingLogEntry != null) {
+                  // Convert confirmation message to regular message (removes Yes/No/Edit buttons)
+                  _messages[i] = _ChatMessage(
+                    text: _messages[i].text,
+                    isUser: false,
+                    timestamp: _messages[i].timestamp,
+                    isConfirmation: false, // This removes the buttons
+                  );
+                }
+              }
+
+              // Show focused reminder message with confirmation buttons instead of error
+              String reminderMessage = _getFocusedReminderMessage();
+              _messages.add(
+                _ChatMessage(
+                  text: reminderMessage,
+                  isUser: false,
+                  timestamp: DateTime.now(),
+                  isConfirmation: true,
+                  onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
+                      _handleLogConfirmation(confirmed, updatedLogEntry),
+                  pendingLogEntry: _pendingLog,
+                  canConfirm: _hasRequiredFields(_pendingLog!),
+                  showEdit: true,
+                ),
+              );
+              _isLoading = false;
+            });
+            _scrollToBottom();
+            return;
+          }
+
           // If no fallback worked, show helpful error message
           setState(() {
             // Remove loading message
@@ -489,15 +541,10 @@ class _ChatScreenNewState extends State<ChatScreenNew>
               _messages.removeLast();
             }
 
-            String errorMessage =
-                "❌ Sorry, I'm having trouble understanding that.";
-
-            // Check if it's a rate limit error
-            if (result['error'].toString().contains('rate limit') ||
-                result['error'].toString().contains('429')) {
-              errorMessage =
-                  "⏰ I'm a bit busy right now. Please try again in a few seconds.";
-            }
+            String errorMessage = _getHelpfulErrorMessage(
+              result['error'],
+              message,
+            );
 
             _messages.add(
               _ChatMessage(
@@ -512,11 +559,87 @@ class _ChatScreenNewState extends State<ChatScreenNew>
           return;
         }
 
-        if (result is Map<String, dynamic> &&
-            result.containsKey('intent') &&
-            result.containsKey('fields')) {
+        if (result.containsKey('intent') && result.containsKey('fields')) {
           final intent = result['intent'];
           final fields = result['fields'] as Map<String, dynamic>;
+
+          // --- NEW: Focused Conversation Logic ---
+          // Check if there's a pending confirmation and the new message is not related
+          if (_pendingLog != null && _hasPendingConfirmation()) {
+            print(
+              'DEBUG: Focused conversation check - pending log: ${_pendingLog?.logType}',
+            );
+            print('DEBUG: Focused conversation check - new intent: $intent');
+
+            // Check if the new intent is NOT related to the current pending confirmation
+            // Block any intent that's not a continuation or general query
+            bool shouldBlock = false;
+
+            // Block creation intents
+            if (intent == 'create_task' ||
+                intent == 'create_reminder' ||
+                intent == 'create_note' ||
+                intent == 'log_expense' ||
+                intent == 'log_gym' ||
+                intent == 'set_reminder') {
+              shouldBlock = true;
+            }
+
+            // Also block any other intents that aren't continuation-related
+            // Allow only: continue_conversation, view_tasks, view_reminders, general queries
+            if (!shouldBlock &&
+                intent != 'continue_conversation' &&
+                intent != 'view_tasks' &&
+                intent != 'view_reminders' &&
+                !intent.startsWith('view_')) {
+              shouldBlock = true;
+            }
+
+            if (shouldBlock) {
+              print('DEBUG: Blocking new intent due to pending confirmation');
+              // User is trying to create something new while we have a pending confirmation
+              setState(() {
+                // Remove loading message
+                if (_messages.isNotEmpty &&
+                    _messages.last.text == "🤖 Processing...") {
+                  _messages.removeLast();
+                }
+
+                // Convert previous confirmation messages to regular messages (remove buttons)
+                for (int i = 0; i < _messages.length; i++) {
+                  if (_messages[i].isConfirmation &&
+                      _messages[i].pendingLogEntry != null) {
+                    // Convert confirmation message to regular message (removes Yes/No/Edit buttons)
+                    _messages[i] = _ChatMessage(
+                      text: _messages[i].text,
+                      isUser: false,
+                      timestamp: _messages[i].timestamp,
+                      isConfirmation: false, // This removes the buttons
+                    );
+                  }
+                }
+
+                // Show focused reminder message with confirmation buttons
+                String reminderMessage = _getFocusedReminderMessage();
+                _messages.add(
+                  _ChatMessage(
+                    text: reminderMessage,
+                    isUser: false,
+                    timestamp: DateTime.now(),
+                    isConfirmation: true,
+                    onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
+                        _handleLogConfirmation(confirmed, updatedLogEntry),
+                    pendingLogEntry: _pendingLog,
+                    canConfirm: _hasRequiredFields(_pendingLog!),
+                    showEdit: true,
+                  ),
+                );
+                _isLoading = false;
+              });
+              _scrollToBottom();
+              return;
+            }
+          }
 
           // --- NEW: AI Conversation continuation ---
           // If we have a pending log entry, try to merge AI response with it
@@ -524,6 +647,18 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             print(
               'DEBUG: AI Conversation continuation - merging with pending log',
             );
+
+            // Check if this looks like a description addition to the pending item
+            bool isDescriptionAddition = _isLikelyDescriptionAddition(
+              message,
+              intent,
+              fields,
+            );
+            if (isDescriptionAddition) {
+              print('DEBUG: Detected description addition to pending item');
+              _addDescriptionToPendingItem(message);
+              return;
+            }
 
             // If we have a pending task and AI returns task or reminder intent, treat it as task continuation
             if (_pendingLog is Task &&
@@ -569,7 +704,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
 
               // Only process date field if it's actually a date (not a time)
               // IMPORTANT: If only time is provided, preserve the original date from pending task
-              if (dateField != null && dateField is String) {
+              if (dateField != null) {
                 final now = DateTime.now();
                 final dateStr = dateField.toLowerCase();
 
@@ -618,7 +753,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                 }
               }
 
-              if (timeField != null && timeField is String) {
+              if (timeField != null) {
                 print('DEBUG: Processing time field: "$timeField"');
 
                 // Handle "today 19:00" format by extracting just the time part
@@ -640,7 +775,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                       : 0;
                   timeOfDay = TimeOfDay(hour: hour, minute: minute);
                   print(
-                    'DEBUG: Extracted time: ${timeOfDay!.hour}:${timeOfDay!.minute}',
+                    'DEBUG: Extracted time: ${timeOfDay.hour}:${timeOfDay.minute}',
                   );
                 }
               }
@@ -649,9 +784,9 @@ class _ChatScreenNewState extends State<ChatScreenNew>
               if (fields['priority'] is String &&
                   fields['priority'].isNotEmpty) {
                 final p = fields['priority'].toString().toLowerCase();
-                if (p == 'low')
+                if (p == 'low') {
                   priorityEnum = TaskPriority.low;
-                else if (p == 'high')
+                } else if (p == 'high')
                   priorityEnum = TaskPriority.high;
                 else if (p == 'medium')
                   priorityEnum = TaskPriority.medium;
@@ -753,7 +888,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             print('DEBUG: AI reminder timeField: $timeField');
 
             // Only process date field if it's actually a date (not a time)
-            if (dateField != null && dateField is String) {
+            if (dateField != null) {
               final now = DateTime.now();
               final dateStr = dateField.toLowerCase();
 
@@ -766,7 +901,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
               }
             }
 
-            if (timeField != null && timeField is String) {
+            if (timeField != null) {
               print('DEBUG: Processing reminder time field: "$timeField"');
 
               // Handle "today 14:00" format by extracting just the time part
@@ -788,33 +923,84 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                     : 0;
                 reminderTime = TimeOfDay(hour: hour, minute: minute);
                 print(
-                  'DEBUG: Extracted reminder time: ${reminderTime!.hour}:${reminderTime!.minute}',
+                  'DEBUG: Extracted reminder time: ${reminderTime.hour}:${reminderTime.minute}',
                 );
               }
             }
 
             // Combine date and time into a single DateTime for reminderTime
             DateTime finalReminderTime = reminderDate ?? pending.reminderTime;
-            if (reminderTime != null) {
-              finalReminderTime = DateTime(
-                finalReminderTime.year,
-                finalReminderTime.month,
-                finalReminderTime.day,
-                reminderTime.hour,
-                reminderTime.minute,
-              );
+            finalReminderTime = DateTime(
+              finalReminderTime.year,
+              finalReminderTime.month,
+              finalReminderTime.day,
+              reminderTime.hour,
+              reminderTime.minute,
+            );
+
+            // Handle repeat functionality
+            RecurrenceType recurrenceType = RecurrenceType.none;
+            List<int>? customDays;
+            int? interval;
+            DateTime? endDate;
+
+            if (fields['repeatType'] != null) {
+              final repeatType = fields['repeatType'] as String;
+              switch (repeatType) {
+                case 'daily':
+                  recurrenceType = RecurrenceType.daily;
+                  break;
+                case 'weekly':
+                  recurrenceType = RecurrenceType.weekly;
+                  break;
+                case 'monthly':
+                  recurrenceType = RecurrenceType.monthly;
+                  break;
+                case 'everyNDays':
+                  recurrenceType = RecurrenceType.everyNDays;
+                  interval = fields['repeatInterval'] as int? ?? 1;
+                  break;
+                case 'everyNWeeks':
+                  recurrenceType = RecurrenceType.everyNWeeks;
+                  interval = fields['repeatInterval'] as int? ?? 1;
+                  break;
+                case 'everyNMonths':
+                  recurrenceType = RecurrenceType.everyNMonths;
+                  interval = fields['repeatInterval'] as int? ?? 1;
+                  break;
+                case 'custom':
+                  recurrenceType = RecurrenceType.custom;
+                  if (fields['repeatDays'] != null) {
+                    customDays = List<int>.from(fields['repeatDays']);
+                  }
+                  break;
+              }
+
+              // Handle end date
+              if (fields['repeatEndDate'] != null) {
+                final endDateStr = fields['repeatEndDate'] as String;
+                endDate = DateTime.tryParse(endDateStr);
+              }
             }
 
-            final updatedReminder = Reminder(
+            final reminder = Reminder(
               title: title,
               description: pending.description,
               reminderTime: finalReminderTime,
               timestamp: DateTime.now(),
-              advanceTiming: pending.advanceTiming,
+              advanceTiming:
+                  fields['reminderAdvance'] != null &&
+                      (fields['reminderAdvance'] as String).isNotEmpty
+                  ? fields['reminderAdvance'] as String
+                  : null,
+              recurrenceType: recurrenceType,
+              customDays: customDays,
+              interval: interval,
+              endDate: endDate,
             );
 
             setState(() {
-              _pendingLog = updatedReminder;
+              _pendingLog = reminder;
               // Remove loading message if it exists
               if (_messages.isNotEmpty &&
                   _messages.last.text == "🤖 Processing...") {
@@ -837,13 +1023,13 @@ class _ChatScreenNewState extends State<ChatScreenNew>
 
               _messages.add(
                 _ChatMessage(
-                  text: _getConfirmationMessage(updatedReminder),
+                  text: _getConfirmationMessage(reminder),
                   isUser: false,
                   timestamp: DateTime.now(),
                   isConfirmation: true,
                   onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
                       _handleLogConfirmation(confirmed, updatedLogEntry),
-                  pendingLogEntry: updatedReminder,
+                  pendingLogEntry: reminder,
                   canConfirm: true,
                   showEdit: true,
                 ),
@@ -1186,15 +1372,18 @@ class _ChatScreenNewState extends State<ChatScreenNew>
 
             // Set default priority to medium if not specified
             TaskPriority priorityEnum = TaskPriority.medium;
+            print('DEBUG: Processing priority field: ${fields['priority']}');
             if (fields['priority'] is String && fields['priority'].isNotEmpty) {
               final p = fields['priority'].toString().toLowerCase();
-              if (p == 'low')
+              print('DEBUG: Priority string: $p');
+              if (p == 'low') {
                 priorityEnum = TaskPriority.low;
-              else if (p == 'high')
+              } else if (p == 'high')
                 priorityEnum = TaskPriority.high;
               else if (p == 'medium')
                 priorityEnum = TaskPriority.medium;
             }
+            print('DEBUG: Final priority enum: $priorityEnum');
 
             // Set default category to Personal if not specified (matching dropdown options)
             String category = 'Personal';
@@ -1207,6 +1396,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             // Set default reminder to none if not specified
             ReminderType reminderType = ReminderType.none;
             final reminderAdvance = fields['reminderAdvance'] ?? '';
+            print('DEBUG: Processing reminderAdvance field: $reminderAdvance');
             if (reminderAdvance.isNotEmpty) {
               if (reminderAdvance.contains('15 minutes before')) {
                 reminderType = ReminderType.fifteenMinutes;
@@ -1226,6 +1416,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                 reminderType = ReminderType.twentyMinutes;
               }
             }
+            print('DEBUG: Final reminder type: $reminderType');
 
             DateTime? dueDate;
             if (fields['dueDate'] != null && fields['dueDate'] is String) {
@@ -1299,7 +1490,67 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                 timeOfDay = TimeOfDay(hour: hour, minute: minute);
               }
             }
+            // Handle repeat functionality for tasks
+            task_model.RecurrenceType recurrenceType =
+                task_model.RecurrenceType.none;
+            List<int>? customDays;
+            int? interval;
+
+            if (fields['repeatType'] != null) {
+              final repeatType = fields['repeatType'] as String;
+              switch (repeatType) {
+                case 'daily':
+                  recurrenceType = task_model.RecurrenceType.daily;
+                  break;
+                case 'weekly':
+                  // If repeatDays is provided, use custom instead of weekly
+                  if (fields['repeatDays'] != null) {
+                    recurrenceType = task_model.RecurrenceType.custom;
+                    customDays = List<int>.from(fields['repeatDays']);
+                  } else {
+                    recurrenceType = task_model.RecurrenceType.weekly;
+                  }
+                  break;
+                case 'monthly':
+                  recurrenceType = task_model.RecurrenceType.monthly;
+                  break;
+                case 'everyNDays':
+                  recurrenceType = task_model.RecurrenceType.everyNDays;
+                  interval = fields['repeatInterval'] as int? ?? 1;
+                  break;
+                case 'everyNWeeks':
+                  recurrenceType = task_model.RecurrenceType.everyNWeeks;
+                  interval = fields['repeatInterval'] as int? ?? 1;
+                  break;
+                case 'everyNMonths':
+                  recurrenceType = task_model.RecurrenceType.everyNMonths;
+                  interval = fields['repeatInterval'] as int? ?? 1;
+                  break;
+                case 'custom':
+                  recurrenceType = task_model.RecurrenceType.custom;
+                  if (fields['repeatDays'] != null) {
+                    customDays = List<int>.from(fields['repeatDays']);
+                  }
+                  break;
+              }
+            }
+
             // Create the Task object
+            print(
+              'DEBUG: Creating Task with priority: $priorityEnum, reminder: $reminderType, recurrence: $recurrenceType',
+            );
+            // Parse limited duration fields
+            int? repeatDuration;
+            String? repeatDurationType;
+            if (fields['repeatDuration'] != null) {
+              repeatDuration = int.tryParse(
+                fields['repeatDuration'].toString(),
+              );
+            }
+            if (fields['repeatDurationType'] != null) {
+              repeatDurationType = fields['repeatDurationType'].toString();
+            }
+
             final newTask = Task(
               title: title,
               description: description,
@@ -1309,6 +1560,14 @@ class _ChatScreenNewState extends State<ChatScreenNew>
               timeOfDay: timeOfDay,
               reminder: reminderType,
               timestamp: DateTime.now(),
+              recurrenceType: recurrenceType,
+              customDays: customDays,
+              interval: interval,
+              repeatDuration: repeatDuration,
+              repeatDurationType: repeatDurationType,
+            );
+            print(
+              'DEBUG: Created Task - priority: ${newTask.priority}, reminder: ${newTask.reminder}',
             );
             setState(() {
               _pendingLog = newTask;
@@ -1324,6 +1583,11 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                   (newTask.dueDate != null &&
                       (newTask.dueDate!.hour != 0 ||
                           newTask.dueDate!.minute != 0));
+
+              // Debug: Print time check details
+              print(
+                'DEBUG: Task time check - timeOfDay: ${newTask.timeOfDay}, dueDate: ${newTask.dueDate}, hasTime: $hasTime',
+              );
 
               if (hasTime) {
                 // Show confirmation if task has time
@@ -1341,11 +1605,10 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                   ),
                 );
               } else {
-                // Show message that time is required
+                // Show message that time is required with captured information
                 _messages.add(
                   _ChatMessage(
-                    text:
-                        "⏰ You have not placed a time for your task. Please set a time by tapping [Edit] or typing something like 'at 18:00' or 'tomorrow at 9am'.",
+                    text: _getTaskTimeRequiredMessage(newTask),
                     isUser: false,
                     timestamp: DateTime.now(),
                     isConfirmation: true,
@@ -1415,12 +1678,12 @@ class _ChatScreenNewState extends State<ChatScreenNew>
               final reminderDateStr = fields['reminderDate'] as String;
               DateTime? reminderDate = DateTime.tryParse(reminderDateStr);
               if (reminderDate != null) {
-                // Set to 9 AM instead of midnight for better user experience
+                // Set to midnight (00:00) to indicate no specific time
                 reminderTime = DateTime(
                   reminderDate.year,
                   reminderDate.month,
                   reminderDate.day,
-                  9,
+                  0,
                   0,
                 );
               }
@@ -1456,13 +1719,13 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                     minute,
                   );
                 } else {
-                  // No time specified, set to tomorrow at 9 AM
+                  // No time specified, set to tomorrow at midnight (no specific time)
                   final tomorrow = now.add(Duration(days: 1));
                   reminderTime = DateTime(
                     tomorrow.year,
                     tomorrow.month,
                     tomorrow.day,
-                    9,
+                    0, // Midnight - indicates no specific time
                     0,
                   );
                 }
@@ -1489,8 +1752,8 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                     minute,
                   );
                 } else {
-                  // No time specified, set to today at 9 AM
-                  reminderTime = DateTime(now.year, now.month, now.day, 9, 0);
+                  // No time specified, set to today at midnight (no specific time)
+                  reminderTime = DateTime(now.year, now.month, now.day, 0, 0);
                 }
               } else {
                 // Try to parse as date/time string
@@ -1521,17 +1784,76 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                 finalReminderTime = reminderTime.subtract(Duration(days: 1));
               } else if (reminderAdvance.contains('5 minutes before')) {
                 finalReminderTime = reminderTime.subtract(Duration(minutes: 5));
+              } else if (reminderAdvance.contains('20 minutes before')) {
+                finalReminderTime = reminderTime.subtract(
+                  Duration(minutes: 20),
+                );
+              }
+            }
+
+            // Handle repeat functionality
+            RecurrenceType recurrenceType = RecurrenceType.none;
+            List<int>? customDays;
+            int? interval;
+            DateTime? endDate;
+
+            if (fields['repeatType'] != null) {
+              final repeatType = fields['repeatType'] as String;
+              switch (repeatType) {
+                case 'daily':
+                  recurrenceType = RecurrenceType.daily;
+                  break;
+                case 'weekly':
+                  recurrenceType = RecurrenceType.weekly;
+                  break;
+                case 'monthly':
+                  recurrenceType = RecurrenceType.monthly;
+                  break;
+                case 'everyNDays':
+                  recurrenceType = RecurrenceType.everyNDays;
+                  interval = fields['repeatInterval'] as int? ?? 1;
+                  break;
+                case 'everyNWeeks':
+                  recurrenceType = RecurrenceType.everyNWeeks;
+                  interval = fields['repeatInterval'] as int? ?? 1;
+                  break;
+                case 'everyNMonths':
+                  recurrenceType = RecurrenceType.everyNMonths;
+                  interval = fields['repeatInterval'] as int? ?? 1;
+                  break;
+                case 'custom':
+                  recurrenceType = RecurrenceType.custom;
+                  if (fields['repeatDays'] != null) {
+                    customDays = List<int>.from(fields['repeatDays']);
+                  }
+                  break;
+              }
+
+              // Handle end date
+              if (fields['repeatEndDate'] != null) {
+                final endDateStr = fields['repeatEndDate'] as String;
+                endDate = DateTime.tryParse(endDateStr);
               }
             }
 
             final reminder = Reminder(
               title: title,
               description: description.isNotEmpty ? description : null,
-              reminderTime: reminderTime, // Store original time (e.g., 6:00am)
+              reminderTime: finalReminderTime,
               timestamp: DateTime.now(),
-              advanceTiming: reminderAdvance.isNotEmpty
-                  ? reminderAdvance
+              advanceTiming:
+                  fields['reminderAdvance'] != null &&
+                      (fields['reminderAdvance'] as String).isNotEmpty
+                  ? fields['reminderAdvance'] as String
                   : null,
+              recurrenceType: recurrenceType,
+              customDays: customDays,
+              interval: interval,
+              endDate: endDate,
+              repeatDuration: fields['repeatDuration'] != null
+                  ? int.tryParse(fields['repeatDuration'].toString())
+                  : null,
+              repeatDurationType: fields['repeatDurationType']?.toString(),
             );
             setState(() {
               _pendingLog =
@@ -1541,19 +1863,41 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                   _messages.last.text == "🤖 Processing...") {
                 _messages.removeLast();
               }
-              _messages.add(
-                _ChatMessage(
-                  text: _getConfirmationMessage(reminder),
-                  isUser: false,
-                  timestamp: DateTime.now(),
-                  isConfirmation: true,
-                  onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
-                      _handleLogConfirmation(confirmed, updatedLogEntry),
-                  pendingLogEntry: reminder,
-                  canConfirm: true,
-                  showEdit: true,
-                ),
-              );
+
+              // Check if reminder has a specific time
+              bool hasTime = reminderTime.hour != 0 || reminderTime.minute != 0;
+
+              if (hasTime) {
+                // Show confirmation if reminder has time
+                _messages.add(
+                  _ChatMessage(
+                    text: _getConfirmationMessage(reminder),
+                    isUser: false,
+                    timestamp: DateTime.now(),
+                    isConfirmation: true,
+                    onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
+                        _handleLogConfirmation(confirmed, updatedLogEntry),
+                    pendingLogEntry: reminder,
+                    canConfirm: _hasRequiredFields(reminder),
+                    showEdit: true,
+                  ),
+                );
+              } else {
+                // Show message that time is required with captured information
+                _messages.add(
+                  _ChatMessage(
+                    text: _getReminderTimeRequiredMessage(reminder),
+                    isUser: false,
+                    timestamp: DateTime.now(),
+                    isConfirmation: true,
+                    onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
+                        _handleLogConfirmation(confirmed, updatedLogEntry),
+                    pendingLogEntry: reminder,
+                    canConfirm: false, // Disable Yes button when no time is set
+                    showEdit: true,
+                  ),
+                );
+              }
               _isLoading = false; // Stop loading
             });
             _scrollToBottom();
@@ -2098,9 +2442,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             ),
           );
           // --- AI integration: open correct modal based on intent ---
-          if (result is Map<String, dynamic> &&
-              result.containsKey('intent') &&
-              result.containsKey('fields')) {
+          if (result.containsKey('intent') && result.containsKey('fields')) {
             final intent = result['intent'];
             final fields = result['fields'] as Map<String, dynamic>;
             if (intent == 'create_task') {
@@ -2139,9 +2481,9 @@ class _ChatScreenNewState extends State<ChatScreenNew>
               if (fields['priority'] is String &&
                   fields['priority'].isNotEmpty) {
                 final p = fields['priority'].toString().toLowerCase();
-                if (p == 'low')
+                if (p == 'low') {
                   priorityEnum = TaskPriority.low;
-                else if (p == 'high')
+                } else if (p == 'high')
                   priorityEnum = TaskPriority.high;
                 else if (p == 'medium')
                   priorityEnum = TaskPriority.medium;
@@ -2306,14 +2648,65 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                 }
               }
 
+              // Handle repeat functionality
+              RecurrenceType recurrenceType = RecurrenceType.none;
+              List<int>? customDays;
+              int? interval;
+              DateTime? endDate;
+
+              if (fields['repeatType'] != null) {
+                final repeatType = fields['repeatType'] as String;
+                switch (repeatType) {
+                  case 'daily':
+                    recurrenceType = RecurrenceType.daily;
+                    break;
+                  case 'weekly':
+                    recurrenceType = RecurrenceType.weekly;
+                    break;
+                  case 'monthly':
+                    recurrenceType = RecurrenceType.monthly;
+                    break;
+                  case 'everyNDays':
+                    recurrenceType = RecurrenceType.everyNDays;
+                    interval = fields['repeatInterval'] as int? ?? 1;
+                    break;
+                  case 'everyNWeeks':
+                    recurrenceType = RecurrenceType.everyNWeeks;
+                    interval = fields['repeatInterval'] as int? ?? 1;
+                    break;
+                  case 'everyNMonths':
+                    recurrenceType = RecurrenceType.everyNMonths;
+                    interval = fields['repeatInterval'] as int? ?? 1;
+                    break;
+                  case 'custom':
+                    recurrenceType = RecurrenceType.custom;
+                    if (fields['repeatDays'] != null) {
+                      customDays = List<int>.from(fields['repeatDays']);
+                    }
+                    break;
+                }
+
+                // Handle end date
+                if (fields['repeatEndDate'] != null) {
+                  final endDateStr = fields['repeatEndDate'] as String;
+                  endDate = DateTime.tryParse(endDateStr);
+                }
+              }
+
               final reminder = Reminder(
                 title: title,
                 description: description.isNotEmpty ? description : null,
                 reminderTime: finalReminderTime,
                 timestamp: DateTime.now(),
-                advanceTiming: reminderAdvance.isNotEmpty
-                    ? reminderAdvance
+                advanceTiming:
+                    fields['reminderAdvance'] != null &&
+                        (fields['reminderAdvance'] as String).isNotEmpty
+                    ? fields['reminderAdvance'] as String
                     : null,
+                recurrenceType: recurrenceType,
+                customDays: customDays,
+                interval: interval,
+                endDate: endDate,
               );
               setState(() {
                 _messages.add(
@@ -2484,25 +2877,41 @@ class _ChatScreenNewState extends State<ChatScreenNew>
     switch (logEntry.logType) {
       case 'expense':
         final expense = logEntry as Expense;
-        return "Log expense: £${expense.amount.toStringAsFixed(2)} for ${expense.category}?";
+        StringBuffer message = StringBuffer();
+        message.writeln("Log an expense for:");
+        message.writeln("📋 ${expense.category}");
+        message.writeln("💰 Amount: £${expense.amount.toStringAsFixed(2)}");
+        message.writeln("🏷️ Category: ${expense.category}");
+
+        // Date
+        final date = expense.timestamp;
+        final dateString =
+            "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}";
+        message.writeln("📅 Date: $dateString");
+
+        return message.toString();
+
       case 'task':
         final task = logEntry as Task;
-        String dateTimeInfo = '';
+        // Debug: Print task details
+        print(
+          'DEBUG: Task confirmation - priority: ${task.priority}, reminder: ${task.reminder}',
+        );
+        StringBuffer message = StringBuffer();
+        message.writeln("Create a task for:");
+        message.writeln("📋 ${task.title}");
 
+        // Date and time
         if (task.dueDate != null) {
           final date = task.dueDate!;
           final now = DateTime.now();
-
-          // Check if we have a specific time set (either in dueDate or timeOfDay)
           bool hasSpecificTime =
               (task.dueDate!.hour != 0 || task.dueDate!.minute != 0) ||
               (task.timeOfDay != null);
 
           if (hasSpecificTime) {
-            // Show full date and time - use timeOfDay if available, otherwise use dueDate
             DateTime displayDateTime;
             if (task.timeOfDay != null) {
-              // Use the date from dueDate but time from timeOfDay
               displayDateTime = DateTime(
                 date.year,
                 date.month,
@@ -2511,87 +2920,283 @@ class _ChatScreenNewState extends State<ChatScreenNew>
                 task.timeOfDay!.minute,
               );
             } else {
-              // Use the dueDate as is
               displayDateTime = date;
             }
             final timeString = _formatReminderTime(displayDateTime);
-            dateTimeInfo = " due <b>$timeString</b>";
+            message.writeln("📅 $timeString");
           } else {
-            // Show date only (no time set)
             if (date.year != now.year ||
                 date.month != now.month ||
                 date.day != now.day) {
               final dateString =
                   "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}";
-              dateTimeInfo = " due <b>$dateString</b> (no time set yet)";
+              message.writeln("📅 $dateString (no time set)");
             } else {
-              dateTimeInfo = " (no time set yet)";
+              message.writeln("📅 —");
             }
           }
+        } else {
+          message.writeln("📅 —");
         }
 
-        // Add priority info only (category is handled internally)
-        String priorityInfo = '';
-        if (task.priority == TaskPriority.high) {
-          priorityInfo = " 🔴 HIGH PRIORITY";
-        } else if (task.priority == TaskPriority.low) {
-          priorityInfo = " 🟢 LOW PRIORITY";
+        // Description
+        if (task.description != null && task.description!.isNotEmpty) {
+          String truncatedDescription = task.description!;
+          if (truncatedDescription.length > 25) {
+            truncatedDescription =
+                "${truncatedDescription.substring(0, 22)}...";
+          }
+          message.writeln("📝 Description: $truncatedDescription");
+        } else {
+          message.writeln("📝 Description: —");
         }
 
-        // Add reminder info
-        String reminderInfo = '';
-        if (task.reminder == ReminderType.fifteenMinutes) {
-          reminderInfo = " with reminder 15 minutes before";
-        } else if (task.reminder == ReminderType.oneHour) {
-          reminderInfo = " with reminder 1 hour before";
-        } else if (task.reminder == ReminderType.oneDay) {
-          reminderInfo = " with reminder 1 day before";
-        } else if (task.reminder == ReminderType.fiveMinutes) {
-          reminderInfo = " with reminder 5 minutes before";
-        } else if (task.reminder == ReminderType.twentyMinutes) {
-          reminderInfo = " with reminder 20 minutes before";
-        } else if (task.reminder == ReminderType.thirtyMinutes) {
-          reminderInfo = " with reminder 30 minutes before";
-        } else if (task.reminder == ReminderType.twoHours) {
-          reminderInfo = " with reminder 2 hours before";
+        // Reminder
+        if (task.reminder != ReminderType.none) {
+          String reminderText = "";
+          switch (task.reminder) {
+            case ReminderType.fifteenMinutes:
+              reminderText = "15 minutes before";
+              break;
+            case ReminderType.oneHour:
+              reminderText = "1 hour before";
+              break;
+            case ReminderType.oneDay:
+              reminderText = "1 day before";
+              break;
+            case ReminderType.fiveMinutes:
+              reminderText = "5 minutes before";
+              break;
+            case ReminderType.twentyMinutes:
+              reminderText = "20 minutes before";
+              break;
+            case ReminderType.thirtyMinutes:
+              reminderText = "30 minutes before";
+              break;
+            case ReminderType.twoHours:
+              reminderText = "2 hours before";
+              break;
+            default:
+              reminderText = "—";
+          }
+          message.writeln("⏰ Reminder: $reminderText");
+        } else {
+          message.writeln("⏰ Reminder: —");
         }
 
-        return "Create task: ${task.title}$priorityInfo$dateTimeInfo$reminderInfo?";
+        // Category
+        message.writeln("🏷️ Category: ${task.category}");
+
+        // Priority
+        String priorityText = "";
+        switch (task.priority) {
+          case TaskPriority.high:
+            priorityText = "High";
+            break;
+          case TaskPriority.medium:
+            priorityText = "Medium";
+            break;
+          case TaskPriority.low:
+            priorityText = "Low";
+            break;
+        }
+        message.writeln("⭐ Priority: $priorityText");
+
+        // Recurring
+        if (task.recurrenceType.index != 0) {
+          // 0 is 'none'
+          String recurringText = "";
+
+          // Check if we have duration info
+          if (task.repeatDuration != null && task.repeatDurationType != null) {
+            final duration = task.repeatDuration!;
+            final durationType = task.repeatDurationType!;
+
+            // Create duration message
+            String durationMessage = '';
+            if (duration == 1) {
+              durationMessage =
+                  '1 ${durationType.substring(0, durationType.length - 1)}'; // Remove 's' for singular
+            } else {
+              durationMessage = '$duration $durationType';
+            }
+
+            recurringText = durationMessage;
+          } else {
+            // No duration specified - infinite recurring task
+            recurringText = "until further notice";
+          }
+
+          message.writeln(" Repeat: $recurringText");
+        } else {
+          message.writeln(" Repeat: —");
+        }
+
+        return message.toString();
+
       case 'reminder':
         final reminder = logEntry as Reminder;
+        StringBuffer message = StringBuffer();
+        message.writeln("Create a reminder for:");
+        message.writeln("📋 ${reminder.title}");
 
-        // If time is 00:00, treat as 'no time set' and only show date (if present)
+        // Date and time
         if (reminder.reminderTime.hour == 0 &&
             reminder.reminderTime.minute == 0) {
           final date = reminder.reminderTime;
           final now = DateTime.now();
-          // Only show date if it's not today
           if (date.year != now.year ||
               date.month != now.month ||
               date.day != now.day) {
             final dateString =
                 "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}";
-            return "Set reminder: ${reminder.title} for <b>$dateString</b> (no time set yet)";
+            message.writeln("📅 $dateString (no time set)");
           } else {
-            return "Set reminder: ${reminder.title} (no time set yet)";
+            message.writeln("📅 —");
           }
+        } else {
+          final timeString = _formatReminderTime(reminder.reminderTime);
+          message.writeln("📅 $timeString");
         }
-        final timeString = _formatReminderTime(reminder.reminderTime);
-        String advanceInfo = '';
+
+        // Advance timing
         if (reminder.advanceTiming != null) {
-          advanceInfo = " with reminder ${reminder.advanceTiming}";
+          message.writeln("⏰ Advance: ${reminder.advanceTiming}");
+        } else {
+          message.writeln("⏰ Advance: —");
         }
-        return "Set reminder: ${reminder.title} for <b>$timeString</b>$advanceInfo?";
+
+        // Description
+        if (reminder.description != null && reminder.description!.isNotEmpty) {
+          String truncatedDescription = reminder.description!;
+          if (truncatedDescription.length > 25) {
+            truncatedDescription =
+                "${truncatedDescription.substring(0, 22)}...";
+          }
+          message.writeln("📝 Description: $truncatedDescription");
+        } else {
+          message.writeln("📝 Description: —");
+        }
+
+        // Repeat information
+        if (reminder.recurrenceType != RecurrenceType.none) {
+          String repeatText = "";
+
+          // Check if we have duration info
+          if (reminder.repeatDuration != null &&
+              reminder.repeatDurationType != null) {
+            final duration = reminder.repeatDuration!;
+            final durationType = reminder.repeatDurationType!;
+
+            // Create duration message
+            String durationMessage = '';
+            if (duration == 1) {
+              durationMessage =
+                  '1 ${durationType.substring(0, durationType.length - 1)}'; // Remove 's' for singular
+            } else {
+              durationMessage = '$duration $durationType';
+            }
+
+            repeatText = durationMessage;
+          } else {
+            // No duration specified - infinite recurring reminder
+            repeatText = "until further notice";
+          }
+
+          message.writeln("🔄 Repeat: $repeatText");
+        } else {
+          message.writeln("🔄 Repeat: —");
+        }
+
+        return message.toString();
+
       case 'note':
         final note = logEntry as Note;
-        return "Save note: ${note.content}?";
+        StringBuffer message = StringBuffer();
+        message.writeln("Create a note for:");
+        message.writeln("📋 ${note.title}");
+
+        // Type
+        String typeText = "";
+        switch (note.type) {
+          case NoteType.text:
+            typeText = "Text";
+            break;
+          case NoteType.checklist:
+            typeText = "Checklist";
+            break;
+          case NoteType.media:
+            typeText = "Media";
+            break;
+          case NoteType.quick:
+            typeText = "Quick";
+            break;
+          case NoteType.linked:
+            typeText = "Linked";
+            break;
+        }
+        message.writeln("📄 Type: $typeText");
+
+        // Category
+        message.writeln("🏷️ Category: ${note.noteCategory}");
+
+        // Priority
+        String priorityText = "";
+        switch (note.priority) {
+          case NotePriority.high:
+            priorityText = "High";
+            break;
+          case NotePriority.medium:
+            priorityText = "Medium";
+            break;
+          case NotePriority.low:
+            priorityText = "Low";
+            break;
+        }
+        message.writeln("⭐ Priority: $priorityText");
+
+        // Status
+        String statusText = "";
+        switch (note.status) {
+          case NoteStatus.draft:
+            statusText = "Draft";
+            break;
+          case NoteStatus.final_:
+            statusText = "Final";
+            break;
+          case NoteStatus.archived:
+            statusText = "Archived";
+            break;
+        }
+        message.writeln("📊 Status: $statusText");
+
+        return message.toString();
+
       case 'gym':
         final gymLog = logEntry as GymLog;
+        StringBuffer message = StringBuffer();
+        message.writeln("Log a workout for:");
+        message.writeln("📋 ${gymLog.exercises.first.name}");
+
+        // Sets and reps
         final exercise = gymLog.exercises.first;
-        final weightText = exercise.weight != null
-            ? " ${exercise.weight}kg"
-            : "";
-        return "Log workout: ${exercise.name} ${exercise.sets}x${exercise.reps}$weightText?";
+        message.writeln("💪 Sets: ${exercise.sets} | Reps: ${exercise.reps}");
+
+        // Weight
+        if (exercise.weight != null) {
+          message.writeln("🏋️ Weight: ${exercise.weight}kg");
+        } else {
+          message.writeln("🏋️ Weight: —");
+        }
+
+        // Date
+        final date = gymLog.timestamp;
+        final dateString =
+            "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}";
+        message.writeln("📅 Date: $dateString");
+
+        return message.toString();
+
       default:
         return "Log this entry?";
     }
@@ -3016,8 +3621,9 @@ class _ChatScreenNewState extends State<ChatScreenNew>
           if (isNextWeek) {
             // Next week: calculate days to next occurrence of target day
             daysToAdd = (targetWeekday - currentWeekday + 7) % 7;
-            if (daysToAdd == 0)
+            if (daysToAdd == 0) {
               daysToAdd = 7; // If it's the same day, go to next week
+            }
           } else {
             // This week: calculate days to next occurrence of target day
             daysToAdd = (targetWeekday - currentWeekday + 7) % 7;
@@ -3411,8 +4017,9 @@ class _ChatScreenNewState extends State<ChatScreenNew>
           if (isNextWeek) {
             // Next week: calculate days to next occurrence of target day
             daysToAdd = (targetWeekday - currentWeekday + 7) % 7;
-            if (daysToAdd == 0)
+            if (daysToAdd == 0) {
               daysToAdd = 7; // If it's the same day, go to next week
+            }
           } else {
             // This week: calculate days to next occurrence of target day
             daysToAdd = (targetWeekday - currentWeekday + 7) % 7;
@@ -3622,8 +4229,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             );
             _messages.add(
               _ChatMessage(
-                text:
-                    "⏰ Please set a time for your reminder. Tap [Edit] to choose a time, or type something like 'at 18:00' or 'tomorrow at 9am'.",
+                text: _getReminderTimeRequiredMessage(reminder),
                 isUser: false,
                 timestamp: DateTime.now(),
                 isConfirmation: true,
@@ -3648,8 +4254,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
             );
             _messages.add(
               _ChatMessage(
-                text:
-                    "⏰ That time has already passed. Please pick a future time. Tap [Edit] to choose a new time, or type something like 'at 18:00' or 'tomorrow at 9am'.",
+                text: _getPastTimeWarningMessage(reminder),
                 isUser: false,
                 timestamp: DateTime.now(),
                 isConfirmation: true,
@@ -3679,6 +4284,12 @@ class _ChatScreenNewState extends State<ChatScreenNew>
           print('DEBUG: Task dueDate: ${task.dueDate}');
           print('DEBUG: Task timeOfDay: ${task.timeOfDay}');
           print('DEBUG: Task category: ${task.category}');
+          print('DEBUG: Task recurrence: ${task.recurrenceType}');
+          print(
+            'DEBUG: Task duration: ${task.repeatDuration} ${task.repeatDurationType}',
+          );
+
+          // Always call onTaskLogged - let the main app handle recurring task generation
           widget.onTaskLogged?.call(task);
           break;
         case 'reminder':
@@ -3738,6 +4349,47 @@ class _ChatScreenNewState extends State<ChatScreenNew>
         return "Expense logged: £${expense.amount.toStringAsFixed(2)} for ${expense.category}";
       case 'task':
         final task = logEntry as Task;
+
+        // Check if this is a recurring task with duration
+        if (task.repeatDuration != null && task.repeatDurationType != null) {
+          // Create a more natural duration message
+          String durationMessage = '';
+          if (task.repeatDuration != null && task.repeatDurationType != null) {
+            final duration = task.repeatDuration!;
+            final durationType = task.repeatDurationType!;
+
+            // Make it more natural: "6 weeks" instead of "for 6 weeks"
+            if (duration == 1) {
+              durationMessage =
+                  '1 ${durationType.substring(0, durationType.length - 1)}'; // Remove 's' for singular
+            } else {
+              durationMessage = '$duration $durationType';
+            }
+          } else {
+            // No duration specified - infinite recurring task
+            durationMessage = 'until further notice';
+          }
+
+          if (task.dueDate != null && task.timeOfDay != null) {
+            final timeString = _formatReminderTime(
+              DateTime(
+                task.dueDate!.year,
+                task.dueDate!.month,
+                task.dueDate!.day,
+                task.timeOfDay!.hour,
+                task.timeOfDay!.minute,
+              ),
+            );
+            return "Recurring task created: ${task.title} (recurring for $durationMessage) starting <b>$timeString</b>";
+          } else if (task.dueDate != null) {
+            final dateString =
+                "${task.dueDate!.day.toString().padLeft(2, '0')}/${task.dueDate!.month.toString().padLeft(2, '0')}/${task.dueDate!.year}";
+            return "Recurring task created: ${task.title} (recurring for $durationMessage) starting <b>$dateString</b>";
+          }
+          return "Recurring task created: ${task.title} (recurring for $durationMessage)";
+        }
+
+        // Regular single task
         if (task.dueDate != null && task.timeOfDay != null) {
           final timeString = _formatReminderTime(
             DateTime(
@@ -3762,6 +4414,28 @@ class _ChatScreenNewState extends State<ChatScreenNew>
         if (reminder.advanceTiming != null) {
           advanceInfo = " with reminder ${reminder.advanceTiming}";
         }
+
+        // Check if this is a recurring reminder with duration
+        if (reminder.repeatDuration != null &&
+            reminder.repeatDurationType != null) {
+          final duration = reminder.repeatDuration!;
+          final durationType = reminder.repeatDurationType!;
+
+          // Create duration message
+          String durationMessage = '';
+          if (duration == 1) {
+            durationMessage =
+                '1 ${durationType.substring(0, durationType.length - 1)}'; // Remove 's' for singular
+          } else {
+            durationMessage = '$duration $durationType';
+          }
+
+          return "Recurring reminder set: ${reminder.title} (recurring for $durationMessage) on <b>$dateTimeString</b>$advanceInfo";
+        } else if (reminder.recurrenceType != RecurrenceType.none) {
+          // Infinite recurring reminder
+          return "Recurring reminder set: ${reminder.title} (recurring until further notice) on <b>$dateTimeString</b>$advanceInfo";
+        }
+
         return "Reminder set: ${reminder.title} on <b>$dateTimeString</b>$advanceInfo";
       case 'note':
         final note = logEntry as Note;
@@ -4915,6 +5589,371 @@ class _ChatScreenNewState extends State<ChatScreenNew>
       // This block is intentionally left empty. Only the correct modals should be used.
     }
   }
+
+  String _formatTaskTime(TimeOfDay timeOfDay) {
+    final hour = timeOfDay.hour;
+    final minute = timeOfDay.minute;
+    final ampm = hour >= 12 ? 'PM' : 'AM';
+    final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    return '$displayHour:${minute.toString().padLeft(2, '0')} $ampm';
+  }
+
+  // --- NEW: Focused Conversation Helper Methods ---
+
+  /// Check if there's a pending confirmation message
+  bool _hasPendingConfirmation() {
+    return _messages.any(
+      (message) => message.isConfirmation && message.pendingLogEntry != null,
+    );
+  }
+
+  /// Get a focused reminder message when user tries to create something new while pending
+  String _getFocusedReminderMessage() {
+    if (_pendingLog == null) return "I'm ready to help you!";
+
+    StringBuffer message = StringBuffer();
+
+    // Add confirmation message
+    message.writeln(
+      "I'm still waiting for you to confirm your ${_getLogTypeName()}. Please confirm this first:",
+    );
+    message.writeln("");
+
+    // Add the current confirmation details
+    message.write(_getConfirmationMessage(_pendingLog!));
+
+    // Add helpful guidance
+    message.writeln("");
+    message.writeln(
+      "Once you confirm or cancel this, I'll be happy to help with anything else!",
+    );
+
+    return message.toString();
+  }
+
+  /// Get a user-friendly name for the log type
+  String _getLogTypeName() {
+    switch (_pendingLog?.logType) {
+      case 'task':
+        return 'task';
+      case 'reminder':
+        return 'reminder';
+      case 'note':
+        return 'note';
+      case 'expense':
+        return 'expense';
+      case 'gym':
+        return 'workout log';
+      default:
+        return 'item';
+    }
+  }
+
+  /// Check if a message is likely adding a description to the pending item
+  bool _isLikelyDescriptionAddition(
+    String message,
+    String intent,
+    Map<String, dynamic> fields,
+  ) {
+    // If AI returns a new task/reminder but the message is short and descriptive
+    if ((intent == 'create_task' || intent == 'create_reminder') &&
+        message.length < 50 &&
+        !message.toLowerCase().contains('tomorrow') &&
+        !message.toLowerCase().contains('today') &&
+        !message.toLowerCase().contains('monday') &&
+        !message.toLowerCase().contains('tuesday') &&
+        !message.toLowerCase().contains('wednesday') &&
+        !message.toLowerCase().contains('thursday') &&
+        !message.toLowerCase().contains('friday') &&
+        !message.toLowerCase().contains('saturday') &&
+        !message.toLowerCase().contains('sunday') &&
+        !message.toLowerCase().contains('am') &&
+        !message.toLowerCase().contains('pm') &&
+        !message.toLowerCase().contains(':') &&
+        !message.toLowerCase().contains('at ') &&
+        !message.toLowerCase().contains('create') &&
+        !message.toLowerCase().contains('remind') &&
+        !message.toLowerCase().contains('task')) {
+      return true;
+    }
+    return false;
+  }
+
+  /// Add description to the pending item and update the confirmation
+  void _addDescriptionToPendingItem(String description) {
+    if (_pendingLog == null) return;
+
+    setState(() {
+      // Remove loading message
+      if (_messages.isNotEmpty && _messages.last.text == "🤖 Processing...") {
+        _messages.removeLast();
+      }
+
+      // Update the pending log with the description
+      if (_pendingLog is Task) {
+        final task = _pendingLog as Task;
+        final updatedTask = task.copyWith(description: description);
+        _pendingLog = updatedTask;
+      } else if (_pendingLog is Reminder) {
+        final reminder = _pendingLog as Reminder;
+        final updatedReminder = reminder.copyWith(description: description);
+        _pendingLog = updatedReminder;
+      }
+
+      // Update the confirmation message
+      _messages.removeWhere(
+        (m) => m.isConfirmation && m.pendingLogEntry != null,
+      );
+      _messages.add(
+        _ChatMessage(
+          text: _getConfirmationMessage(_pendingLog!),
+          isUser: false,
+          timestamp: DateTime.now(),
+          isConfirmation: true,
+          onConfirmationResponse: (confirmed, [updatedLogEntry]) =>
+              _handleLogConfirmation(confirmed, updatedLogEntry),
+          pendingLogEntry: _pendingLog,
+          canConfirm: true,
+          showEdit: true,
+        ),
+      );
+      _isLoading = false;
+    });
+    _scrollToBottom();
+  }
+
+  /// Get task time required message with captured information
+  String _getTaskTimeRequiredMessage(Task task) {
+    StringBuffer message = StringBuffer();
+    message.writeln("⏰ Time required for task");
+    message.writeln("Set time: \"at 2pm\" or \"tomorrow 9am\"");
+    message.writeln("");
+
+    // Show captured information
+    message.writeln("📋 ${task.title}");
+    if (task.dueDate != null) {
+      final date = task.dueDate!;
+      final now = DateTime.now();
+      if (date.year != now.year ||
+          date.month != now.month ||
+          date.day != now.day) {
+        final dateString =
+            "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}";
+        message.writeln("📅 $dateString");
+      } else {
+        message.writeln("📅 Today");
+      }
+    }
+    if (task.description != null && task.description!.isNotEmpty) {
+      String truncatedDescription = task.description!;
+      if (truncatedDescription.length > 25) {
+        truncatedDescription = "${truncatedDescription.substring(0, 22)}...";
+      }
+      message.writeln("📝 $truncatedDescription");
+    }
+    if (task.category != null && task.category!.isNotEmpty) {
+      message.writeln("🏷️ ${task.category}");
+    }
+
+    // Add priority information
+    String priorityText = "";
+    switch (task.priority) {
+      case TaskPriority.high:
+        priorityText = "High";
+        break;
+      case TaskPriority.medium:
+        priorityText = "Medium";
+        break;
+      case TaskPriority.low:
+        priorityText = "Low";
+        break;
+    }
+    message.writeln("⭐ Priority: $priorityText");
+
+    // Add reminder information
+    if (task.reminder != ReminderType.none) {
+      String reminderText = "";
+      switch (task.reminder) {
+        case ReminderType.fifteenMinutes:
+          reminderText = "15 minutes before";
+          break;
+        case ReminderType.oneHour:
+          reminderText = "1 hour before";
+          break;
+        case ReminderType.oneDay:
+          reminderText = "1 day before";
+          break;
+        case ReminderType.fiveMinutes:
+          reminderText = "5 minutes before";
+          break;
+        case ReminderType.twentyMinutes:
+          reminderText = "20 minutes before";
+          break;
+        case ReminderType.thirtyMinutes:
+          reminderText = "30 minutes before";
+          break;
+        case ReminderType.twoHours:
+          reminderText = "2 hours before";
+          break;
+        default:
+          reminderText = "—";
+      }
+      message.writeln("⏰ Reminder: $reminderText");
+    } else {
+      message.writeln("⏰ Reminder: —");
+    }
+
+    return message.toString();
+  }
+
+  /// Get reminder time required message with captured information
+  String _getReminderTimeRequiredMessage(Reminder reminder) {
+    StringBuffer message = StringBuffer();
+    message.writeln("⏰ Time required for reminder");
+    message.writeln("Set time: \"at 2pm\" or \"tomorrow 9am\"");
+    message.writeln("");
+
+    // Show captured information
+    message.writeln("📋 ${reminder.title}");
+    final date = reminder.reminderTime;
+    final now = DateTime.now();
+    if (date.year != now.year ||
+        date.month != now.month ||
+        date.day != now.day) {
+      final dateString =
+          "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}";
+      message.writeln("📅 $dateString");
+    } else {
+      message.writeln("📅 Today");
+    }
+    if (reminder.description != null && reminder.description!.isNotEmpty) {
+      String truncatedDescription = reminder.description!;
+      if (truncatedDescription.length > 25) {
+        truncatedDescription = "${truncatedDescription.substring(0, 22)}...";
+      }
+      message.writeln("📝 $truncatedDescription");
+    }
+    if (reminder.advanceTiming != null && reminder.advanceTiming!.isNotEmpty) {
+      message.writeln("⏰ Advance: ${reminder.advanceTiming}");
+    }
+
+    return message.toString();
+  }
+
+  /// Get past time warning message with captured information
+  String _getPastTimeWarningMessage(Reminder reminder) {
+    StringBuffer message = StringBuffer();
+    message.writeln("⏰ Time has already passed");
+    message.writeln("Set future time: \"at 2pm\" or \"tomorrow 9am\"");
+    message.writeln("");
+
+    // Show captured information
+    message.writeln("📋 ${reminder.title}");
+    final date = reminder.reminderTime;
+    final now = DateTime.now();
+    if (date.year != now.year ||
+        date.month != now.month ||
+        date.day != now.day) {
+      final dateString =
+          "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}";
+      message.writeln("📅 $dateString");
+    } else {
+      message.writeln("📅 Today");
+    }
+    if (reminder.description != null && reminder.description!.isNotEmpty) {
+      String truncatedDescription = reminder.description!;
+      if (truncatedDescription.length > 25) {
+        truncatedDescription = "${truncatedDescription.substring(0, 22)}...";
+      }
+      message.writeln("📝 $truncatedDescription");
+    }
+    if (reminder.advanceTiming != null && reminder.advanceTiming!.isNotEmpty) {
+      message.writeln("⏰ Advance: ${reminder.advanceTiming}");
+    }
+
+    return message.toString();
+  }
+
+  /// Get a helpful error message based on the error and user's message
+  String _getHelpfulErrorMessage(String error, String userMessage) {
+    String lowerMessage = userMessage.toLowerCase();
+
+    // Check for rate limit errors
+    if (error.contains('rate limit') || error.contains('429')) {
+      return "⏰ I'm a bit busy right now. Please try again in a few seconds.";
+    }
+
+    // Check for weather-related queries
+    if (lowerMessage.contains('weather') ||
+        lowerMessage.contains('temperature') ||
+        lowerMessage.contains('forecast') ||
+        lowerMessage.contains('rain') ||
+        lowerMessage.contains('sunny') ||
+        lowerMessage.contains('cold') ||
+        lowerMessage.contains('hot')) {
+      return "🌤️ I don't have access to weather information. I'm designed to help with tasks, reminders, notes, expenses, and workout tracking. For weather updates, try checking a weather app or website!";
+    }
+
+    // Check for time/date queries
+    if (lowerMessage.contains('what time') ||
+        lowerMessage.contains('current time') ||
+        lowerMessage.contains('what day') ||
+        lowerMessage.contains('what date') ||
+        lowerMessage.contains('today is') ||
+        lowerMessage.contains('day of the week')) {
+      return "🕐 I can help you schedule tasks and reminders, but I can't tell you the current time or date. Check your device's clock or calendar app!";
+    }
+
+    // Check for calculator/math queries
+    if (lowerMessage.contains('calculate') ||
+        lowerMessage.contains('math') ||
+        lowerMessage.contains('add') ||
+        lowerMessage.contains('subtract') ||
+        lowerMessage.contains('multiply') ||
+        lowerMessage.contains('divide') ||
+        lowerMessage.contains('+') ||
+        lowerMessage.contains('-') ||
+        lowerMessage.contains('*') ||
+        lowerMessage.contains('/')) {
+      return "🧮 I can help you log expenses, but I'm not a calculator. Try using your device's calculator app for math calculations!";
+    }
+
+    // Check for web search queries
+    if (lowerMessage.contains('search') ||
+        lowerMessage.contains('google') ||
+        lowerMessage.contains('find') ||
+        lowerMessage.contains('look up') ||
+        lowerMessage.contains('what is') ||
+        lowerMessage.contains('who is')) {
+      return "🔍 I can't search the web or provide general information. I'm focused on helping you manage tasks, reminders, notes, expenses, and workouts. Try a search engine for general queries!";
+    }
+
+    // Check for entertainment queries
+    if (lowerMessage.contains('joke') ||
+        lowerMessage.contains('funny') ||
+        lowerMessage.contains('entertain') ||
+        lowerMessage.contains('play') ||
+        lowerMessage.contains('game') ||
+        lowerMessage.contains('music')) {
+      return "🎭 I'm designed to help you stay organized and productive. I can't provide entertainment, jokes, or games. Try a dedicated entertainment app!";
+    }
+
+    // Check for personal questions
+    if (lowerMessage.contains('how are you') ||
+        lowerMessage.contains('your name') ||
+        lowerMessage.contains('who are you') ||
+        lowerMessage.contains('about you')) {
+      return "👋 I'm Loggit, your AI assistant for managing tasks, reminders, notes, expenses, and workouts. I'm here to help you stay organized and productive!";
+    }
+
+    // Default helpful message
+    return "🤔 I understand you're asking about something, but I'm specifically designed to help with:\n\n"
+            "📋 Tasks and reminders\n" +
+        "📝 Notes and organization\n" +
+        "💰 Expense tracking\n" +
+        "💪 Workout logging\n\n" +
+        "Try asking me to help with one of these instead!";
+  }
 }
 
 // Profile bottom sheet widgets
@@ -5154,10 +6193,6 @@ class _ChatMessage {
     this.isConfirmation = false,
     this.onConfirmationResponse,
     this.pendingLogEntry,
-    this.isReminderList = false,
-    this.reminderList,
-    this.isDeleteMode = false,
-    this.originalSearchTerm,
     this.canConfirm = true,
     this.showEdit = false,
     this.customWidget,
@@ -5538,7 +6573,7 @@ class _ReminderBubble extends StatelessWidget {
     final minute = reminderTime.minute;
     final ampm = hour >= 12 ? 'PM' : 'AM';
     final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
-    final timeStr = '${displayHour}:${minute.toString().padLeft(2, '0')} $ampm';
+    final timeStr = '$displayHour:${minute.toString().padLeft(2, '0')} $ampm';
 
     return '$dateStr at $timeStr';
   }
@@ -5693,6 +6728,6 @@ class _TaskBubble extends StatelessWidget {
     final minute = timeOfDay.minute;
     final ampm = hour >= 12 ? 'PM' : 'AM';
     final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
-    return '${displayHour}:${minute.toString().padLeft(2, '0')} $ampm';
+    return '$displayHour:${minute.toString().padLeft(2, '0')} $ampm';
   }
 }

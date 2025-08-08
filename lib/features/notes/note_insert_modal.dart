@@ -16,7 +16,7 @@ class NoteInsertModal extends StatefulWidget {
 class _NoteInsertModalState extends State<NoteInsertModal>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  InsertTab _selectedTab = InsertTab.camera;
+  final InsertTab _selectedTab = InsertTab.camera;
   int _selectedTopButton = -1; // -1 means none selected
 
   @override

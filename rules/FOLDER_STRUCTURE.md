@@ -21,6 +21,61 @@
 
 ### 🎯 **Scope Files to Maintain**
 
+# File Size Monitoring and Prevention Rule
+
+## CRITICAL: File Size Limits and Reminders
+
+**MANDATORY:** During any development work, you MUST monitor file sizes and remind the user when files are approaching or exceeding limits.
+
+### ✅ **File Size Limits (STRICT)**
+- **Widget files: MAXIMUM 200 lines**
+- **Service files: MAXIMUM 300 lines**
+- **Model files: MAXIMUM 150 lines**
+- **Modal files: MAXIMUM 200 lines**
+- **Screen files: MAXIMUM 200 lines**
+
+### 🚨 **When to Alert the User**
+- **File reaches 150 lines** → "⚠️ This file is approaching the 200-line limit. Should we split it?"
+- **File reaches 180 lines** → "🚨 This file is close to the 200-line limit. We need to split it soon."
+- **File exceeds 200 lines** → "🚨 CRITICAL: This file exceeds the 200-line limit. We MUST split it immediately."
+
+### 📋 **Reminder Process**
+1. **Check file size** before making any edits
+2. **Alert user** when approaching limits
+3. **Suggest splitting** with specific recommendations
+4. **Ask for permission** before creating new files
+5. **Follow up** if user agrees to split
+
+### 🎯 **Splitting Recommendations**
+When a file needs splitting, suggest:
+- **What to extract** (specific functionality)
+- **New file name** (descriptive and clear)
+- **Folder location** (following structure rules)
+- **Dependencies** (what other files need to change)
+
+### 📝 **Example Alerts**
+```
+⚠️ ALERT: notes_screen.dart is now 180 lines. 
+Should we split the category management into a separate widget?
+
+🚨 CRITICAL: note_view_screen.dart is now 250 lines.
+We MUST split the text formatting logic into a separate file.
+```
+
+### 🔄 **Continuous Monitoring**
+- **Check file sizes** at the start of each development session
+- **Monitor during edits** - stop if approaching limits
+- **Review after changes** - ensure limits weren't exceeded
+- **Document violations** - note when rules are broken
+
+### 📁 **Prevention Strategy**
+- **Plan file structure** before starting new features
+- **Split early** - don't wait until files are too large
+- **Use proper folder structure** from the beginning
+- **Create focused files** with single responsibilities
+
+---
+
 # Folder Structure Rules
 
 ## HTML Files
@@ -85,8 +140,8 @@ This way, Cursor will know exactly where to place each type of file, keeping you
 # Page Isolation Rule
 
 - Each page must have its own widget and its own functions.
-- Any logic, state, or function that is only used by a page should be defined within that page’s file or subfolder.
-- Changes to one page’s code should not affect other pages unless explicitly intended (e.g., via shared widgets or services).
+- Any logic, state, or function that is only used by a page should be defined within that page's file or subfolder.
+- Changes to one page's code should not affect other pages unless explicitly intended (e.g., via shared widgets or services).
 - Shared code should be placed in `shared/` or a dedicated shared location, and only imported where needed.
 - This ensures that working on one page will not break or change the behavior of other pages.
 

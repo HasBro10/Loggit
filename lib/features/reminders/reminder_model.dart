@@ -27,6 +27,9 @@ class Reminder implements LogEntry {
   final List<int>? customDays; // 1=Mon, 7=Sun
   final int? interval; // for every N days/weeks/months
   final DateTime? endDate;
+  // Duration fields for limited repeats
+  final int? repeatDuration; // Number of occurrences
+  final String? repeatDurationType; // "days", "weeks", "months"
   // Snooze field
   final DateTime? snoozedUntil;
 
@@ -42,6 +45,8 @@ class Reminder implements LogEntry {
     this.customDays,
     this.interval,
     this.endDate,
+    this.repeatDuration,
+    this.repeatDurationType,
     this.snoozedUntil,
   });
 
@@ -57,6 +62,8 @@ class Reminder implements LogEntry {
     List<int>? customDays,
     int? interval,
     DateTime? endDate,
+    int? repeatDuration,
+    String? repeatDurationType,
     DateTime? snoozedUntil,
   }) {
     return Reminder(
@@ -71,6 +78,8 @@ class Reminder implements LogEntry {
       customDays: customDays ?? this.customDays,
       interval: interval ?? this.interval,
       endDate: endDate ?? this.endDate,
+      repeatDuration: repeatDuration ?? this.repeatDuration,
+      repeatDurationType: repeatDurationType ?? this.repeatDurationType,
       snoozedUntil: snoozedUntil ?? this.snoozedUntil,
     );
   }
@@ -89,6 +98,8 @@ class Reminder implements LogEntry {
       'customDays': customDays,
       'interval': interval,
       'endDate': endDate?.toIso8601String(),
+      'repeatDuration': repeatDuration,
+      'repeatDurationType': repeatDurationType,
       'snoozedUntil': snoozedUntil?.toIso8601String(),
     };
   }
@@ -114,6 +125,8 @@ class Reminder implements LogEntry {
           : null,
       interval: json['interval'],
       endDate: json['endDate'] != null ? DateTime.parse(json['endDate']) : null,
+      repeatDuration: json['repeatDuration'],
+      repeatDurationType: json['repeatDurationType'],
       snoozedUntil: json['snoozedUntil'] != null
           ? DateTime.parse(json['snoozedUntil'])
           : null,

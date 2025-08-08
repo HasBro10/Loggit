@@ -61,7 +61,7 @@ class LogParserService {
                 )
               : null,
           priority: tasks.TaskPriority.medium,
-          status: tasks.TaskStatus.notStarted,
+          status: tasks.TaskStatus.inProgress,
           reminder: tasks.ReminderType.none,
           category: parsed.category,
           timestamp: DateTime.now(),
@@ -640,326 +640,302 @@ class LogParserService {
             }
 
             // Clean up action by removing trigger phrases and common fillers
-            if (action != null) {
-              // Remove trigger phrases from the beginning
-              action = action.replaceFirst(
-                RegExp(
-                  r'^(add|set|create|new|schedule|put|set up|add a|create a|set up a)\s+(reminder|a reminder)?\s*',
-                  caseSensitive: false,
-                ),
-                '',
-              );
+            // Remove trigger phrases from the beginning
+            action = action.replaceFirst(
+              RegExp(
+                r'^(add|set|create|new|schedule|put|set up|add a|create a|set up a)\s+(reminder|a reminder)?\s*',
+                caseSensitive: false,
+              ),
+              '',
+            );
 
-              // Remove "reminder" word if it appears
-              action = action.replaceAll(
-                RegExp(r'\breminder\b', caseSensitive: false),
-                '',
-              );
+            // Remove "reminder" word if it appears
+            action = action.replaceAll(
+              RegExp(r'\breminder\b', caseSensitive: false),
+              '',
+            );
 
-              // Remove task-specific trigger phrases
-              action = action.replaceFirst(
-                RegExp(
-                  r'^(add|set|create|new|schedule|put|set up|add a|create a|set up a)\s+(task|todo|item|a task|a todo|an item)?\s*',
-                  caseSensitive: false,
-                ),
-                '',
-              );
+            // Remove task-specific trigger phrases
+            action = action.replaceFirst(
+              RegExp(
+                r'^(add|set|create|new|schedule|put|set up|add a|create a|set up a)\s+(task|todo|item|a task|a todo|an item)?\s*',
+                caseSensitive: false,
+              ),
+              '',
+            );
 
-              // Remove "task", "todo", "item" words if they appear
-              action = action.replaceAll(
-                RegExp(r'\b(task|todo|item)\b', caseSensitive: false),
-                '',
-              );
+            // Remove "task", "todo", "item" words if they appear
+            action = action.replaceAll(
+              RegExp(r'\b(task|todo|item)\b', caseSensitive: false),
+              '',
+            );
 
-              // Remove leading "a" or "an" if it's followed by a space
-              action = action.replaceFirst(
-                RegExp(r'^(a|an)\s+', caseSensitive: false),
-                '',
-              );
+            // Remove leading "a" or "an" if it's followed by a space
+            action = action.replaceFirst(
+              RegExp(r'^(a|an)\s+', caseSensitive: false),
+              '',
+            );
 
-              // Clean up extra whitespace and punctuation
-              action = action.trim().replaceAll(RegExp(r'\s+'), ' ');
-            }
+            // Clean up extra whitespace and punctuation
+            action = action.trim().replaceAll(RegExp(r'\s+'), ' ');
             print('DEBUG: Extracted action: $action');
             print('DEBUG: Extracted dateTimeStr: $dateTimeStr');
             // If 'tomorrow' is present anywhere in the input, ensure dateTimeStr includes it
             if (input.toLowerCase().contains('tomorrow')) {
               dateTimeStr =
-                  'tomorrow' +
-                  (dateTimeStr != null && dateTimeStr.isNotEmpty
-                      ? ' ' + dateTimeStr
-                      : '');
+                  'tomorrow${dateTimeStr != null && dateTimeStr.isNotEmpty ? ' ' + dateTimeStr : ''}';
               print(
                 'DEBUG: Overriding dateTimeStr to include "tomorrow": $dateTimeStr',
               );
             }
             // --- New: Post-process action for multi-sentence and filler removal ---
-            if (action != null) {
-              // 1. If input contains multiple sentences, use the last non-empty, non-date/time sentence as the action
-              final sentences = action.split(RegExp(r'[.!?]'));
-              String? candidateAction;
-              final dateTimeWords = [
-                'tomorrow',
-                'today',
-                'yesterday',
-                'tonight',
-                'morning',
-                'afternoon',
-                'evening',
-                'at',
-                'on',
-                'next',
-                'am',
-                'pm',
-              ];
-              for (var i = sentences.length - 1; i >= 0; i--) {
-                final s = sentences[i].trim();
-                // Skip empty or date/time-only sentences
-                if (s.isEmpty) continue;
-                final isDateTimeOnly = dateTimeWords.any(
-                  (w) =>
-                      RegExp(
-                        '^' + w + r'(\s|$)',
-                        caseSensitive: false,
-                      ).hasMatch(s) &&
-                      s
-                          .replaceAll(RegExp(w, caseSensitive: false), '')
-                          .trim()
-                          .isEmpty,
-                );
-                if (!isDateTimeOnly) {
-                  candidateAction = s;
-                  break;
-                }
-              }
-              if (candidateAction != null && candidateAction.isNotEmpty) {
-                action = candidateAction;
-              }
-              // 2. Remove leading filler phrases
-              action = action.replaceFirst(
-                RegExp(
-                  r'^(i need to|i have to|i must|please|can you|could you|would you|i want to|i should|i will|i am going to|i gotta|i got to|i ought to|i wish to|i plan to|i intend to|i would like to)\s+',
-                  caseSensitive: false,
-                ),
-                '',
-              );
-              // 3. Remove all standalone date/time words (e.g., 'tomorrow', 'at 2 pm', etc.)
-              action = action
-                  .replaceAll(
+            // 1. If input contains multiple sentences, use the last non-empty, non-date/time sentence as the action
+            final sentences = action.split(RegExp(r'[.!?]'));
+            String? candidateAction;
+            final dateTimeWords = [
+              'tomorrow',
+              'today',
+              'yesterday',
+              'tonight',
+              'morning',
+              'afternoon',
+              'evening',
+              'at',
+              'on',
+              'next',
+              'am',
+              'pm',
+            ];
+            for (var i = sentences.length - 1; i >= 0; i--) {
+              final s = sentences[i].trim();
+              // Skip empty or date/time-only sentences
+              if (s.isEmpty) continue;
+              final isDateTimeOnly = dateTimeWords.any(
+                (w) =>
                     RegExp(
-                      r'\b(tomorrow|today|yesterday|tonight|morning|afternoon|evening|at\s+\d{1,2}(:\d{2})?\s*(am|pm)?|on\s+\w+|\d{1,2}(st|nd|rd|th)?|next\s+\w+|am|pm)\b',
+                      '^' + w + r'(\s|$)',
                       caseSensitive: false,
-                    ),
-                    '',
-                  )
-                  .trim();
-              // 4. Remove any leading/trailing punctuation or whitespace
-              action = action.replaceAll(
-                RegExp(r'^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$'),
-                '',
+                    ).hasMatch(s) &&
+                    s
+                        .replaceAll(RegExp(w, caseSensitive: false), '')
+                        .trim()
+                        .isEmpty,
               );
+              if (!isDateTimeOnly) {
+                candidateAction = s;
+                break;
+              }
             }
+            if (candidateAction != null && candidateAction.isNotEmpty) {
+              action = candidateAction;
+            }
+            // 2. Remove leading filler phrases
+            action = action.replaceFirst(
+              RegExp(
+                r'^(i need to|i have to|i must|please|can you|could you|would you|i want to|i should|i will|i am going to|i gotta|i got to|i ought to|i wish to|i plan to|i intend to|i would like to)\s+',
+                caseSensitive: false,
+              ),
+              '',
+            );
+            // 3. Remove all standalone date/time words (e.g., 'tomorrow', 'at 2 pm', etc.)
+            action = action
+                .replaceAll(
+                  RegExp(
+                    r'\b(tomorrow|today|yesterday|tonight|morning|afternoon|evening|at\s+\d{1,2}(:\d{2})?\s*(am|pm)?|on\s+\w+|\d{1,2}(st|nd|rd|th)?|next\s+\w+|am|pm)\b',
+                    caseSensitive: false,
+                  ),
+                  '',
+                )
+                .trim();
+            // 4. Remove any leading/trailing punctuation or whitespace
+            action = action.replaceAll(
+              RegExp(r'^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$'),
+              '',
+            );
             // --- End enhanced action extraction ---
             // Semantic mapping for natural titles
-            if (action != null) {
-              final actionMappings = {
-                RegExp(r'go to the doctor(s)?', caseSensitive: false):
-                    "doctor's appointment",
-                RegExp(r'go to the dentist', caseSensitive: false):
-                    "dentist appointment",
-                RegExp(r'car wash', caseSensitive: false): "car wash",
-                RegExp(r'meet (a )?friend(s)?', caseSensitive: false):
-                    "meet with friends",
-                RegExp(r'restaurant|dinner reservation', caseSensitive: false):
-                    "restaurant reservation",
-                RegExp(r'work meeting|team meeting', caseSensitive: false):
-                    "work meeting",
-                RegExp(r'buy groceries|grocery shopping', caseSensitive: false):
-                    "grocery shopping",
-                RegExp(r'call (.+)', caseSensitive: false): (Match m) =>
-                    "call ${m.group(1)}",
-                RegExp(r'email (.+)', caseSensitive: false): (Match m) =>
-                    "email ${m.group(1)}",
-                RegExp(r'pay bills?', caseSensitive: false): "pay bills",
-                RegExp(r'pick up (kids?|child)', caseSensitive: false):
-                    "pick up kids",
-                RegExp(r'walk the dog', caseSensitive: false): "walk the dog",
-                RegExp(r'take medicine|take pills', caseSensitive: false):
-                    "take medicine",
-                RegExp(r'birthday( party)?', caseSensitive: false):
-                    "birthday party",
-                RegExp(r'anniversary( dinner)?', caseSensitive: false):
-                    "anniversary",
-                RegExp(r'gym|workout|exercise', caseSensitive: false):
-                    "gym session",
-                RegExp(r'laundry|do laundry', caseSensitive: false): "laundry",
-                RegExp(r'clean (house|the house)', caseSensitive: false):
-                    "clean house",
-                RegExp(r'study( session)?', caseSensitive: false):
-                    "study session",
-                RegExp(r'submit report|send report', caseSensitive: false):
-                    "submit report",
-                RegExp(
-                  r'renew (insurance|car insurance)',
-                  caseSensitive: false,
-                ): "renew insurance",
-                RegExp(r'pay rent', caseSensitive: false): "pay rent",
-                RegExp(r'book (flight|hotel)', caseSensitive: false):
-                    "book travel",
-                RegExp(r'grocery delivery', caseSensitive: false):
-                    "grocery delivery",
-                RegExp(r'hair (appointment|cut|haircut)', caseSensitive: false):
-                    "hair appointment",
-                RegExp(r'vet appointment', caseSensitive: false):
-                    "vet appointment",
-                RegExp(r'parent(-| )teacher meeting', caseSensitive: false):
-                    "parent-teacher meeting",
-                RegExp(r'shopping|go shopping', caseSensitive: false):
-                    "shopping",
-                RegExp(r'movie night|go to the movies', caseSensitive: false):
-                    "movie night",
-                RegExp(r'pick up (parcel|package)', caseSensitive: false):
-                    "pick up parcel",
-                RegExp(r'dentist cleaning', caseSensitive: false):
-                    "dentist appointment",
-                RegExp(r'oil change', caseSensitive: false): "car maintenance",
-                RegExp(r'renew passport', caseSensitive: false):
-                    "renew passport",
-                RegExp(r'pay credit card', caseSensitive: false):
-                    "pay credit card",
-                RegExp(r'send flowers', caseSensitive: false): "send flowers",
-                RegExp(r'volunteer(ing)?', caseSensitive: false):
-                    "volunteering",
-                RegExp(r'meditation|meditate', caseSensitive: false):
-                    "meditation",
-                RegExp(r'yoga class', caseSensitive: false): "yoga class",
-                RegExp(r'book club', caseSensitive: false): "book club",
-                RegExp(r'parent meeting', caseSensitive: false):
-                    "parent meeting",
-                RegExp(
-                  r'soccer practice|football practice',
-                  caseSensitive: false,
-                ): "soccer practice",
-                RegExp(r'piano lesson|music lesson', caseSensitive: false):
-                    "music lesson",
-                RegExp(r'library visit', caseSensitive: false): "library visit",
-                RegExp(r'walk the cat', caseSensitive: false): "walk the cat",
-                RegExp(r'feed the (dog|cat|pets?)', caseSensitive: false):
-                    "feed pets",
-                RegExp(r'change lightbulb', caseSensitive: false):
-                    "change lightbulb",
-                RegExp(r'water (plants|the plants)', caseSensitive: false):
-                    "water plants",
-                RegExp(r'charge (phone|laptop|device)', caseSensitive: false):
-                    "charge device",
-                RegExp(r'backup (phone|computer|device)', caseSensitive: false):
-                    "backup device",
-                RegExp(r'update (software|app)', caseSensitive: false):
-                    "update software",
-                RegExp(r'car (mot|inspection)', caseSensitive: false):
-                    "car inspection",
-                RegExp(r'renew driving license', caseSensitive: false):
-                    "renew driving license",
-                RegExp(r'pay parking ticket', caseSensitive: false):
-                    "pay parking ticket",
-                RegExp(r'dentist checkup', caseSensitive: false):
-                    "dentist appointment",
-                RegExp(r'eye exam|optician appointment', caseSensitive: false):
-                    "eye exam",
-                RegExp(r'get groceries delivered', caseSensitive: false):
-                    "grocery delivery",
-                RegExp(r'take out (trash|rubbish)', caseSensitive: false):
-                    "take out trash",
-                RegExp(r'recycling day', caseSensitive: false): "recycling day",
-                RegExp(r'meal prep|meal planning', caseSensitive: false):
-                    "meal prep",
-                RegExp(r'pack lunch', caseSensitive: false): "pack lunch",
-                RegExp(r'school run', caseSensitive: false): "school run",
-                RegExp(r'after school club', caseSensitive: false):
-                    "after school club",
-                RegExp(r'football match|soccer match', caseSensitive: false):
-                    "football match",
-                RegExp(r'swimming lesson', caseSensitive: false):
-                    "swimming lesson",
-                RegExp(r'driving lesson', caseSensitive: false):
-                    "driving lesson",
-                RegExp(
-                  r'renew netflix|renew subscription',
-                  caseSensitive: false,
-                ): "renew subscription",
-                RegExp(r'pay council tax', caseSensitive: false):
-                    "pay council tax",
-                RegExp(r'pay water bill', caseSensitive: false):
-                    "pay water bill",
-                RegExp(r'pay electricity bill', caseSensitive: false):
-                    "pay electricity bill",
-                RegExp(r'pay gas bill', caseSensitive: false): "pay gas bill",
-                RegExp(r'pay phone bill', caseSensitive: false):
-                    "pay phone bill",
-                RegExp(r'pay internet bill', caseSensitive: false):
-                    "pay internet bill",
-                RegExp(r'pay tv license', caseSensitive: false):
-                    "pay TV license",
-                RegExp(r'pay insurance', caseSensitive: false): "pay insurance",
-                RegExp(r'pay mortgage', caseSensitive: false): "pay mortgage",
-                RegExp(r'pay loan', caseSensitive: false): "pay loan",
-                RegExp(r'pay tuition', caseSensitive: false): "pay tuition",
-                RegExp(r'pay childcare', caseSensitive: false): "pay childcare",
-                RegExp(r'pay gym membership', caseSensitive: false):
-                    "pay gym membership",
-                RegExp(r'pay club fees', caseSensitive: false): "pay club fees",
-                RegExp(r'pay subscription', caseSensitive: false):
-                    "pay subscription",
-                // Dynamic patterns
-                RegExp(r'meet (with )?(.+)', caseSensitive: false): (Match m) =>
-                    "meet ${m.group(2)}",
-                RegExp(r'lunch with (.+)', caseSensitive: false): (Match m) =>
-                    "lunch with ${m.group(1)}",
-                RegExp(r'dinner with (.+)', caseSensitive: false): (Match m) =>
-                    "dinner with ${m.group(1)}",
-                RegExp(r'coffee with (.+)', caseSensitive: false): (Match m) =>
-                    "coffee with ${m.group(1)}",
-                RegExp(r'visit (.+)', caseSensitive: false): (Match m) =>
-                    "visit ${m.group(1)}",
-                RegExp(r'pick up (.+)', caseSensitive: false): (Match m) =>
-                    "pick up ${m.group(1)}",
-                RegExp(r'drop off (.+)', caseSensitive: false): (Match m) =>
-                    "drop off ${m.group(1)}",
-                RegExp(r'return (.+)', caseSensitive: false): (Match m) =>
-                    "return ${m.group(1)}",
-                RegExp(r'send (.+) to (.+)', caseSensitive: false): (Match m) =>
-                    "send ${m.group(1)} to ${m.group(2)}",
-                RegExp(r'book (.+)', caseSensitive: false): (Match m) =>
-                    "book ${m.group(1)}",
-                RegExp(r'order (.+)', caseSensitive: false): (Match m) =>
-                    "order ${m.group(1)}",
-                RegExp(r'collect (.+)', caseSensitive: false): (Match m) =>
-                    "collect ${m.group(1)}",
-                RegExp(r'deliver (.+)', caseSensitive: false): (Match m) =>
-                    "deliver ${m.group(1)}",
-                RegExp(r'pay for (.+)', caseSensitive: false): (Match m) =>
-                    "pay for ${m.group(1)}",
-                RegExp(r'schedule (.+)', caseSensitive: false): (Match m) =>
-                    "schedule ${m.group(1)}",
-                RegExp(r'attend (.+)', caseSensitive: false): (Match m) =>
-                    "attend ${m.group(1)}",
-                RegExp(r'rsvp to (.+)', caseSensitive: false): (Match m) =>
-                    "RSVP to ${m.group(1)}",
-                RegExp(
-                  r'remind (.+) to (.+)',
-                  caseSensitive: false,
-                ): (Match m) =>
-                    "remind ${m.group(1)} to ${m.group(2)}",
-              };
-              for (final entry in actionMappings.entries) {
-                final reg = entry.key;
-                final val = entry.value;
-                final matchMap = reg.firstMatch(action!);
-                if (matchMap != null) {
-                  action = val is String ? val : (val as Function)(matchMap);
-                  print('DEBUG: Semantic mapping applied, new action: $action');
-                  break;
-                }
+            final actionMappings = {
+              RegExp(r'go to the doctor(s)?', caseSensitive: false):
+                  "doctor's appointment",
+              RegExp(r'go to the dentist', caseSensitive: false):
+                  "dentist appointment",
+              RegExp(r'car wash', caseSensitive: false): "car wash",
+              RegExp(r'meet (a )?friend(s)?', caseSensitive: false):
+                  "meet with friends",
+              RegExp(r'restaurant|dinner reservation', caseSensitive: false):
+                  "restaurant reservation",
+              RegExp(r'work meeting|team meeting', caseSensitive: false):
+                  "work meeting",
+              RegExp(r'buy groceries|grocery shopping', caseSensitive: false):
+                  "grocery shopping",
+              RegExp(r'call (.+)', caseSensitive: false): (Match m) =>
+                  "call ${m.group(1)}",
+              RegExp(r'email (.+)', caseSensitive: false): (Match m) =>
+                  "email ${m.group(1)}",
+              RegExp(r'pay bills?', caseSensitive: false): "pay bills",
+              RegExp(r'pick up (kids?|child)', caseSensitive: false):
+                  "pick up kids",
+              RegExp(r'walk the dog', caseSensitive: false): "walk the dog",
+              RegExp(r'take medicine|take pills', caseSensitive: false):
+                  "take medicine",
+              RegExp(r'birthday( party)?', caseSensitive: false):
+                  "birthday party",
+              RegExp(r'anniversary( dinner)?', caseSensitive: false):
+                  "anniversary",
+              RegExp(r'gym|workout|exercise', caseSensitive: false):
+                  "gym session",
+              RegExp(r'laundry|do laundry', caseSensitive: false): "laundry",
+              RegExp(r'clean (house|the house)', caseSensitive: false):
+                  "clean house",
+              RegExp(r'study( session)?', caseSensitive: false):
+                  "study session",
+              RegExp(r'submit report|send report', caseSensitive: false):
+                  "submit report",
+              RegExp(r'renew (insurance|car insurance)', caseSensitive: false):
+                  "renew insurance",
+              RegExp(r'pay rent', caseSensitive: false): "pay rent",
+              RegExp(r'book (flight|hotel)', caseSensitive: false):
+                  "book travel",
+              RegExp(r'grocery delivery', caseSensitive: false):
+                  "grocery delivery",
+              RegExp(r'hair (appointment|cut|haircut)', caseSensitive: false):
+                  "hair appointment",
+              RegExp(r'vet appointment', caseSensitive: false):
+                  "vet appointment",
+              RegExp(r'parent(-| )teacher meeting', caseSensitive: false):
+                  "parent-teacher meeting",
+              RegExp(r'shopping|go shopping', caseSensitive: false): "shopping",
+              RegExp(r'movie night|go to the movies', caseSensitive: false):
+                  "movie night",
+              RegExp(r'pick up (parcel|package)', caseSensitive: false):
+                  "pick up parcel",
+              RegExp(r'dentist cleaning', caseSensitive: false):
+                  "dentist appointment",
+              RegExp(r'oil change', caseSensitive: false): "car maintenance",
+              RegExp(r'renew passport', caseSensitive: false): "renew passport",
+              RegExp(r'pay credit card', caseSensitive: false):
+                  "pay credit card",
+              RegExp(r'send flowers', caseSensitive: false): "send flowers",
+              RegExp(r'volunteer(ing)?', caseSensitive: false): "volunteering",
+              RegExp(r'meditation|meditate', caseSensitive: false):
+                  "meditation",
+              RegExp(r'yoga class', caseSensitive: false): "yoga class",
+              RegExp(r'book club', caseSensitive: false): "book club",
+              RegExp(r'parent meeting', caseSensitive: false): "parent meeting",
+              RegExp(
+                r'soccer practice|football practice',
+                caseSensitive: false,
+              ): "soccer practice",
+              RegExp(r'piano lesson|music lesson', caseSensitive: false):
+                  "music lesson",
+              RegExp(r'library visit', caseSensitive: false): "library visit",
+              RegExp(r'walk the cat', caseSensitive: false): "walk the cat",
+              RegExp(r'feed the (dog|cat|pets?)', caseSensitive: false):
+                  "feed pets",
+              RegExp(r'change lightbulb', caseSensitive: false):
+                  "change lightbulb",
+              RegExp(r'water (plants|the plants)', caseSensitive: false):
+                  "water plants",
+              RegExp(r'charge (phone|laptop|device)', caseSensitive: false):
+                  "charge device",
+              RegExp(r'backup (phone|computer|device)', caseSensitive: false):
+                  "backup device",
+              RegExp(r'update (software|app)', caseSensitive: false):
+                  "update software",
+              RegExp(r'car (mot|inspection)', caseSensitive: false):
+                  "car inspection",
+              RegExp(r'renew driving license', caseSensitive: false):
+                  "renew driving license",
+              RegExp(r'pay parking ticket', caseSensitive: false):
+                  "pay parking ticket",
+              RegExp(r'dentist checkup', caseSensitive: false):
+                  "dentist appointment",
+              RegExp(r'eye exam|optician appointment', caseSensitive: false):
+                  "eye exam",
+              RegExp(r'get groceries delivered', caseSensitive: false):
+                  "grocery delivery",
+              RegExp(r'take out (trash|rubbish)', caseSensitive: false):
+                  "take out trash",
+              RegExp(r'recycling day', caseSensitive: false): "recycling day",
+              RegExp(r'meal prep|meal planning', caseSensitive: false):
+                  "meal prep",
+              RegExp(r'pack lunch', caseSensitive: false): "pack lunch",
+              RegExp(r'school run', caseSensitive: false): "school run",
+              RegExp(r'after school club', caseSensitive: false):
+                  "after school club",
+              RegExp(r'football match|soccer match', caseSensitive: false):
+                  "football match",
+              RegExp(r'swimming lesson', caseSensitive: false):
+                  "swimming lesson",
+              RegExp(r'driving lesson', caseSensitive: false): "driving lesson",
+              RegExp(r'renew netflix|renew subscription', caseSensitive: false):
+                  "renew subscription",
+              RegExp(r'pay council tax', caseSensitive: false):
+                  "pay council tax",
+              RegExp(r'pay water bill', caseSensitive: false): "pay water bill",
+              RegExp(r'pay electricity bill', caseSensitive: false):
+                  "pay electricity bill",
+              RegExp(r'pay gas bill', caseSensitive: false): "pay gas bill",
+              RegExp(r'pay phone bill', caseSensitive: false): "pay phone bill",
+              RegExp(r'pay internet bill', caseSensitive: false):
+                  "pay internet bill",
+              RegExp(r'pay tv license', caseSensitive: false): "pay TV license",
+              RegExp(r'pay insurance', caseSensitive: false): "pay insurance",
+              RegExp(r'pay mortgage', caseSensitive: false): "pay mortgage",
+              RegExp(r'pay loan', caseSensitive: false): "pay loan",
+              RegExp(r'pay tuition', caseSensitive: false): "pay tuition",
+              RegExp(r'pay childcare', caseSensitive: false): "pay childcare",
+              RegExp(r'pay gym membership', caseSensitive: false):
+                  "pay gym membership",
+              RegExp(r'pay club fees', caseSensitive: false): "pay club fees",
+              RegExp(r'pay subscription', caseSensitive: false):
+                  "pay subscription",
+              // Dynamic patterns
+              RegExp(r'meet (with )?(.+)', caseSensitive: false): (Match m) =>
+                  "meet ${m.group(2)}",
+              RegExp(r'lunch with (.+)', caseSensitive: false): (Match m) =>
+                  "lunch with ${m.group(1)}",
+              RegExp(r'dinner with (.+)', caseSensitive: false): (Match m) =>
+                  "dinner with ${m.group(1)}",
+              RegExp(r'coffee with (.+)', caseSensitive: false): (Match m) =>
+                  "coffee with ${m.group(1)}",
+              RegExp(r'visit (.+)', caseSensitive: false): (Match m) =>
+                  "visit ${m.group(1)}",
+              RegExp(r'pick up (.+)', caseSensitive: false): (Match m) =>
+                  "pick up ${m.group(1)}",
+              RegExp(r'drop off (.+)', caseSensitive: false): (Match m) =>
+                  "drop off ${m.group(1)}",
+              RegExp(r'return (.+)', caseSensitive: false): (Match m) =>
+                  "return ${m.group(1)}",
+              RegExp(r'send (.+) to (.+)', caseSensitive: false): (Match m) =>
+                  "send ${m.group(1)} to ${m.group(2)}",
+              RegExp(r'book (.+)', caseSensitive: false): (Match m) =>
+                  "book ${m.group(1)}",
+              RegExp(r'order (.+)', caseSensitive: false): (Match m) =>
+                  "order ${m.group(1)}",
+              RegExp(r'collect (.+)', caseSensitive: false): (Match m) =>
+                  "collect ${m.group(1)}",
+              RegExp(r'deliver (.+)', caseSensitive: false): (Match m) =>
+                  "deliver ${m.group(1)}",
+              RegExp(r'pay for (.+)', caseSensitive: false): (Match m) =>
+                  "pay for ${m.group(1)}",
+              RegExp(r'schedule (.+)', caseSensitive: false): (Match m) =>
+                  "schedule ${m.group(1)}",
+              RegExp(r'attend (.+)', caseSensitive: false): (Match m) =>
+                  "attend ${m.group(1)}",
+              RegExp(r'rsvp to (.+)', caseSensitive: false): (Match m) =>
+                  "RSVP to ${m.group(1)}",
+              RegExp(r'remind (.+) to (.+)', caseSensitive: false): (Match m) =>
+                  "remind ${m.group(1)} to ${m.group(2)}",
+            };
+            for (final entry in actionMappings.entries) {
+              final reg = entry.key;
+              final val = entry.value;
+              final matchMap = reg.firstMatch(action!);
+              if (matchMap != null) {
+                action = val is String ? val : (val as Function)(matchMap);
+                print('DEBUG: Semantic mapping applied, new action: $action');
+                break;
               }
             }
             break;
@@ -1007,31 +983,29 @@ class LogParserService {
             }
 
             // Clean up action by removing trigger phrases and common fillers
-            if (action != null) {
-              // Remove trigger phrases from the beginning
-              action = action.replaceFirst(
-                RegExp(
-                  r'^(add|set|create|new|schedule|put|set up|add a|create a|set up a)\s+(task|todo|item|a task|a todo|an item)?\s*',
-                  caseSensitive: false,
-                ),
-                '',
-              );
+            // Remove trigger phrases from the beginning
+            action = action.replaceFirst(
+              RegExp(
+                r'^(add|set|create|new|schedule|put|set up|add a|create a|set up a)\s+(task|todo|item|a task|a todo|an item)?\s*',
+                caseSensitive: false,
+              ),
+              '',
+            );
 
-              // Remove "task", "todo", "item" words if they appear
-              action = action.replaceAll(
-                RegExp(r'\b(task|todo|item)\b', caseSensitive: false),
-                '',
-              );
+            // Remove "task", "todo", "item" words if they appear
+            action = action.replaceAll(
+              RegExp(r'\b(task|todo|item)\b', caseSensitive: false),
+              '',
+            );
 
-              // Remove leading "a" or "an" if it's followed by a space
-              action = action.replaceFirst(
-                RegExp(r'^(a|an)\s+', caseSensitive: false),
-                '',
-              );
+            // Remove leading "a" or "an" if it's followed by a space
+            action = action.replaceFirst(
+              RegExp(r'^(a|an)\s+', caseSensitive: false),
+              '',
+            );
 
-              // Clean up extra whitespace and punctuation
-              action = action.trim().replaceAll(RegExp(r'\s+'), ' ');
-            }
+            // Clean up extra whitespace and punctuation
+            action = action.trim().replaceAll(RegExp(r'\s+'), ' ');
 
             print('DEBUG: [TASK] Extracted action: $action');
             print('DEBUG: [TASK] Extracted dateTimeStr: $dateTimeStr');
@@ -1039,84 +1013,79 @@ class LogParserService {
             // If 'tomorrow' is present anywhere in the input, ensure dateTimeStr includes it
             if (input.toLowerCase().contains('tomorrow')) {
               dateTimeStr =
-                  'tomorrow' +
-                  (dateTimeStr != null && dateTimeStr.isNotEmpty
-                      ? ' ' + dateTimeStr
-                      : '');
+                  'tomorrow${dateTimeStr != null && dateTimeStr.isNotEmpty ? ' ' + dateTimeStr : ''}';
               print(
                 'DEBUG: [TASK] Overriding dateTimeStr to include "tomorrow": $dateTimeStr',
               );
             }
 
             // Post-process action for multi-sentence and filler removal
-            if (action != null) {
-              // 1. If input contains multiple sentences, use the last non-empty, non-date/time sentence as the action
-              final sentences = action.split(RegExp(r'[.!?]'));
-              String? candidateAction;
-              final dateTimeWords = [
-                'tomorrow',
-                'today',
-                'yesterday',
-                'tonight',
-                'morning',
-                'afternoon',
-                'evening',
-                'at',
-                'on',
-                'next',
-                'am',
-                'pm',
-              ];
-              for (var i = sentences.length - 1; i >= 0; i--) {
-                final s = sentences[i].trim();
-                // Skip empty or date/time-only sentences
-                if (s.isEmpty) continue;
-                final isDateTimeOnly = dateTimeWords.any(
-                  (w) =>
-                      RegExp(
-                        '^' + w + r'(\s|$)',
-                        caseSensitive: false,
-                      ).hasMatch(s) &&
-                      s
-                          .replaceAll(RegExp(w, caseSensitive: false), '')
-                          .trim()
-                          .isEmpty,
-                );
-                if (!isDateTimeOnly) {
-                  candidateAction = s;
-                  break;
-                }
-              }
-              if (candidateAction != null && candidateAction.isNotEmpty) {
-                action = candidateAction;
-              }
-
-              // 2. Remove leading filler phrases
-              action = action.replaceFirst(
-                RegExp(
-                  r'^(i need to|i have to|i must|please|can you|could you|would you|i want to|i should|i will|i am going to|i gotta|i got to|i ought to|i wish to|i plan to|i intend to|i would like to)\s+',
-                  caseSensitive: false,
-                ),
-                '',
-              );
-
-              // 3. Remove all standalone date/time words
-              action = action
-                  .replaceAll(
+            // 1. If input contains multiple sentences, use the last non-empty, non-date/time sentence as the action
+            final sentences = action.split(RegExp(r'[.!?]'));
+            String? candidateAction;
+            final dateTimeWords = [
+              'tomorrow',
+              'today',
+              'yesterday',
+              'tonight',
+              'morning',
+              'afternoon',
+              'evening',
+              'at',
+              'on',
+              'next',
+              'am',
+              'pm',
+            ];
+            for (var i = sentences.length - 1; i >= 0; i--) {
+              final s = sentences[i].trim();
+              // Skip empty or date/time-only sentences
+              if (s.isEmpty) continue;
+              final isDateTimeOnly = dateTimeWords.any(
+                (w) =>
                     RegExp(
-                      r'\b(tomorrow|today|yesterday|tonight|morning|afternoon|evening|at\s+\d{1,2}(:\d{2})?\s*(am|pm)?|on\s+\w+|\d{1,2}(st|nd|rd|th)?|next\s+\w+|am|pm)\b',
+                      '^' + w + r'(\s|$)',
                       caseSensitive: false,
-                    ),
-                    '',
-                  )
-                  .trim();
-
-              // 4. Remove any leading/trailing punctuation or whitespace
-              action = action.replaceAll(
-                RegExp(r'^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$'),
-                '',
+                    ).hasMatch(s) &&
+                    s
+                        .replaceAll(RegExp(w, caseSensitive: false), '')
+                        .trim()
+                        .isEmpty,
               );
+              if (!isDateTimeOnly) {
+                candidateAction = s;
+                break;
+              }
             }
+            if (candidateAction != null && candidateAction.isNotEmpty) {
+              action = candidateAction;
+            }
+
+            // 2. Remove leading filler phrases
+            action = action.replaceFirst(
+              RegExp(
+                r'^(i need to|i have to|i must|please|can you|could you|would you|i want to|i should|i will|i am going to|i gotta|i got to|i ought to|i wish to|i plan to|i intend to|i would like to)\s+',
+                caseSensitive: false,
+              ),
+              '',
+            );
+
+            // 3. Remove all standalone date/time words
+            action = action
+                .replaceAll(
+                  RegExp(
+                    r'\b(tomorrow|today|yesterday|tonight|morning|afternoon|evening|at\s+\d{1,2}(:\d{2})?\s*(am|pm)?|on\s+\w+|\d{1,2}(st|nd|rd|th)?|next\s+\w+|am|pm)\b',
+                    caseSensitive: false,
+                  ),
+                  '',
+                )
+                .trim();
+
+            // 4. Remove any leading/trailing punctuation or whitespace
+            action = action.replaceAll(
+              RegExp(r'^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$'),
+              '',
+            );
             break;
           case LogType.expense:
             amountStr = match.group(2)?.trim();
@@ -1196,7 +1165,7 @@ class LogParserService {
       'dec',
     ];
     // Helper to get month index from string
-    int _parseMonth(String monthStr) {
+    int parseMonth(String monthStr) {
       monthStr = monthStr.toLowerCase();
       int idx = monthNames.indexOf(monthStr);
       if (idx != -1) return idx + 1;
@@ -1270,7 +1239,7 @@ class LogParserService {
           }
           if (match.groupCount >= 3 && match.group(3) != null) {
             String monthStr = match.group(3)!.toLowerCase();
-            month = _parseMonth(monthStr);
+            month = parseMonth(monthStr);
             if (month < 1 || month > 12) {
               print('DEBUG: Invalid month parsed: [31m$monthStr -> $month [0m');
               return _DateTimeWithFlag(null, false);
@@ -1316,7 +1285,7 @@ class LogParserService {
               return _DateTimeWithFlag(null, false);
             }
             String monthStr = match.group(7)!.toLowerCase();
-            month = _parseMonth(monthStr);
+            month = parseMonth(monthStr);
             if (month < 1 || month > 12) {
               print(
                 'DEBUG: Invalid month parsed: '
@@ -1327,7 +1296,7 @@ class LogParserService {
           } else {
             // 6 pm July 15
             String monthStr = match.group(5)!.toLowerCase();
-            month = _parseMonth(monthStr);
+            month = parseMonth(monthStr);
             if (month < 1 || month > 12) {
               print(
                 'DEBUG: Invalid month parsed: '
@@ -1366,7 +1335,7 @@ class LogParserService {
               return _DateTimeWithFlag(null, false);
             }
             String monthStr = match.group(7)!.toLowerCase();
-            month = _parseMonth(monthStr);
+            month = parseMonth(monthStr);
             if (month < 1 || month > 12) {
               print(
                 'DEBUG: Invalid month parsed: '
@@ -1383,7 +1352,7 @@ class LogParserService {
               return _DateTimeWithFlag(null, false);
             }
             String monthStr = match.group(3)!.toLowerCase();
-            month = _parseMonth(monthStr);
+            month = parseMonth(monthStr);
             if (month < 1 || month > 12) {
               print(
                 'DEBUG: Invalid month parsed: '
@@ -1415,7 +1384,7 @@ class LogParserService {
               return _DateTimeWithFlag(null, false);
             }
             String monthStr = match.group(3)!.toLowerCase();
-            month = _parseMonth(monthStr);
+            month = parseMonth(monthStr);
             if (month < 1 || month > 12) {
               print(
                 'DEBUG: Invalid month parsed: '
@@ -1437,7 +1406,7 @@ class LogParserService {
             hasTime = true;
           } else {
             String monthStr = match.group(1)!.toLowerCase();
-            month = _parseMonth(monthStr);
+            month = parseMonth(monthStr);
             if (month < 1 || month > 12) {
               print(
                 'DEBUG: Invalid month parsed: '
@@ -1535,7 +1504,7 @@ class LogParserService {
         return _DateTimeWithFlag(null, false);
       }
       String monthStr = match.group(3)!.toLowerCase();
-      month = _parseMonth(monthStr);
+      month = parseMonth(monthStr);
       if (month < 1 || month > 12) {
         print(
           'DEBUG: Invalid month parsed: '
@@ -1575,7 +1544,7 @@ class LogParserService {
       int minute = 0;
       bool hasTime = false;
       String monthStr = match.group(1)!.toLowerCase();
-      month = _parseMonth(monthStr);
+      month = parseMonth(monthStr);
       if (month < 1 || month > 12) {
         print(
           'DEBUG: Invalid month parsed: '
@@ -1651,7 +1620,7 @@ class LogParserService {
         return _DateTimeWithFlag(null, false);
       }
       String monthStr = match.group(7)!.toLowerCase();
-      month = _parseMonth(monthStr);
+      month = parseMonth(monthStr);
       if (month < 1 || month > 12) {
         print(
           'DEBUG: Invalid month parsed: '
@@ -1682,7 +1651,7 @@ class LogParserService {
       if (ampm == 'pm' && hour < 12) hour += 12;
       if (ampm == 'am' && hour == 12) hour = 0;
       String monthStr = match.group(5)!.toLowerCase();
-      month = _parseMonth(monthStr);
+      month = parseMonth(monthStr);
       if (month < 1 || month > 12) {
         print(
           'DEBUG: Invalid month parsed: '
@@ -1716,7 +1685,7 @@ class LogParserService {
         return _DateTimeWithFlag(null, false);
       }
       String monthStr = match.group(3)!.toLowerCase();
-      month = _parseMonth(monthStr);
+      month = parseMonth(monthStr);
       if (month < 1 || month > 12) {
         print(
           'DEBUG: Invalid month parsed: '
@@ -1823,7 +1792,7 @@ class LogParserService {
         if (standaloneDateMatch.groupCount >= 3 &&
             standaloneDateMatch.group(3) != null) {
           String monthStr = standaloneDateMatch.group(3)!.toLowerCase();
-          month = _parseMonth(monthStr);
+          month = parseMonth(monthStr);
           if (month < 1 || month > 12) return _DateTimeWithFlag(null, false);
         } else {
           return _DateTimeWithFlag(null, false);

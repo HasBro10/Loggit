@@ -344,6 +344,12 @@ class _LoggitHomeState extends State<LoggitHome> {
 
   void _addTask(Task task) async {
     print('[DEBUG] _addTask called with task: ${task.toJson()}');
+    print(
+      '[DEBUG] Task has repeatDuration: ${task.repeatDuration}, repeatDurationType: ${task.repeatDurationType}',
+    );
+
+    // Always add just ONE task (like manual path)
+    // The display logic will handle showing the next occurrence
     setState(() {
       _tasks.add(task);
     });
@@ -452,30 +458,31 @@ class _LoggitHomeState extends State<LoggitHome> {
           },
           onUpdateOrDeleteTask: (Task task, {bool isDelete = false}) async {
             print(
-              '[DEBUG] onUpdateOrDeleteTask called. isDelete: ' +
-                  isDelete.toString() +
-                  ', task: ' +
-                  task.toJson().toString(),
+              '[DEBUG] onUpdateOrDeleteTask called. isDelete: $isDelete, task: ${task.toJson()}',
             );
             print(
-              '[DEBUG] _tasks before: ' +
-                  _tasks.map((t) => t.toJson()).toList().toString(),
+              '[DEBUG] _tasks before: ${_tasks.map((t) => t.toJson()).toList()}',
             );
-            setState(() {
-              if (isDelete) {
+
+            if (isDelete) {
+              setState(() {
                 _tasks.removeWhere((t) => t.id == task.id);
-              } else {
+              });
+            } else {
+              // Always save just ONE task (like AI path now)
+              // The display logic will handle showing the next occurrence
+              setState(() {
                 final index = _tasks.indexWhere((t) => t.id == task.id);
                 if (index != -1) {
                   _tasks[index] = task;
                 } else {
                   _tasks.add(task);
                 }
-              }
-            });
+              });
+            }
+
             print(
-              '[DEBUG] _tasks after: ' +
-                  _tasks.map((t) => t.toJson()).toList().toString(),
+              '[DEBUG] _tasks after: ${_tasks.map((t) => t.toJson()).toList()}',
             );
             await _saveTasks();
           },

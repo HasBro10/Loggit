@@ -4,23 +4,41 @@ import '../../shared/design/spacing.dart';
 import 'task_model.dart';
 import '../../shared/utils/responsive.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 String weekdayString(int weekday) {
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  return days[(weekday - 1) % 7];
+  switch (weekday) {
+    case 1:
+      return 'Mon';
+    case 2:
+      return 'Tue';
+    case 3:
+      return 'Wed';
+    case 4:
+      return 'Thu';
+    case 5:
+      return 'Fri';
+    case 6:
+      return 'Sat';
+    case 7:
+      return 'Sun';
+    default:
+      return '';
+  }
 }
 
 enum TaskSortOption { dueDate, priority, category }
 
 class TasksScreenNew extends StatefulWidget {
-  final VoidCallback onBack;
   final List<Task> tasks;
-  final void Function(Task task, {bool isDelete}) onUpdateOrDeleteTask;
+  final Function(Task, {bool isDelete}) onUpdateOrDeleteTask;
+  final VoidCallback onBack;
+
   const TasksScreenNew({
     super.key,
-    required this.onBack,
     required this.tasks,
     required this.onUpdateOrDeleteTask,
+    required this.onBack,
   });
 
   @override
@@ -29,159 +47,774 @@ class TasksScreenNew extends StatefulWidget {
 
 class _TasksScreenNewState extends State<TasksScreenNew> {
   final ScrollController _scrollController = ScrollController();
-  final ValueNotifier<int> closeSwipeOptionsNotifier = ValueNotifier<int>(0);
-  final ValueNotifier<Key?> openSwipeCardKey = ValueNotifier<Key?>(null);
   final ValueNotifier<String?> _openDeleteTaskTitle = ValueNotifier<String?>(
     null,
   );
 
-  List<Task> get tasks => widget.tasks;
+  // View system state
+  bool _isGridView = false;
+  bool _isCompactView = false;
 
+  // State variables
+  int selectedTabIndex = 0;
   String searchQuery = '';
   String statusFilter = 'All';
+  int selectedFilter = 0;
   String? categoryFilter;
   String? priorityFilter;
   String? recurrenceFilter;
   DateTime? dateFromFilter;
   DateTime? dateToFilter;
+  TaskSortOption selectedSortOption = TaskSortOption.dueDate;
+
+  // Additional state variables
+  int selectedDayIndex = 0; // Default to today (index 0)
   bool showOverdueOnly = false;
   TaskSortOption sortOption = TaskSortOption.dueDate;
-  int selectedFilter = 0; // 0 = All, 1 = Pending, 2 = Completed
-  int selectedDayIndex = 0; // 0 = Today (default to today)
-  late List<String> days;
-  late List<int> dates;
-  int selectedTabIndex = 0; // 0 = Week, 1 = Month, 2 = All (default to Week)
-  int selectedTimeFilter =
-      0; // 0 = All Time, 1 = This Week, 2 = This Month, 3 = Next 3 Months, 4 = Overdue
 
-  DateTime _displayedMonth = DateTime(
-    DateTime.now().year,
-    DateTime.now().month,
-  );
+  // Missing variables
+  List<Task> tasks = [];
+  DateTime _displayedMonth = DateTime.now();
+  int selectedTimeFilter = 0;
+  List<DateTime> days = [];
+  List<DateTime> dates = [];
 
-  // Drag tracking variables for swipe gestures
-  final bool _isDragging = false;
-  final double _dragStartX = 0;
-  final double _dragDistance = 0;
+  // Method to load saved view preference
+  Future<void> _loadViewPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isGridView = prefs.getBool('tasks_isGridView') ?? false;
+    final isCompactView = prefs.getBool('tasks_isCompactView') ?? false;
+
+    setState(() {
+      _isGridView = isGridView;
+      _isCompactView = isCompactView;
+    });
+  }
+
+  // Method to save view preference
+  Future<void> _saveViewPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('tasks_isGridView', _isGridView);
+    await prefs.setBool('tasks_isCompactView', _isCompactView);
+  }
+
+  // View system methods
+  Widget _buildTaskListView(
+    List<Task> tasks,
+    bool isDark,
+    BuildContext context,
+  ) {
+    if (_isGridView) {
+      return GridView.count(
+        shrinkWrap: true,
+        physics: NeverScrollableScrollPhysics(),
+        padding: EdgeInsets.zero,
+        crossAxisCount: 2,
+        crossAxisSpacing: LoggitSpacing.sm,
+        mainAxisSpacing: LoggitSpacing.sm,
+        childAspectRatio: 0.85,
+        children: tasks
+            .map((task) => _buildGridTaskCard(task, isDark, context))
+            .toList(),
+      );
+    } else if (_isCompactView) {
+      return ListView.builder(
+        shrinkWrap: true,
+        physics: NeverScrollableScrollPhysics(),
+        padding: EdgeInsets.zero,
+        itemCount: tasks.length,
+        itemBuilder: (context, index) {
+          final task = tasks[index];
+          return _buildCompactTaskCard(task, isDark, context);
+        },
+      );
+    } else {
+      // Default list view
+      return Column(
+        children: tasks
+            .map(
+              (task) => _buildTaskCard(
+                task,
+                isDark,
+                context,
+                onTap: () async {
+                  final editedTask = await showTaskModal(context, task: task);
+                  if (editedTask != null) {
+                    final index = widget.tasks.indexWhere(
+                      (t) => t.id == task.id,
+                    );
+                    if (index != -1) {
+                      setState(() {
+                        widget.tasks[index] = editedTask;
+                      });
+                      widget.onUpdateOrDeleteTask(editedTask, isDelete: false);
+                    }
+                  }
+                },
+              ),
+            )
+            .toList(),
+      );
+    }
+  }
+
+  Widget _buildGridTaskCard(Task task, bool isDark, BuildContext context) {
+    return ValueListenableBuilder<String?>(
+      valueListenable: _openDeleteTaskTitle,
+      builder: (context, openDeleteTitle, child) {
+        final isOpen = openDeleteTitle == task.title;
+
+        return GestureDetector(
+          onTap: () {
+            // Close any open delete overlay when tapping anywhere on the card
+            if (_openDeleteTaskTitle.value != null) {
+              _openDeleteTaskTitle.value = null;
+            }
+          },
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: Stack(
+              children: [
+                // Main card
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 8,
+                        offset: Offset(0, 2),
+                        spreadRadius: 0,
+                      ),
+                    ],
+                  ),
+                  child: GestureDetector(
+                    onHorizontalDragUpdate: (details) {
+                      if (details.delta.dx < -1) {
+                        // Reduced threshold from -2 to -1
+                        _openDeleteTaskTitle.value = task.title;
+                      }
+                    },
+                    onTap: () async {
+                      // Close any open delete overlay when tapping the card
+                      if (_openDeleteTaskTitle.value != null) {
+                        _openDeleteTaskTitle.value = null;
+                        return;
+                      }
+                      final editedTask = await showTaskModal(
+                        context,
+                        task: task,
+                      );
+                      if (editedTask != null) {
+                        final index = widget.tasks.indexWhere(
+                          (t) => t.id == task.id,
+                        );
+                        if (index != -1) {
+                          setState(() {
+                            widget.tasks[index] = editedTask;
+                          });
+                          widget.onUpdateOrDeleteTask(
+                            editedTask,
+                            isDelete: false,
+                          );
+                        }
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _getPriorityColor(
+                            task.priority,
+                          ).withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Checkbox in top-right corner
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              SizedBox(width: 0), // Spacer for left side
+                              GestureDetector(
+                                onTap: () async {
+                                  final shouldToggle = await showDialog<bool>(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      title: Row(
+                                        children: [
+                                          Icon(
+                                            task.isCompleted
+                                                ? Icons.undo
+                                                : Icons.check_circle,
+                                            color: task.isCompleted
+                                                ? Colors.orange
+                                                : Colors.green,
+                                            size: 28,
+                                          ),
+                                          SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              task.isCompleted
+                                                  ? 'Mark as Pending?'
+                                                  : 'Complete Task?',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 20,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      content: Text(
+                                        task.isCompleted
+                                            ? 'Are you sure you want to mark this task as pending?'
+                                            : 'Are you sure you want to mark this task as completed?',
+                                        style: TextStyle(fontSize: 16),
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.of(context).pop(false),
+                                          child: Text('Cancel'),
+                                        ),
+                                        ElevatedButton(
+                                          onPressed: () =>
+                                              Navigator.of(context).pop(true),
+                                          child: Text('Confirm'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (shouldToggle == true) {
+                                    setState(() {
+                                      final idx = widget.tasks.indexOf(task);
+                                      if (idx != -1) {
+                                        widget.tasks[idx] = task.copyWith(
+                                          isCompleted: !task.isCompleted,
+                                          status: !task.isCompleted
+                                              ? TaskStatus.completed
+                                              : TaskStatus.notStarted,
+                                        );
+                                      }
+                                    });
+                                  }
+                                },
+                                child: Container(
+                                  width: 20,
+                                  height: 20,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: task.isCompleted
+                                        ? LoggitColors.teal
+                                        : Colors.transparent,
+                                    border: Border.all(
+                                      color: task.isCompleted
+                                          ? LoggitColors.teal
+                                          : Colors.grey[400]!,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: task.isCompleted
+                                      ? Icon(
+                                          Icons.check,
+                                          size: 12,
+                                          color: Colors.white,
+                                        )
+                                      : null,
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 8), // Space after checkbox
+                          // Title - moved up one line and increased size
+                          Text(
+                            task.title,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15, // Increased from 13
+                              color: Colors.black,
+                              decoration: task.isCompleted
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          SizedBox(height: 6), // Increased spacing
+                          // Date and time
+                          if (task.dueDate != null) ...[
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.calendar_today,
+                                  size: 14, // Increased from 12
+                                  color: Colors.grey[600],
+                                ),
+                                SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    _formatDateDayMonthYear(task.dueDate!),
+                                    style: TextStyle(
+                                      fontSize: 12, // Increased from 10
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey[600],
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (task.timeOfDay != null) ...[
+                              SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.access_time,
+                                    size: 14, // Increased from 12
+                                    color: Colors.grey[600],
+                                  ),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    task.timeOfDay!.format(context),
+                                    style: TextStyle(
+                                      fontSize: 12, // Increased from 10
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                          // Description - added more space before and increased size
+                          if (task.description != null &&
+                              task.description!.isNotEmpty) ...[
+                            SizedBox(height: 8), // Increased spacing from 4
+                            Text(
+                              task.description!,
+                              style: TextStyle(
+                                fontSize: 12, // Increased from 10
+                                color: Colors.grey[600],
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                          Spacer(),
+                          // Category and repeat button
+                          Row(
+                            children: [
+                              if (task.category != null) ...[
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _getCategoryColor(
+                                      task.category!,
+                                    ).withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    task.category!,
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      color: _getCategoryColor(task.category!),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                Spacer(),
+                              ],
+                              // Repeat icon for recurring tasks
+                              if (task.recurrenceType != RecurrenceType.none)
+                                GestureDetector(
+                                  onTap: () => _showRecurringDatesModal(
+                                    context,
+                                    task,
+                                    isDark,
+                                  ),
+                                  child: Container(
+                                    padding: EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                        color: Colors.blue.withOpacity(0.3),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      Icons.repeat,
+                                      size: 12,
+                                      color: Colors.blue,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                // Delete overlay - slides in from outside like main task card
+                AnimatedPositioned(
+                  duration: Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  top: 8,
+                  bottom: 8,
+                  right: isOpen ? 0 : -56,
+                  width: 56,
+                  child: AnimatedOpacity(
+                    duration: Duration(milliseconds: 200),
+                    opacity: isOpen ? 1.0 : 0.0,
+                    child: Material(
+                      color: Colors.red.withOpacity(0.95),
+                      borderRadius: BorderRadius.only(
+                        topRight: Radius.circular(8),
+                        bottomRight: Radius.circular(8),
+                      ),
+                      child: InkWell(
+                        borderRadius: BorderRadius.only(
+                          topRight: Radius.circular(8),
+                          bottomRight: Radius.circular(8),
+                        ),
+                        onTap: isOpen
+                            ? () {
+                                _showDeleteConfirmationDialog(
+                                  context,
+                                  task,
+                                  isDark,
+                                );
+                              }
+                            : null,
+                        child: SizedBox.expand(
+                          child: Icon(
+                            Icons.delete,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCompactTaskCard(Task task, bool isDark, BuildContext context) {
+    return ValueListenableBuilder<String?>(
+      valueListenable: _openDeleteTaskTitle,
+      builder: (context, openDeleteTitle, child) {
+        final isOpen = openDeleteTitle == task.title;
+
+        return GestureDetector(
+          onTap: () async {
+            // Close any open delete overlay when tapping the card
+            if (_openDeleteTaskTitle.value != null) {
+              _openDeleteTaskTitle.value = null;
+              return;
+            }
+            final editedTask = await showTaskModal(context, task: task);
+            if (editedTask != null) {
+              final index = widget.tasks.indexWhere((t) => t.id == task.id);
+              if (index != -1) {
+                setState(() {
+                  widget.tasks[index] = editedTask;
+                });
+                widget.onUpdateOrDeleteTask(editedTask, isDelete: false);
+              }
+            }
+          },
+          onHorizontalDragUpdate: (details) {
+            print('Compact view outer drag detected: ${details.delta.dx}');
+            if (details.delta.dx < -0.1) {
+              print(
+                'Compact view outer swipe detected for task: ${task.title}',
+              );
+              _openDeleteTaskTitle.value = task.title;
+            }
+          },
+          onHorizontalDragStart: (details) {
+            print('Compact view outer drag started for task: ${task.title}');
+          },
+          onHorizontalDragEnd: (details) {
+            print('Compact view outer drag ended for task: ${task.title}');
+          },
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: Stack(
+              children: [
+                // Main card
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _getPriorityColor(task.priority).withOpacity(0.3),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 4,
+                        offset: Offset(0, 2),
+                        spreadRadius: 0,
+                      ),
+                    ],
+                  ),
+                  child: GestureDetector(
+                    child: Row(
+                      children: [
+                        // Priority indicator
+                        Container(
+                          width: 4,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: _getPriorityColor(task.priority),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        // Content
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                task.title,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                  color: Colors.black,
+                                  decoration: task.isCompleted
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              SizedBox(height: 2),
+                              if (task.dueDate != null)
+                                Text(
+                                  _formatDateDayMonthYear(task.dueDate!),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        // Repeat icon and checkbox
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (task.recurrenceType != RecurrenceType.none)
+                              GestureDetector(
+                                onTap: () => _showRecurringDatesModal(
+                                  context,
+                                  task,
+                                  isDark,
+                                ),
+                                child: Container(
+                                  padding: EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: Colors.blue.withOpacity(0.3),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Icon(
+                                    Icons.repeat,
+                                    size: 14,
+                                    color: Colors.blue,
+                                  ),
+                                ),
+                              ),
+                            SizedBox(width: 8),
+                            // Checkbox
+                            GestureDetector(
+                              onTap: () async {
+                                final shouldToggle = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    title: Row(
+                                      children: [
+                                        Icon(
+                                          task.isCompleted
+                                              ? Icons.undo
+                                              : Icons.check_circle,
+                                          color: task.isCompleted
+                                              ? Colors.orange
+                                              : Colors.green,
+                                          size: 28,
+                                        ),
+                                        SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            task.isCompleted
+                                                ? 'Mark as Pending?'
+                                                : 'Complete Task?',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 20,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    content: Text(
+                                      task.isCompleted
+                                          ? 'Are you sure you want to mark this task as pending?'
+                                          : 'Are you sure you want to mark this task as completed?',
+                                      style: TextStyle(fontSize: 16),
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.of(context).pop(false),
+                                        child: Text('Cancel'),
+                                      ),
+                                      ElevatedButton(
+                                        onPressed: () =>
+                                            Navigator.of(context).pop(true),
+                                        child: Text('Confirm'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (shouldToggle == true) {
+                                  setState(() {
+                                    final idx = widget.tasks.indexOf(task);
+                                    if (idx != -1) {
+                                      widget.tasks[idx] = task.copyWith(
+                                        isCompleted: !task.isCompleted,
+                                        status: !task.isCompleted
+                                            ? TaskStatus.completed
+                                            : TaskStatus.notStarted,
+                                      );
+                                    }
+                                  });
+                                }
+                              },
+                              child: Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: task.isCompleted
+                                      ? Colors.green
+                                      : Colors.transparent,
+                                  border: Border.all(
+                                    color: task.isCompleted
+                                        ? Colors.green
+                                        : Colors.grey[400]!,
+                                    width: 2,
+                                  ),
+                                ),
+                                child: task.isCompleted
+                                    ? Icon(
+                                        Icons.check,
+                                        color: Colors.white,
+                                        size: 16,
+                                      )
+                                    : null,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                // Delete overlay - slides in from outside like main task card
+                AnimatedPositioned(
+                  duration: Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  top: 0, // Align with top edge of card
+                  bottom: 0, // Align with bottom edge of card
+                  right: isOpen ? 0 : -80, // Wider to cover repeat button
+                  width: 80, // Wider width to cover repeat button
+                  child: AnimatedOpacity(
+                    duration: Duration(milliseconds: 200),
+                    opacity: isOpen ? 1.0 : 0.0,
+                    child: Material(
+                      color: Colors.red.withOpacity(0.95),
+                      borderRadius: BorderRadius.only(
+                        topRight: Radius.circular(8),
+                        bottomRight: Radius.circular(8),
+                      ),
+                      child: InkWell(
+                        borderRadius: BorderRadius.only(
+                          topRight: Radius.circular(8),
+                          bottomRight: Radius.circular(8),
+                        ),
+                        onTap: isOpen
+                            ? () {
+                                _showDeleteConfirmationDialog(
+                                  context,
+                                  task,
+                                  isDark,
+                                );
+                              }
+                            : null,
+                        child: SizedBox.expand(
+                          child: Icon(
+                            Icons.delete,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   void initState() {
     super.initState();
-    _generateDynamicDates();
+    _loadViewPreference();
 
-    _scrollController.addListener(() {
-      if (_scrollController.position.isScrollingNotifier.value) {
-        closeSwipeOptionsNotifier.value++;
-      }
+    // Initialize days list for Week tab calendar
+    final now = DateTime.now();
+    days = List.generate(7, (index) {
+      return now.add(Duration(days: index));
     });
-  }
 
-  void _generateDynamicDates() {
-    final today = DateTime.now();
-    final weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-    // Store current selection before regenerating
-    final currentSelectedDayIndex = selectedDayIndex;
-    print(
-      'DEBUG: _generateDynamicDates - currentSelectedDayIndex: $currentSelectedDayIndex',
-    );
-
-    days = [];
-    dates = [];
-
-    // Generate 14 days starting from today
-    for (int i = 0; i < 14; i++) {
-      final date = today.add(Duration(days: i));
-      days.add(weekDays[date.weekday % 7]);
-      dates.add(date.day);
-    }
-
-    // Preserve the current selection, but ensure it's within bounds
-    if (currentSelectedDayIndex >= 0 && currentSelectedDayIndex < days.length) {
-      selectedDayIndex = currentSelectedDayIndex;
-      print(
-        'DEBUG: _generateDynamicDates - preserved selection: $selectedDayIndex',
-      );
-    } else {
-      // Only reset to 0 if the current selection is invalid
-      selectedDayIndex = 0;
-      print('DEBUG: _generateDynamicDates - reset to 0 (invalid selection)');
-    }
-  }
-
-  bool _isTaskForSelectedDate(Task task, int selectedIndex) {
-    if (selectedIndex < 0 || selectedIndex >= dates.length) return false;
-
-    final today = DateTime.now();
-    final selectedDate = today.add(Duration(days: selectedIndex));
-
-    return task.dueDate != null &&
-        task.dueDate!.year == selectedDate.year &&
-        task.dueDate!.month == selectedDate.month &&
-        task.dueDate!.day == selectedDate.day;
-  }
-
-  bool _isTaskOverdue(Task task) {
-    if (task.dueDate == null || task.isCompleted) return false;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final dueDate = DateTime(
-      task.dueDate!.year,
-      task.dueDate!.month,
-      task.dueDate!.day,
-    );
-    return dueDate.isBefore(today);
-  }
-
-  bool _isTaskDueSoon(Task task) {
-    if (task.dueDate == null || task.isCompleted) return false;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final dueDate = DateTime(
-      task.dueDate!.year,
-      task.dueDate!.month,
-      task.dueDate!.day,
-    );
-    final daysUntilDue = dueDate.difference(today).inDays;
-    return daysUntilDue >= 0 && daysUntilDue <= 3;
-  }
-
-  String _getUserFriendlyDateLabel(int index) {
-    if (index == 0) return 'Today';
-    if (index == 1) return 'Tomorrow';
-
-    final weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    final today = DateTime.now();
-    final targetDate = today.add(Duration(days: index));
-
-    // Show consistent day names for all days
-    return weekDays[targetDate.weekday % 7];
-  }
-
-  String _getSelectedDateContext() {
-    if (selectedTabIndex == 1) {
-      // Month tab - use the selected date from month view
-      final selectedDate = _getSelectedDateForMonthView();
-      if (selectedDate != null) {
-        final today = DateTime.now();
-        final isToday =
-            selectedDate.year == today.year &&
-            selectedDate.month == today.month &&
-            selectedDate.day == today.day;
-        if (isToday) {
-          return 'Today';
-        } else {
-          return '${_monthString(selectedDate.month)} ${selectedDate.day}';
-        }
-      }
-      return 'Today';
-    } else if (selectedDayIndex == 0) {
-      return 'Today';
-    } else if (selectedDayIndex == 1) {
-      return 'Tomorrow';
-    } else {
-      return '${days[selectedDayIndex]} ${dates[selectedDayIndex]}';
-    }
+    // Set default selected date for calendar view (today)
+    _setSelectedDateForMonthView(now);
   }
 
   @override
@@ -198,8 +831,11 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
         final isDark = Theme.of(context).brightness == Brightness.dark;
         final now = DateTime.now();
 
+        // Generate recurring task instances
+        List<Task> allTasks = _generateAllTasks();
+
         // Filter and sort logic
-        List<Task> filteredTasks = tasks.where((task) {
+        List<Task> filteredTasks = allTasks.where((task) {
           final matchesSearch =
               searchQuery.isEmpty ||
               task.title.toLowerCase().contains(searchQuery.toLowerCase()) ||
@@ -248,10 +884,19 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                       )));
 
           // Date filter based on selected day
-          final matchesSelectedDate =
-              selectedDayIndex < 0 ||
-              (task.dueDate != null &&
-                  _isTaskForSelectedDate(task, selectedDayIndex));
+          final matchesSelectedDate = selectedTabIndex == 1
+              ? _matchesSelectedCalendarDate(task)
+              : (selectedDayIndex < 0 ||
+                    (task.dueDate != null &&
+                        _isTaskForSelectedDate(task, selectedDayIndex)));
+
+          // Debug output for calendar view
+          if (selectedTabIndex == 1 &&
+              task.recurrenceType != RecurrenceType.none) {
+            print(
+              'DEBUG: Calendar filtering - Task: ${task.title}, dueDate: ${task.dueDate}, matchesSelectedDate: $matchesSelectedDate',
+            );
+          }
 
           // Overdue filter
           final matchesOverdue =
@@ -346,356 +991,368 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                                 : LoggitColors.darkGrayText,
                           ),
                         ),
+                        Spacer(),
+                        IconButton(
+                          icon: Icon(
+                            _isGridView
+                                ? Icons.view_list
+                                : _isCompactView
+                                ? Icons.view_compact
+                                : Icons.grid_view,
+                            color: isDark
+                                ? Colors.white
+                                : LoggitColors.darkGrayText,
+                            size: Responsive.responsiveIcon(
+                              context,
+                              24,
+                              min: 20,
+                              max: 32,
+                            ),
+                          ),
+                          tooltip: _isGridView
+                              ? 'List View'
+                              : _isCompactView
+                              ? 'Grid View'
+                              : 'Compact View',
+                          onPressed: () {
+                            // Close any open delete overlay when tapping on view toggle button
+                            if (_openDeleteTaskTitle.value != null) {
+                              _openDeleteTaskTitle.value = null;
+                            }
+                            setState(() {
+                              if (_isGridView) {
+                                // From Grid view → Compact view
+                                _isGridView = false;
+                                _isCompactView = true;
+                              } else if (_isCompactView) {
+                                // From Compact view → List view
+                                _isGridView = false;
+                                _isCompactView = false;
+                              } else {
+                                // From List view → Grid view
+                                _isGridView = true;
+                                _isCompactView = false;
+                              }
+                              _saveViewPreference();
+                            });
+                          },
+                        ),
                       ],
                     ),
                   ),
                   // Scrollable content
                   Expanded(
-                    child: SingleChildScrollView(
-                      controller: _scrollController,
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      child: Padding(
-                        padding: const EdgeInsets.all(
-                          LoggitSpacing.screenPadding,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Tab navigation
-                            Container(
-                              decoration: BoxDecoration(
-                                color: Colors.grey.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: _buildTabButton('Week', 0, isDark),
-                                  ),
-                                  Expanded(
-                                    child: _buildTabButton(
-                                      'Calendar',
-                                      1,
-                                      isDark,
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: _buildTabButton('All', 2, isDark),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            SizedBox(height: LoggitSpacing.lg),
-                            // Date selector bar with background
-                            if (selectedTabIndex == 0) // Week View
+                    child: GestureDetector(
+                      onTap: () {
+                        // Close any open delete overlay when tapping anywhere on the screen
+                        if (_openDeleteTaskTitle.value != null) {
+                          _openDeleteTaskTitle.value = null;
+                        }
+                      },
+                      child: SingleChildScrollView(
+                        controller: _scrollController,
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        child: Padding(
+                          padding: const EdgeInsets.all(
+                            LoggitSpacing.screenPadding,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Tab navigation
                               Container(
-                                decoration: BoxDecoration(
-                                  color: Color(0xFFF1F5F9), // Light background
-                                  borderRadius: BorderRadius.circular(20),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.02),
-                                      blurRadius: 2,
-                                      offset: Offset(0, 1),
-                                    ),
-                                  ],
-                                ),
-                                child: SizedBox(
-                                  height:
-                                      76, // Increased height to accommodate border
-                                  child: ListView.builder(
-                                    scrollDirection: Axis.horizontal,
-                                    itemCount: days.length,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                    ),
-                                    physics: BouncingScrollPhysics(),
-                                    shrinkWrap: true,
-                                    itemBuilder: (context, i) {
-                                      final selected = i == selectedDayIndex;
-                                      return GestureDetector(
-                                        onTap: () {
-                                          // Close any open delete button first
-                                          _openDeleteTaskTitle.value = null;
-                                          setState(() {
-                                            selectedDayIndex = i;
-                                            // When a specific date is selected, we're no longer in "All" mode
-                                            // Keep the filter as "All" (0) but the visual state will be correct
-                                          });
-                                        },
-                                        child: AnimatedContainer(
-                                          duration: Duration(milliseconds: 180),
-                                          margin: EdgeInsets.symmetric(
-                                            horizontal: 4,
-                                            vertical:
-                                                8, // Increased vertical margin
-                                          ),
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: selected
-                                                ? LoggitColors.teal.withOpacity(
-                                                    0.1,
-                                                  )
-                                                : Colors.transparent,
-                                            borderRadius: BorderRadius.circular(
-                                              16,
-                                            ),
-                                            border: (i == 0 || selected)
-                                                ? Border.all(
-                                                    color: LoggitColors.teal,
-                                                    width: 2,
-                                                  )
-                                                : null,
-                                          ),
-                                          child: Column(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            children: [
-                                              Text(
-                                                _getUserFriendlyDateLabel(i),
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  color: selected
-                                                      ? Colors.black
-                                                      : i == 0
-                                                      ? LoggitColors.teal
-                                                      : Colors.grey[600],
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
-                                              SizedBox(height: 2),
-                                              Text(
-                                                dates[i].toString(),
-                                                style: TextStyle(
-                                                  fontSize: 16,
-                                                  color: selected
-                                                      ? Colors.black
-                                                      : i == 0
-                                                      ? LoggitColors.teal
-                                                      : Colors.grey[800],
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              )
-                            else if (selectedTabIndex == 1) // Month View
-                              _buildMonthView(isDark)
-                            else // All View
-                              Column(
-                                children: [
-                                  _buildAllTabSearchBar(isDark),
-                                  _buildAllTabContextBar(
-                                    isDark,
-                                    _getFilteredTasksForAllView().length,
-                                  ),
-                                  SizedBox(height: 12),
-                                  // Simple filter chips below the header
-                                  SingleChildScrollView(
-                                    scrollDirection: Axis.horizontal,
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        _buildSimpleFilterChip(
-                                          'All',
-                                          'All',
-                                          isDark,
-                                        ),
-                                        SizedBox(width: 8),
-                                        _buildSimpleFilterChip(
-                                          'Pending',
-                                          'Pending',
-                                          isDark,
-                                        ),
-                                        SizedBox(width: 8),
-                                        _buildSimpleFilterChip(
-                                          'Completed',
-                                          'Completed',
-                                          isDark,
-                                        ),
-                                        SizedBox(width: 8),
-                                        _buildSimpleFilterChip(
-                                          'Overdue',
-                                          'Overdue',
-                                          isDark,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  SizedBox(height: 12),
-                                  _buildAllTasksView(topLevelContext, isDark),
-                                ],
-                              ),
-                            SizedBox(height: LoggitSpacing.lg),
-                            // Date context header (only for Week and Month views)
-                            if (selectedTabIndex != 2)
-                              Container(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 12,
-                                ),
                                 decoration: BoxDecoration(
                                   color: Colors.grey.withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: Colors.grey.withOpacity(0.2),
-                                  ),
                                 ),
                                 child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          selectedDayIndex >= 0
-                                              ? Icons.calendar_today
-                                              : Icons.list_alt,
-                                          color: Colors.grey[600],
-                                          size: 20,
-                                        ),
-                                        SizedBox(width: 8),
-                                        RichText(
-                                          text: TextSpan(
-                                            text:
-                                                (selectedTabIndex == 1 &&
-                                                        _getSelectedDateForMonthView() !=
-                                                            null) ||
-                                                    selectedDayIndex >= 0
-                                                ? _getSelectedDateContext()
-                                                : 'All Tasks',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.grey[600],
-                                            ),
-                                          ),
-                                        ),
-                                      ],
+                                    Expanded(
+                                      child: _buildTabButton('Week', 0, isDark),
                                     ),
-                                    RichText(
-                                      text: TextSpan(
-                                        children: [
-                                          TextSpan(
-                                            text: 'Showing: ',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.grey[600],
+                                    Expanded(
+                                      child: _buildTabButton(
+                                        'Calendar',
+                                        1,
+                                        isDark,
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: _buildTabButton('All', 2, isDark),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              SizedBox(height: LoggitSpacing.lg),
+                              // Date selector bar with background
+                              if (selectedTabIndex == 0) // Week View
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Color(
+                                      0xFFF1F5F9,
+                                    ), // Light background
+                                    borderRadius: BorderRadius.circular(20),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.02),
+                                        blurRadius: 2,
+                                        offset: Offset(0, 1),
+                                      ),
+                                    ],
+                                  ),
+                                  child: SizedBox(
+                                    height:
+                                        92, // Increased height to accommodate larger dots
+                                    child: ListView.builder(
+                                      scrollDirection: Axis.horizontal,
+                                      itemCount: days.length,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                      ),
+                                      physics: BouncingScrollPhysics(),
+                                      shrinkWrap: true,
+                                      itemBuilder: (context, i) {
+                                        final selected = i == selectedDayIndex;
+                                        return GestureDetector(
+                                          onTap: () {
+                                            // Close any open delete button first
+                                            _openDeleteTaskTitle.value = null;
+                                            setState(() {
+                                              selectedDayIndex = i;
+                                              // When a specific date is selected, we're no longer in "All" mode
+                                              // Keep the filter as "All" (0) but the visual state will be correct
+                                            });
+                                          },
+                                          child: AnimatedContainer(
+                                            duration: Duration(
+                                              milliseconds: 180,
+                                            ),
+                                            margin: EdgeInsets.symmetric(
+                                              horizontal: 4,
+                                              vertical:
+                                                  8, // Increased vertical margin
+                                            ),
+                                            padding: EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: selected
+                                                  ? LoggitColors.teal
+                                                        .withOpacity(0.1)
+                                                  : Colors.transparent,
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
+                                              border: (i == 0 || selected)
+                                                  ? Border.all(
+                                                      color: LoggitColors.teal,
+                                                      width: 2,
+                                                    )
+                                                  : null,
+                                            ),
+                                            child: Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  _getUserFriendlyDateLabel(i),
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: selected
+                                                        ? Colors.black
+                                                        : i == 0
+                                                        ? LoggitColors.teal
+                                                        : Colors.grey[600],
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                                SizedBox(height: 2),
+                                                Text(
+                                                  days[i].day.toString(),
+                                                  style: TextStyle(
+                                                    fontSize: 16,
+                                                    color: selected
+                                                        ? Colors.black
+                                                        : i == 0
+                                                        ? LoggitColors.teal
+                                                        : Colors.grey[800],
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                                SizedBox(height: 4),
+                                                if (_hasTasksForWeekDate(i))
+                                                  Container(
+                                                    width: 8,
+                                                    height: 8,
+                                                    decoration: BoxDecoration(
+                                                      color: LoggitColors.teal,
+                                                      shape: BoxShape.circle,
+                                                      boxShadow: [
+                                                        BoxShadow(
+                                                          color: LoggitColors
+                                                              .teal
+                                                              .withOpacity(0.3),
+                                                          blurRadius: 2,
+                                                          offset: Offset(0, 1),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                              ],
                                             ),
                                           ),
-                                          TextSpan(
-                                            text: selectedTabIndex == 1
-                                                ? '${_getFilteredTasksForMonthView().length}'
-                                                : '${filteredTasks.length}',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.grey[600],
-                                            ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                )
+                              else if (selectedTabIndex == 1) // Month View
+                                _buildMonthView(isDark)
+                              else // All View
+                                Column(
+                                  children: [
+                                    _buildAllTabSearchBar(isDark),
+                                    _buildAllTabContextBar(
+                                      isDark,
+                                      _getFilteredTasksForAllView().length,
+                                    ),
+                                    SizedBox(height: 12),
+                                    // Simple filter chips below the header
+                                    SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          _buildSimpleFilterChip(
+                                            'All',
+                                            'All',
+                                            isDark,
+                                          ),
+                                          SizedBox(width: 8),
+                                          _buildSimpleFilterChip(
+                                            'Pending',
+                                            'Pending',
+                                            isDark,
+                                          ),
+                                          SizedBox(width: 8),
+                                          _buildSimpleFilterChip(
+                                            'Completed',
+                                            'Completed',
+                                            isDark,
+                                          ),
+                                          SizedBox(width: 8),
+                                          _buildSimpleFilterChip(
+                                            'Overdue',
+                                            'Overdue',
+                                            isDark,
                                           ),
                                         ],
                                       ),
                                     ),
+                                    SizedBox(height: 12),
+                                    _buildAllTasksView(topLevelContext, isDark),
                                   ],
                                 ),
-                              ),
-                            if (selectedTabIndex != 2)
-                              SizedBox(height: LoggitSpacing.md),
-                            // Tasks section (for Week and Month views)
-                            if (selectedTabIndex == 0) ...[
-                              if (filteredTasks.isNotEmpty)
-                                ...filteredTasks.map(
-                                  (task) => _buildTaskCard(
-                                    task,
+                              SizedBox(height: LoggitSpacing.lg),
+                              // Date context header (only for Week and Month views)
+                              if (selectedTabIndex != 2)
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: Colors.grey.withOpacity(0.2),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            selectedDayIndex >= 0
+                                                ? Icons.calendar_today
+                                                : Icons.list_alt,
+                                            color: Colors.grey[600],
+                                            size: 20,
+                                          ),
+                                          SizedBox(width: 8),
+                                          RichText(
+                                            text: TextSpan(
+                                              text:
+                                                  (selectedTabIndex == 1 &&
+                                                          _getSelectedDateForMonthView() !=
+                                                              null) ||
+                                                      selectedDayIndex >= 0
+                                                  ? _getSelectedDateContext()
+                                                  : 'All Tasks',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.grey[600],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      RichText(
+                                        text: TextSpan(
+                                          children: [
+                                            TextSpan(
+                                              text: 'Showing: ',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.grey[600],
+                                              ),
+                                            ),
+                                            TextSpan(
+                                              text: '${filteredTasks.length}',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.grey[600],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              if (selectedTabIndex != 2)
+                                SizedBox(height: LoggitSpacing.md),
+                              // Tasks section (for Week and Month views)
+                              if (selectedTabIndex == 0) ...[
+                                if (filteredTasks.isNotEmpty)
+                                  _buildTaskListView(
+                                    filteredTasks,
                                     isDark,
                                     topLevelContext,
-                                    onTap: () async {
-                                      final editedTask = await showTaskModal(
-                                        topLevelContext,
-                                        task: task,
-                                      );
-                                      print(
-                                        '[DEBUG] Modal returned editedTask: ' +
-                                            (editedTask?.toJson().toString() ??
-                                                'null'),
-                                      );
-                                      if (editedTask != null) {
-                                        final index = tasks.indexWhere(
-                                          (t) => t.id == task.id,
-                                        );
-                                        if (index != -1) {
-                                          setState(() {
-                                            tasks[index] = editedTask;
-                                          });
-                                          print(
-                                            '[DEBUG] Calling onUpdateOrDeleteTask for editedTask: ' +
-                                                editedTask.toJson().toString(),
-                                          );
-                                          widget.onUpdateOrDeleteTask(
-                                            editedTask,
-                                            isDelete: false,
-                                          );
-                                        }
-                                      }
-                                    },
-                                  ),
-                                )
-                              else
-                                _buildEmptyState(isDark),
-                            ] else if (selectedTabIndex == 1) ...[
-                              if (_getFilteredTasksForMonthView().isNotEmpty)
-                                ..._getFilteredTasksForMonthView().map(
-                                  (task) => _buildTaskCard(
-                                    task,
+                                  )
+                                else
+                                  _buildEmptyState(isDark),
+                              ] else if (selectedTabIndex == 1) ...[
+                                if (filteredTasks.isNotEmpty)
+                                  _buildTaskListView(
+                                    filteredTasks,
                                     isDark,
                                     topLevelContext,
-                                    onTap: () async {
-                                      final editedTask = await showTaskModal(
-                                        topLevelContext,
-                                        task: task,
-                                      );
-                                      print(
-                                        '[DEBUG] Modal returned editedTask: ' +
-                                            (editedTask?.toJson().toString() ??
-                                                'null'),
-                                      );
-                                      if (editedTask != null) {
-                                        final index = tasks.indexWhere(
-                                          (t) => t.id == task.id,
-                                        );
-                                        if (index != -1) {
-                                          setState(() {
-                                            tasks[index] = editedTask;
-                                          });
-                                          print(
-                                            '[DEBUG] Calling onUpdateOrDeleteTask for editedTask: ' +
-                                                editedTask.toJson().toString(),
-                                          );
-                                          widget.onUpdateOrDeleteTask(
-                                            editedTask,
-                                            isDelete: false,
-                                          );
-                                        }
-                                      }
-                                    },
-                                  ),
-                                )
-                              else
-                                _buildEmptyState(isDark),
+                                  )
+                                else
+                                  _buildEmptyState(isDark),
+                              ],
+                              SizedBox(height: 80),
                             ],
-                            SizedBox(height: 80),
-                          ],
+                          ),
                         ),
                       ),
                     ),
@@ -707,18 +1364,18 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
               backgroundColor: LoggitColors.teal,
               onPressed: () async {
                 _openDeleteTaskTitle.value = null;
+                // Wait a moment for the delete overlay animation to complete
+                await Future.delayed(Duration(milliseconds: 300));
                 final newTask = await showTaskModal(rootContext);
                 print(
-                  '[DEBUG] Modal returned newTask: ' +
-                      (newTask?.toJson().toString() ?? 'null'),
+                  '[DEBUG] Modal returned newTask: ${newTask?.toJson().toString() ?? 'null'}',
                 );
                 if (newTask != null) {
                   setState(() {
                     tasks.add(newTask);
                   });
                   print(
-                    '[DEBUG] Calling onUpdateOrDeleteTask for newTask: ' +
-                        newTask.toJson().toString(),
+                    '[DEBUG] Calling onUpdateOrDeleteTask for newTask: ${newTask.toJson()}',
                   );
                   widget.onUpdateOrDeleteTask(newTask, isDelete: false);
                 }
@@ -798,6 +1455,11 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
   }
 
   void _showFilterSheet() {
+    // Close any open delete overlay when opening filter sheet
+    if (_openDeleteTaskTitle.value != null) {
+      _openDeleteTaskTitle.value = null;
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -2616,13 +3278,13 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                           dayNumber == selectedDate.day &&
                           _displayedMonth.month == selectedDate.month &&
                           _displayedMonth.year == selectedDate.year;
-                      final hasTasks = tasks.any(
-                        (task) =>
-                            task.dueDate != null &&
-                            task.dueDate!.year == _displayedMonth.year &&
-                            task.dueDate!.month == _displayedMonth.month &&
-                            task.dueDate!.day == dayNumber,
-                      );
+                      final hasTasks = isValidDay
+                          ? _hasTasksForDate(
+                              _displayedMonth.year,
+                              _displayedMonth.month,
+                              dayNumber,
+                            )
+                          : false;
 
                       return Expanded(
                         child: GestureDetector(
@@ -2737,34 +3399,113 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
   }
 
   Widget _buildAllTasksView(BuildContext context, bool isDark) {
-    final filteredTasks = _getFilteredTasksForAllView();
+    // For All tab, show original tasks (not virtual instances) to avoid clutter
+    List<Task> allTasks =
+        widget.tasks; // Use widget.tasks, not local tasks variable
+
+    // Apply filtering logic
+    List<Task> filteredTasks = allTasks.where((task) {
+      final matchesSearch =
+          searchQuery.isEmpty ||
+          task.title.toLowerCase().contains(searchQuery.toLowerCase()) ||
+          (task.description?.toLowerCase().contains(
+                searchQuery.toLowerCase(),
+              ) ??
+              false);
+
+      // Status filter for All tab
+      final matchesStatus =
+          statusFilter == 'All' ||
+          (statusFilter == 'Pending' && !task.isCompleted) ||
+          (statusFilter == 'Completed' && task.isCompleted) ||
+          (statusFilter == 'Overdue' &&
+              task.dueDate != null &&
+              _isTaskOverdue(task));
+
+      // Category filter
+      final matchesCategory =
+          categoryFilter == null || task.category == categoryFilter;
+
+      // Priority filter
+      final matchesPriority =
+          priorityFilter == null || priorityString(task) == priorityFilter;
+
+      // Recurrence filter
+      final matchesRecurrence =
+          recurrenceFilter == null ||
+          (recurrenceFilter == 'Recurring' &&
+              task.recurrenceType != RecurrenceType.none) ||
+          (recurrenceFilter == 'One-time' &&
+              task.recurrenceType == RecurrenceType.none);
+
+      // Date range filter
+      final matchesDateRange =
+          (dateFromFilter == null ||
+              (task.dueDate != null &&
+                  task.dueDate!.isAfter(dateFromFilter!))) &&
+          (dateToFilter == null ||
+              (task.dueDate != null &&
+                  task.dueDate!.isBefore(
+                    dateToFilter!.add(Duration(days: 1)),
+                  )));
+
+      // Overdue filter
+      final matchesOverdue =
+          !showOverdueOnly || (task.dueDate != null && _isTaskOverdue(task));
+
+      // Due soon filter (due within 3 days)
+      final matchesDueSoon =
+          statusFilter != 'Due Soon' ||
+          (statusFilter == 'Due Soon' && _isTaskDueSoon(task));
+
+      return matchesSearch &&
+          matchesStatus &&
+          matchesCategory &&
+          matchesPriority &&
+          matchesRecurrence &&
+          matchesDateRange &&
+          matchesOverdue &&
+          matchesDueSoon;
+    }).toList();
+
+    // Sort the filtered tasks
+    filteredTasks.sort((a, b) {
+      switch (sortOption) {
+        case TaskSortOption.dueDate:
+          // Get the effective scheduled time for each task
+          DateTime getEffectiveTime(Task task) {
+            if (task.dueDate == null) return DateTime(2100);
+
+            // If task has a specific timeOfDay, combine it with the dueDate
+            if (task.timeOfDay != null) {
+              return DateTime(
+                task.dueDate!.year,
+                task.dueDate!.month,
+                task.dueDate!.day,
+                task.timeOfDay!.hour,
+                task.timeOfDay!.minute,
+              );
+            }
+
+            // Otherwise use the dueDate as is
+            return task.dueDate!;
+          }
+
+          return getEffectiveTime(a).compareTo(getEffectiveTime(b));
+        case TaskSortOption.priority:
+          return priorityString(
+            b,
+          ).compareTo(priorityString(a)); // High > Medium > Low
+        case TaskSortOption.category:
+          return (a.category ?? '').compareTo(b.category ?? '');
+      }
+    });
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (filteredTasks.isNotEmpty)
-          ...filteredTasks.map(
-            (task) => _buildTaskCard(
-              task,
-              isDark,
-              context,
-              onTap: () async {
-                final editedTask = await showTaskModal(context, task: task);
-                if (editedTask != null) {
-                  final index = tasks.indexWhere((t) => t.id == task.id);
-                  if (index != -1) {
-                    setState(() {
-                      tasks[index] = editedTask;
-                    });
-                    print(
-                      '[DEBUG] Calling onUpdateOrDeleteTask for editedTask: ' +
-                          editedTask.toJson().toString(),
-                    );
-                    widget.onUpdateOrDeleteTask(editedTask, isDelete: false);
-                  }
-                }
-              },
-            ),
-          )
+          _buildTaskListView(filteredTasks, isDark, context)
         else
           _buildEmptyState(isDark),
       ],
@@ -2820,12 +3561,15 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
           task: task,
           isDark: isDark,
           onDelete: () {
-            widget.onUpdateOrDeleteTask(task, isDelete: true);
+            _showDeleteConfirmationDialog(context, task, isDark);
           },
           onTap: () async {
-            final editedTask = await showTaskModal(context, task: task);
-            if (editedTask != null) {
-              widget.onUpdateOrDeleteTask(editedTask, isDelete: false);
+            // Only open modal if no delete overlay is open anywhere
+            if (_openDeleteTaskTitle.value == null) {
+              final editedTask = await showTaskModal(context, task: task);
+              if (editedTask != null) {
+                widget.onUpdateOrDeleteTask(editedTask, isDelete: false);
+              }
             }
           },
           openDeleteTaskTitle: _openDeleteTaskTitle,
@@ -2849,9 +3593,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                     margin: EdgeInsets.symmetric(vertical: 8),
                     padding: EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: isDark
-                          ? LoggitColors.darkBg
-                          : Colors.grey.withOpacity(0.05),
+                      color: isDark ? LoggitColors.darkBg : Colors.white,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: _getPriorityColor(
@@ -2870,9 +3612,9 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                             ]
                           : [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.01),
-                                blurRadius: 1,
-                                offset: Offset(0, 0.5),
+                                color: Colors.black.withOpacity(0.15),
+                                blurRadius: 12,
+                                offset: Offset(0, 4),
                                 spreadRadius: 0,
                               ),
                             ],
@@ -2891,122 +3633,219 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                         ),
                         SizedBox(width: 14),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                task.title,
-                                style: TextStyle(
-                                  fontSize: Responsive.responsiveFont(
-                                    context,
-                                    18,
-                                    min: 15,
-                                    max: 24,
-                                  ),
-                                  fontWeight: FontWeight.bold,
-                                  color: isDark
-                                      ? Colors.white
-                                      : LoggitColors.darkGrayText,
-                                  decoration: task.isCompleted
-                                      ? TextDecoration.lineThrough
-                                      : null,
-                                ),
-                              ),
-                              if (task.description != null &&
-                                  task.description!.isNotEmpty) ...[
-                                SizedBox(height: 6),
-                                Text(
-                                  task.description!,
-                                  style: TextStyle(
-                                    fontSize: Responsive.responsiveFont(
-                                      context,
-                                      15,
-                                      min: 13,
-                                      max: 20,
-                                    ),
-                                    color: isDark
-                                        ? Colors.grey[300]
-                                        : Colors.grey[700],
-                                  ),
-                                ),
-                              ],
-                              SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  if (task.category != null) ...[
-                                    Container(
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 5,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: _getCategoryColor(
-                                          task.category!,
-                                        ).withOpacity(0.12),
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                      child: Text(
-                                        task.category!,
-                                        style: TextStyle(
-                                          fontSize: Responsive.responsiveFont(
-                                            context,
-                                            13,
-                                            min: 12,
-                                            max: 18,
-                                          ),
-                                          color: _getCategoryColor(
-                                            task.category!,
-                                          ),
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                    SizedBox(width: 10),
-                                  ],
-                                  if (task.dueDate != null) ...[
-                                    Icon(
-                                      Icons.calendar_today,
-                                      size: Responsive.responsiveFont(
+                          child: SizedBox(
+                            height:
+                                120, // Fixed height for consistent card sizing
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: EdgeInsets.only(
+                                    right: 50,
+                                  ), // Add padding to avoid checkbox
+                                  child: Text(
+                                    task.title,
+                                    style: TextStyle(
+                                      fontSize: Responsive.responsiveFont(
                                         context,
-                                        16,
-                                        min: 14,
-                                        max: 22,
+                                        18,
+                                        min: 15,
+                                        max: 24,
                                       ),
-                                      color: Colors.grey[600],
+                                      fontWeight: FontWeight.bold,
+                                      color: isDark
+                                          ? Colors.white
+                                          : LoggitColors.darkGrayText,
+                                      decoration: task.isCompleted
+                                          ? TextDecoration.lineThrough
+                                          : null,
                                     ),
-                                    SizedBox(width: 5),
-                                    Text(
-                                      _formatDateDayMonthYear(task.dueDate!),
-                                      style: TextStyle(
-                                        fontSize: Responsive.responsiveFont(
+                                    maxLines: 2, // Limit to 2 lines
+                                    overflow: TextOverflow
+                                        .ellipsis, // Add ellipsis for overflow
+                                  ),
+                                ),
+                                // Date and time after title
+                                if (task.dueDate != null) ...[
+                                  SizedBox(height: 6),
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.calendar_today,
+                                        size: Responsive.responsiveFont(
                                           context,
-                                          13,
+                                          14,
                                           min: 12,
                                           max: 18,
                                         ),
                                         color: Colors.grey[600],
-                                        fontWeight: FontWeight.w500,
                                       ),
-                                    ),
-                                    if (task.timeOfDay != null) ...[
-                                      SizedBox(width: 8),
+                                      SizedBox(width: 5),
                                       Text(
-                                        task.timeOfDay!.format(context),
+                                        _formatDateDayMonthYear(task.dueDate!),
                                         style: TextStyle(
                                           fontSize: Responsive.responsiveFont(
                                             context,
-                                            13,
+                                            12,
+                                            min: 10,
+                                            max: 16,
+                                          ),
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                      if (task.timeOfDay != null) ...[
+                                        SizedBox(width: 8),
+                                        Icon(
+                                          Icons.access_time,
+                                          size: Responsive.responsiveFont(
+                                            context,
+                                            14,
                                             min: 12,
                                             max: 18,
                                           ),
-                                          color: Colors.grey[500],
+                                          color: Colors.grey[600],
+                                        ),
+                                        SizedBox(width: 5),
+                                        Text(
+                                          task.timeOfDay!.format(context),
+                                          style: TextStyle(
+                                            fontSize: Responsive.responsiveFont(
+                                              context,
+                                              12,
+                                              min: 10,
+                                              max: 16,
+                                            ),
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.grey[600],
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ],
+                                // Description below date/time
+                                if (task.description != null &&
+                                    task.description!.isNotEmpty) ...[
+                                  SizedBox(height: 6),
+                                  LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      // Subtract space for checkbox and repeat button (e.g., 76px)
+                                      final maxDescWidth =
+                                          constraints.maxWidth - 76;
+                                      return Container(
+                                        constraints: BoxConstraints(
+                                          maxWidth: maxDescWidth > 0
+                                              ? maxDescWidth
+                                              : 0,
+                                        ),
+                                        child: Text(
+                                          task.description!,
+                                          style: TextStyle(
+                                            fontSize: Responsive.responsiveFont(
+                                              context,
+                                              13,
+                                              min: 11,
+                                              max: 18,
+                                            ),
+                                            color: isDark
+                                                ? Colors.grey[300]
+                                                : Colors.grey[700],
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
+                                SizedBox(height: 16),
+                                Row(
+                                  children: [
+                                    if (task.category != null) ...[
+                                      Container(
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 5,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: _getCategoryColor(
+                                            task.category!,
+                                          ).withOpacity(0.12),
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          task.category!,
+                                          style: TextStyle(
+                                            fontSize: Responsive.responsiveFont(
+                                              context,
+                                              13,
+                                              min: 12,
+                                              max: 18,
+                                            ),
+                                            color: _getCategoryColor(
+                                              task.category!,
+                                            ),
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                      SizedBox(width: 10),
+                                    ],
+                                    // Add repeat icon for recurring tasks in the right corner
+                                    if (task.recurrenceType !=
+                                        RecurrenceType.none) ...[
+                                      Spacer(),
+                                      GestureDetector(
+                                        onTap: () => _showRecurringDatesModal(
+                                          context,
+                                          task,
+                                          isDark,
+                                        ),
+                                        child: Container(
+                                          padding: EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: Colors.blue.withOpacity(0.1),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                            border: Border.all(
+                                              color: Colors.blue.withOpacity(
+                                                0.3,
+                                              ),
+                                              width: 1,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.blue.withOpacity(
+                                                  0.2,
+                                                ),
+                                                blurRadius: 4,
+                                                offset: Offset(0, 2),
+                                                spreadRadius: 0,
+                                              ),
+                                            ],
+                                          ),
+                                          child: Icon(
+                                            Icons.repeat,
+                                            size: Responsive.responsiveFont(
+                                              context,
+                                              16,
+                                              min: 14,
+                                              max: 22,
+                                            ),
+                                            color: Colors.white,
+                                          ),
                                         ),
                                       ),
                                     ],
                                   ],
-                                ],
-                              ),
-                            ],
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],
@@ -3161,9 +4000,9 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
                     );
                     if (shouldToggle == true) {
                       setState(() {
-                        final idx = tasks.indexOf(task);
+                        final idx = widget.tasks.indexOf(task);
                         if (idx != -1) {
-                          tasks[idx] = task.copyWith(
+                          widget.tasks[idx] = task.copyWith(
                             isCompleted: !task.isCompleted,
                             status: !task.isCompleted
                                 ? TaskStatus.completed
@@ -3212,7 +4051,7 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    final filteredTasks = tasks.where((task) {
+    final filteredTasks = widget.tasks.where((task) {
       // Search filter
       final matchesSearch =
           searchQuery.isEmpty ||
@@ -3363,9 +4202,15 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
     final filteredTasks = tasks.where((task) {
       if (task.dueDate == null) return false;
 
-      return task.dueDate!.year == selectedDate.year &&
-          task.dueDate!.month == selectedDate.month &&
-          task.dueDate!.day == selectedDate.day;
+      // For non-recurring tasks, check exact date match
+      if (task.recurrenceType == RecurrenceType.none) {
+        return task.dueDate!.year == selectedDate.year &&
+            task.dueDate!.month == selectedDate.month &&
+            task.dueDate!.day == selectedDate.day;
+      } else {
+        // For recurring tasks, use the _isTaskForDate method
+        return _isTaskForDate(task, selectedDate);
+      }
     }).toList();
 
     // Sort the filtered tasks
@@ -3459,6 +4304,12 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
         children: [
           Expanded(
             child: TextField(
+              onTap: () {
+                // Close any open delete overlay when tapping search bar
+                if (_openDeleteTaskTitle.value != null) {
+                  _openDeleteTaskTitle.value = null;
+                }
+              },
               onChanged: (value) {
                 setState(() {
                   searchQuery = value;
@@ -3492,7 +4343,13 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
             ),
             child: IconButton(
               icon: Icon(Icons.tune, color: Colors.grey[700]),
-              onPressed: _showFilterSheet,
+              onPressed: () {
+                // Close any open delete overlay when tapping filter button
+                if (_openDeleteTaskTitle.value != null) {
+                  _openDeleteTaskTitle.value = null;
+                }
+                _showFilterSheet();
+              },
               tooltip: 'Filter',
             ),
           ),
@@ -3557,6 +4414,10 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
     final isSelected = statusFilter == filterValue;
     return GestureDetector(
       onTap: () {
+        // Close any open delete overlay when tapping filter buttons
+        if (_openDeleteTaskTitle.value != null) {
+          _openDeleteTaskTitle.value = null;
+        }
         setState(() {
           statusFilter = filterValue;
         });
@@ -3898,6 +4759,440 @@ class _TasksScreenNewState extends State<TasksScreenNew> {
 
     return weeks;
   }
+
+  // Get the next upcoming date for a recurring task
+  DateTime? _getNextUpcomingDate(Task task) {
+    if (task.recurrenceType == RecurrenceType.none || task.dueDate == null) {
+      return task.dueDate;
+    }
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    // Check the next 365 days for the next occurrence
+    for (int i = 0; i < 365; i++) {
+      final checkDate = today.add(Duration(days: i));
+      if (_isTaskForDate(task, checkDate)) {
+        return checkDate;
+      }
+    }
+
+    return null;
+  }
+
+  // Get list of future recurring dates
+  List<DateTime> _getFutureRecurringDates(Task task, {int maxDates = 15}) {
+    if (task.recurrenceType == RecurrenceType.none || task.dueDate == null) {
+      return [];
+    }
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    List<DateTime> futureDates = [];
+
+    // Check the next 365 days for occurrences
+    for (int i = 0; i < 365 && futureDates.length < maxDates; i++) {
+      final checkDate = today.add(Duration(days: i));
+      if (_isTaskForDate(task, checkDate)) {
+        futureDates.add(checkDate);
+      }
+    }
+
+    return futureDates;
+  }
+
+  // Show modal with recurring dates
+  void _showRecurringDatesModal(BuildContext context, Task task, bool isDark) {
+    final futureDates = _getFutureRecurringDates(task);
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Recurring Task',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[600],
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                task.title,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  constraints: BoxConstraints(maxHeight: 200),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: futureDates
+                          .map(
+                            (date) => Container(
+                              margin: EdgeInsets.only(bottom: 8),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? Colors.grey[800]
+                                    : Colors.grey[50],
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: isDark
+                                      ? Colors.grey[700]!
+                                      : Colors.grey[200]!,
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.calendar_today,
+                                    size: 16,
+                                    color: LoggitColors.teal,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    _formatDateDayMonthYear(date),
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: isDark
+                                          ? Colors.white
+                                          : Colors.black87,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: LoggitColors.teal,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                ),
+                child: Text(
+                  'Close',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Show delete confirmation popup for recurring tasks
+  void _showDeleteConfirmationDialog(
+    BuildContext context,
+    Task task,
+    bool isDark,
+  ) {
+    if (task.recurrenceType == RecurrenceType.none) {
+      // Non-recurring task - delete directly
+      widget.onUpdateOrDeleteTask(task, isDelete: true);
+      return;
+    }
+
+    // Recurring task - show confirmation dialog
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            'Delete Recurring Task',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white : Colors.black87,
+            ),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey[800] : Colors.grey[50],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark ? Colors.grey[700]! : Colors.grey[200]!,
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.repeat, color: LoggitColors.teal, size: 20),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'This task repeats every ${_getRecurrenceText(task)}.',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: isDark ? Colors.grey[300] : Colors.grey[700],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 20),
+                Text(
+                  'Are you sure you want to delete?',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 16),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      widget.onUpdateOrDeleteTask(task, isDelete: true);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: Text(
+                      'Delete',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _getRecurrenceText(Task task) {
+    switch (task.recurrenceType) {
+      case RecurrenceType.daily:
+        return 'day';
+      case RecurrenceType.weekly:
+        return 'week';
+      case RecurrenceType.monthly:
+        return 'month';
+      case RecurrenceType.custom:
+        if (task.customDays != null && task.customDays!.isNotEmpty) {
+          final days = task.customDays!
+              .map((day) => _getDayName(day))
+              .join(', ');
+          return days;
+        }
+        return 'custom days';
+      default:
+        return 'custom interval';
+    }
+  }
+
+  String _getDayName(int weekday) {
+    switch (weekday) {
+      case 1:
+        return 'Monday';
+      case 2:
+        return 'Tuesday';
+      case 3:
+        return 'Wednesday';
+      case 4:
+        return 'Thursday';
+      case 5:
+        return 'Friday';
+      case 6:
+        return 'Saturday';
+      case 7:
+        return 'Sunday';
+      default:
+        return 'day';
+    }
+  }
+
+  String _getDurationTypeText(RecurrenceType recurrenceType) {
+    switch (recurrenceType) {
+      case RecurrenceType.daily:
+        return 'Days';
+      case RecurrenceType.weekly:
+        return 'Weeks';
+      case RecurrenceType.monthly:
+        return 'Months';
+      default:
+        return 'Weeks';
+    }
+  }
+
+  // Essential missing methods
+  List<Task> _generateAllTasks() {
+    return widget.tasks;
+  }
+
+  bool _isTaskOverdue(Task task) {
+    if (task.dueDate == null) return false;
+    return task.dueDate!.isBefore(DateTime.now());
+  }
+
+  bool _isTaskDueSoon(Task task) {
+    if (task.dueDate == null) return false;
+    final now = DateTime.now();
+    final dueDate = task.dueDate!;
+    final difference = dueDate.difference(now).inDays;
+    return difference >= 0 && difference <= 3;
+  }
+
+  bool _matchesSelectedCalendarDate(Task task) {
+    final selectedDate = _getSelectedDateForMonthView();
+    if (selectedDate == null) return true; // Show all tasks if no date selected
+    return _isTaskForDate(task, selectedDate);
+  }
+
+  bool _isTaskForSelectedDate(Task task, int dayIndex) {
+    if (dayIndex < 0 || dayIndex >= days.length) {
+      return true; // Show all tasks if no day selected
+    }
+    final selectedDate = days[dayIndex];
+    return _isTaskForDate(task, selectedDate);
+  }
+
+  String _getUserFriendlyDateLabel(int index) {
+    if (index >= 0 && index < days.length) {
+      final date = days[index];
+      final weekday = date.weekday;
+      switch (weekday) {
+        case 1:
+          return 'Mon';
+        case 2:
+          return 'Tue';
+        case 3:
+          return 'Wed';
+        case 4:
+          return 'Thu';
+        case 5:
+          return 'Fri';
+        case 6:
+          return 'Sat';
+        case 7:
+          return 'Sun';
+        default:
+          return 'Day';
+      }
+    }
+    return 'Day';
+  }
+
+  bool _hasTasksForWeekDate(int index) {
+    if (index < 0 || index >= days.length) return false;
+    final selectedDate = days[index];
+    return widget.tasks.any((task) => _isTaskForDate(task, selectedDate));
+  }
+
+  String _getSelectedDateContext() {
+    if (selectedDayIndex >= 0 && selectedDayIndex < days.length) {
+      final selectedDate = days[selectedDayIndex];
+      final today = DateTime.now();
+      final tomorrow = today.add(Duration(days: 1));
+
+      if (selectedDate.year == today.year &&
+          selectedDate.month == today.month &&
+          selectedDate.day == today.day) {
+        return 'Today';
+      } else if (selectedDate.year == tomorrow.year &&
+          selectedDate.month == tomorrow.month &&
+          selectedDate.day == tomorrow.day) {
+        return 'Tomorrow';
+      } else {
+        return '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}';
+      }
+    }
+    return 'All Tasks';
+  }
+
+  bool _hasTasksForDate(int year, int month, int day) {
+    final checkDate = DateTime(year, month, day);
+    return widget.tasks.any((task) => _isTaskForDate(task, checkDate));
+  }
+
+  bool _isTaskForDate(Task task, DateTime date) {
+    if (task.dueDate == null) return false;
+    return task.dueDate!.year == date.year &&
+        task.dueDate!.month == date.month &&
+        task.dueDate!.day == date.day;
+  }
 }
 
 class _AnimatedFilterPill extends StatefulWidget {
@@ -4162,7 +5457,8 @@ class _OverlayDeleteTaskCardState extends State<OverlayDeleteTaskCard> {
   }
 
   void _onHorizontalDragUpdate(DragUpdateDetails details) {
-    if (details.delta.dx < -2) {
+    if (details.delta.dx < -1) {
+      // Reduced threshold from -2 to -1
       print('Drag detected for task: ${widget.task.title}');
       widget.openDeleteTaskTitle.value = widget.task.title;
     }
@@ -4183,7 +5479,8 @@ class _OverlayDeleteTaskCardState extends State<OverlayDeleteTaskCard> {
             onHorizontalDragUpdate: _onHorizontalDragUpdate,
             onHorizontalDragEnd: _onHorizontalDragEnd,
             onTap: () {
-              if (showDelete) {
+              // Close any open delete overlay when tapping on any card
+              if (widget.openDeleteTaskTitle.value != null) {
                 widget.openDeleteTaskTitle.value = null;
                 return;
               }
@@ -4222,7 +5519,7 @@ class _OverlayDeleteTaskCardState extends State<OverlayDeleteTaskCard> {
                     topRight: Radius.circular(8),
                     bottomRight: Radius.circular(8),
                   ),
-                  onTap: widget.onDelete,
+                  onTap: showDelete ? widget.onDelete : null,
                   child: SizedBox.expand(
                     child: Icon(Icons.delete, color: Colors.white, size: 28),
                   ),
@@ -4247,14 +5544,21 @@ Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
   String? category = task?.category;
   bool isCompleted = task?.isCompleted ?? false;
   TaskPriority priority = task?.priority ?? TaskPriority.medium;
-  TaskStatus status = task?.status ?? TaskStatus.notStarted;
+  TaskStatus status = (task?.status == TaskStatus.notStarted)
+      ? TaskStatus.inProgress
+      : (task?.status ?? TaskStatus.inProgress);
   ReminderType reminder = task?.reminder ?? ReminderType.none;
   bool showTitleError = false;
   bool showCategoryError = false;
   bool showDateTimeError = false;
   RecurrenceType recurrenceType = task?.recurrenceType ?? RecurrenceType.none;
+  // Duration fields for limited repeats
+  int? repeatDuration = task?.repeatDuration;
+  String? repeatDurationType = task?.repeatDurationType;
 
   Task? result;
+  final ScrollController modalScrollController = ScrollController();
+  final ScrollController scrollController = ScrollController();
   return await showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -4267,6 +5571,7 @@ Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
       return StatefulBuilder(
         builder: (context, setModalState) {
           String? error;
+
           return FractionallySizedBox(
             heightFactor: 0.8,
             child: SafeArea(
@@ -4303,6 +5608,7 @@ Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
                   // Scrollable content below
                   Expanded(
                     child: SingleChildScrollView(
+                      controller: modalScrollController,
                       child: Padding(
                         padding: const EdgeInsets.all(
                           LoggitSpacing.screenPadding,
@@ -4679,8 +5985,12 @@ Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
                             ),
                             SizedBox(height: 6),
                             DropdownButtonFormField<TaskStatus>(
-                              value: status,
+                              value: status == TaskStatus.notStarted
+                                  ? TaskStatus.inProgress
+                                  : status,
                               items: TaskStatus.values
+                                  .where((s) => s != TaskStatus.notStarted)
+                                  .toList()
                                   .map(
                                     (s) => DropdownMenuItem(
                                       value: s,
@@ -4699,6 +6009,8 @@ Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
                                   .toList(),
                               selectedItemBuilder: (context) => TaskStatus
                                   .values
+                                  .where((s) => s != TaskStatus.notStarted)
+                                  .toList()
                                   .map(
                                     (s) => Align(
                                       alignment: Alignment.centerLeft,
@@ -4725,7 +6037,7 @@ Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
                                   )
                                   .toList(),
                               onChanged: (val) => setModalState(
-                                () => status = val ?? TaskStatus.notStarted,
+                                () => status = val ?? TaskStatus.inProgress,
                               ),
                               decoration: InputDecoration(
                                 filled: true,
@@ -4881,11 +6193,52 @@ Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
                                     ),
                                   ),
                                 ),
+                                DropdownMenuItem(
+                                  value: RecurrenceType.custom,
+                                  child: Text(
+                                    'Custom',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.normal,
+                                      fontSize: 15,
+                                      color: isDark
+                                          ? Colors.white
+                                          : LoggitColors.darkGrayText,
+                                    ),
+                                  ),
+                                ),
                               ],
-                              onChanged: (val) => setModalState(
-                                () =>
-                                    recurrenceType = val ?? RecurrenceType.none,
-                              ),
+                              onChanged: (val) {
+                                setModalState(() {
+                                  recurrenceType = val ?? RecurrenceType.none;
+                                  // Reset duration when changing recurrence type to prevent dropdown conflicts
+                                  repeatDuration = null;
+                                  repeatDurationType = null;
+                                  // Reset custom days when changing recurrence type
+                                  if (val != RecurrenceType.custom) {
+                                    // customDays = null; // Removed as customDays is not defined in this scope
+                                  }
+                                });
+                                // Auto-scroll to duration section if repeat is selected
+                                if (val != null && val != RecurrenceType.none) {
+                                  Future.delayed(Duration(milliseconds: 100), () {
+                                    if (modalScrollController.hasClients) {
+                                      // Scroll down by a fixed amount to show duration section
+                                      final currentOffset =
+                                          modalScrollController.position.pixels;
+                                      final maxOffset = modalScrollController
+                                          .position
+                                          .maxScrollExtent;
+                                      final targetOffset = (currentOffset + 200)
+                                          .clamp(0.0, maxOffset);
+                                      modalScrollController.animateTo(
+                                        targetOffset,
+                                        duration: Duration(milliseconds: 300),
+                                        curve: Curves.easeInOut,
+                                      );
+                                    }
+                                  });
+                                }
+                              },
                               decoration: InputDecoration(
                                 filled: true,
                                 fillColor: isDark
@@ -4898,6 +6251,100 @@ Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
                                 hintText: 'Select repeat',
                               ),
                             ),
+                            // Duration controls - only show when repeat is selected
+                            if (recurrenceType != RecurrenceType.none) ...[
+                              SizedBox(height: 16),
+                              Text(
+                                'Duration',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 15,
+                                ),
+                              ),
+                              SizedBox(height: 6),
+                              DropdownButtonFormField<String>(
+                                value:
+                                    repeatDuration == null ||
+                                        repeatDurationType == null
+                                    ? 'infinite'
+                                    : '$repeatDuration $repeatDurationType',
+                                hint: Text('Select duration'),
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: isDark
+                                      ? LoggitColors.darkCard
+                                      : Color(0xFFF1F5F9),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 12,
+                                  ),
+                                ),
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: isDark
+                                      ? Colors.white
+                                      : LoggitColors.darkGrayText,
+                                ),
+                                items: () {
+                                  final durationType =
+                                      recurrenceType == RecurrenceType.daily
+                                      ? 'days'
+                                      : recurrenceType == RecurrenceType.weekly
+                                      ? 'weeks'
+                                      : 'months';
+
+                                  final items = <DropdownMenuItem<String>>[];
+
+                                  // Add specific duration options
+                                  for (int i = 1; i <= 12; i++) {
+                                    items.add(
+                                      DropdownMenuItem(
+                                        value: '$i $durationType',
+                                        child: Text(
+                                          '$i ${durationType == 'days'
+                                              ? 'day'
+                                              : durationType == 'weeks'
+                                              ? 'week'
+                                              : 'month'}${i == 1
+                                              ? ''
+                                              : durationType == 'days'
+                                              ? 's'
+                                              : durationType == 'weeks'
+                                              ? 's'
+                                              : 's'}',
+                                        ),
+                                      ),
+                                    );
+                                  }
+
+                                  // Add "Until further notice" option
+                                  items.add(
+                                    DropdownMenuItem(
+                                      value: 'infinite',
+                                      child: Text('Until further notice'),
+                                    ),
+                                  );
+
+                                  return items;
+                                }(),
+                                onChanged: (value) {
+                                  setModalState(() {
+                                    if (value == 'infinite') {
+                                      repeatDuration = null;
+                                      repeatDurationType = null;
+                                    } else if (value != null) {
+                                      final parts = value.split(' ');
+                                      repeatDuration = int.tryParse(parts[0]);
+                                      repeatDurationType = parts[1];
+                                    }
+                                  });
+                                },
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -4975,19 +6422,16 @@ Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
                               onPressed: () {
                                 print('[DEBUG] Save button pressed in modal');
                                 print(
-                                  '[DEBUG] title: ' +
-                                      titleController.text.trim(),
+                                  '[DEBUG] title: ${titleController.text.trim()}',
                                 );
                                 print(
-                                  '[DEBUG] category: ' + (category ?? 'null'),
+                                  '[DEBUG] category: ${category ?? 'null'}',
                                 );
                                 print(
-                                  '[DEBUG] dueDate: ' +
-                                      (dueDate?.toString() ?? 'null'),
+                                  '[DEBUG] dueDate: ${dueDate?.toString() ?? 'null'}',
                                 );
                                 print(
-                                  '[DEBUG] timeOfDay: ' +
-                                      (timeOfDay?.format(context) ?? 'null'),
+                                  '[DEBUG] timeOfDay: ${timeOfDay?.format(context) ?? 'null'}',
                                 );
                                 setModalState(() {
                                   showTitleError = titleController.text
@@ -4999,12 +6443,15 @@ Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
                                   showDateTimeError =
                                       dueDate == null || timeOfDay == null;
                                 });
-                                if (showTitleError)
+                                if (showTitleError) {
                                   print('[DEBUG] Title validation failed');
-                                if (showCategoryError)
+                                }
+                                if (showCategoryError) {
                                   print('[DEBUG] Category validation failed');
-                                if (showDateTimeError)
+                                }
+                                if (showDateTimeError) {
                                   print('[DEBUG] Date/Time validation failed');
+                                }
                                 if (showTitleError ||
                                     showCategoryError ||
                                     showDateTimeError) {
@@ -5035,14 +6482,14 @@ Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
                                 });
                                 final newTask = Task(
                                   id: isEditing
-                                      ? task!.id
+                                      ? task.id
                                       : null, // Ensure original ID is kept when editing
                                   title: titleController.text,
                                   description: descController.text,
                                   dueDate: dueDate,
                                   isCompleted: status == TaskStatus.completed,
                                   timestamp: isEditing
-                                      ? task!.timestamp
+                                      ? task.timestamp
                                       : DateTime.now(), // Keep original timestamp when editing
                                   category: category,
                                   recurrenceType: recurrenceType,
@@ -5050,11 +6497,12 @@ Future<Task?> showTaskModal(BuildContext context, {Task? task}) async {
                                   priority: priority,
                                   status: status,
                                   reminder: reminder,
+                                  repeatDuration: repeatDuration,
+                                  repeatDurationType: repeatDurationType,
                                 );
                                 // Before popping the modal with the new task:
                                 print(
-                                  '[DEBUG] About to pop modal with newTask: ' +
-                                      newTask.toJson().toString(),
+                                  '[DEBUG] About to pop modal with newTask: ${newTask.toJson()}',
                                 );
                                 Navigator.of(originalContext).pop(newTask);
                               },

@@ -6,6 +6,38 @@ import '../../shared/design/spacing.dart';
 import '../../shared/design/widgets/header.dart';
 import 'note_view_screen.dart';
 import '../../services/notes_service.dart' show PersistentCategory;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+
+// Helper function to convert Delta format to plain text
+String _convertDeltaToPlainText(String deltaContent) {
+  try {
+    if (deltaContent.isEmpty) return '';
+
+    // Check if it's Delta format (starts with [)
+    if (deltaContent.startsWith('[')) {
+      final List<dynamic> delta = jsonDecode(deltaContent);
+      String plainText = '';
+
+      for (final operation in delta) {
+        if (operation is Map && operation.containsKey('insert')) {
+          final insert = operation['insert'];
+          if (insert is String) {
+            plainText += insert;
+          }
+        }
+      }
+
+      return plainText.trim();
+    }
+
+    // If not Delta format, return as-is (for backward compatibility)
+    return deltaContent;
+  } catch (e) {
+    // If parsing fails, return the original content
+    return deltaContent;
+  }
+}
 
 class NotesScreen extends StatefulWidget {
   final VoidCallback? onThemeToggle;
@@ -32,11 +64,13 @@ class _NotesScreenState extends State<NotesScreen>
   String _selectedCategory = 'All';
   String _searchQuery = '';
   List<String> _categories = ['All'];
+  Map<String, Color> _categoryColors = {};
   bool _isGridView = false;
-  bool _showCategoryDropdown = false;
+  bool _isCompactView = false; // New compact view option
+  final bool _showCategoryDropdown = false;
   double _dropdownHeight = 0.0;
   double _maxDropdownHeight = 320.0;
-  double _minDropdownHeight = 0.0;
+  final double _minDropdownHeight = 0.0;
   bool _isDraggingDropdown = false;
   late AnimationController _dropdownAnimController;
   late Animation<double> _dropdownAnim;
@@ -88,10 +122,16 @@ class _NotesScreenState extends State<NotesScreen>
   void initState() {
     super.initState();
     _loadNotes();
+    _loadViewPreference();
     _searchController.addListener(() {
       setState(() {
         _searchQuery = _searchController.text.trim();
+        // Automatically deselect category when searching
+        if (_searchQuery.isNotEmpty) {
+          _selectedCategory = 'All';
+        }
       });
+      _filterNotes(); // Apply the filtering
     });
     _dropdownHeight = _collapsedHeight;
     _dropdownAnimController = AnimationController(
@@ -99,20 +139,57 @@ class _NotesScreenState extends State<NotesScreen>
       duration: Duration(milliseconds: 260),
     );
     _dropdownAnim =
-        Tween<double>(
-            begin: _collapsedHeight,
-            end: _dynamicExpandedHeight,
-          ).animate(
-            CurvedAnimation(
-              parent: _dropdownAnimController,
-              curve: Curves.easeInOut,
-            ),
-          )
-          ..addListener(() {
-            setState(() {
-              _dropdownHeight = _dropdownAnim.value;
-            });
+        Tween<double>(begin: _dropdownHeight, end: _dropdownHeight).animate(
+          CurvedAnimation(
+            parent: _dropdownAnimController,
+            curve: Curves.easeInOut,
+          ),
+        )..addListener(() {
+          setState(() {
+            _dropdownHeight = _dropdownAnim.value;
           });
+        });
+  }
+
+  // Load saved view preference
+  Future<void> _loadViewPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    final viewType =
+        prefs.getString('notes_view_type') ?? 'list'; // Default to list view
+
+    setState(() {
+      switch (viewType) {
+        case 'grid':
+          _isGridView = true;
+          _isCompactView = false;
+          break;
+        case 'compact':
+          _isGridView = false;
+          _isCompactView = true;
+          break;
+        case 'list':
+        default:
+          _isGridView = false;
+          _isCompactView = false;
+          break;
+      }
+    });
+  }
+
+  // Save view preference
+  Future<void> _saveViewPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    String viewType;
+
+    if (_isGridView) {
+      viewType = 'grid';
+    } else if (_isCompactView) {
+      viewType = 'compact';
+    } else {
+      viewType = 'list';
+    }
+
+    await prefs.setString('notes_view_type', viewType);
   }
 
   @override
@@ -131,9 +208,17 @@ class _NotesScreenState extends State<NotesScreen>
       final notes = await NotesService.getNotes();
       final persistent = await NotesService.getPersistentCategories();
       final categories = persistent.map((c) => c.name).toList();
+
+      // Create category colors map
+      final categoryColors = <String, Color>{};
+      for (final cat in persistent) {
+        categoryColors[cat.name] = Color(cat.colorValue);
+      }
+
       setState(() {
         _notes = notes;
         _categories = ['All', ...categories];
+        _categoryColors = categoryColors;
         _filteredNotes = _notes;
         _isLoading = false;
       });
@@ -165,18 +250,19 @@ class _NotesScreenState extends State<NotesScreen>
   void _filterNotes() {
     setState(() {
       _filteredNotes = _notes.where((note) {
-        // Category filter
-        if (_selectedCategory != 'All' &&
-            note.noteCategory != _selectedCategory) {
-          return false;
-        }
-
-        // Search filter
+        // If searching, override category filter and show all matching notes
         if (_searchQuery.isNotEmpty) {
           final query = _searchQuery.toLowerCase();
           return note.title.toLowerCase().contains(query) ||
               note.content.toLowerCase().contains(query) ||
+              note.noteCategory.toLowerCase().contains(query) ||
               note.tags.any((tag) => tag.toLowerCase().contains(query));
+        }
+
+        // If not searching, apply category filter
+        if (_selectedCategory != 'All' &&
+            note.noteCategory != _selectedCategory) {
+          return false;
         }
 
         return true;
@@ -308,16 +394,37 @@ class _NotesScreenState extends State<NotesScreen>
                       const Spacer(),
                       IconButton(
                         icon: Icon(
-                          _isGridView ? Icons.view_list : Icons.grid_view,
+                          _isGridView
+                              ? Icons.view_list
+                              : _isCompactView
+                              ? Icons.grid_view
+                              : Icons.view_compact,
                           color: isDark
                               ? Colors.white
                               : LoggitColors.darkGrayText,
                         ),
-                        tooltip: _isGridView ? 'List View' : 'Grid View',
+                        tooltip: _isGridView
+                            ? 'List View'
+                            : _isCompactView
+                            ? 'Grid View'
+                            : 'Compact View',
                         onPressed: () {
                           setState(() {
-                            _isGridView = !_isGridView;
+                            if (_isGridView) {
+                              // From Grid (Card) view → List (Tile) view
+                              _isGridView = false;
+                              _isCompactView = false;
+                            } else if (_isCompactView) {
+                              // From Compact view → Grid (Card) view
+                              _isGridView = true;
+                              _isCompactView = false;
+                            } else {
+                              // From List (Tile) view → Compact view
+                              _isGridView = false;
+                              _isCompactView = true;
+                            }
                           });
+                          _saveViewPreference(); // Save the new view preference
                         },
                       ),
                     ],
@@ -375,7 +482,13 @@ class _NotesScreenState extends State<NotesScreen>
                                 ? _buildEmptyState()
                                 : _isGridView
                                 ? GridView.count(
-                                    padding: EdgeInsets.all(LoggitSpacing.lg),
+                                    padding: EdgeInsets.fromLTRB(
+                                      LoggitSpacing.lg,
+                                      LoggitSpacing.lg,
+                                      LoggitSpacing.lg,
+                                      LoggitSpacing.lg +
+                                          80, // Extra bottom padding for FAB
+                                    ),
                                     crossAxisCount: 2,
                                     crossAxisSpacing: LoggitSpacing.lg,
                                     mainAxisSpacing: LoggitSpacing.lg,
@@ -384,12 +497,33 @@ class _NotesScreenState extends State<NotesScreen>
                                         .map(_buildNoteCard)
                                         .toList(),
                                   )
-                                : ListView.builder(
-                                    padding: EdgeInsets.all(LoggitSpacing.lg),
+                                : _isCompactView
+                                ? ListView.builder(
+                                    padding: EdgeInsets.fromLTRB(
+                                      LoggitSpacing.md,
+                                      LoggitSpacing.md,
+                                      LoggitSpacing.md,
+                                      LoggitSpacing.md +
+                                          80, // Extra bottom padding for FAB
+                                    ),
                                     itemCount: _filteredNotes.length,
                                     itemBuilder: (context, index) {
                                       final note = _filteredNotes[index];
-                                      return _buildNoteCard(note);
+                                      return _buildCompactNoteCard(note);
+                                    },
+                                  )
+                                : ListView.builder(
+                                    padding: EdgeInsets.fromLTRB(
+                                      LoggitSpacing.lg,
+                                      LoggitSpacing.lg,
+                                      LoggitSpacing.lg,
+                                      LoggitSpacing.lg +
+                                          80, // Extra bottom padding for FAB
+                                    ),
+                                    itemCount: _filteredNotes.length,
+                                    itemBuilder: (context, index) {
+                                      final note = _filteredNotes[index];
+                                      return _buildMainNoteCard(note);
                                     },
                                   ),
                           ),
@@ -474,11 +608,18 @@ class _NotesScreenState extends State<NotesScreen>
                                                         height: 44,
                                                         decoration: BoxDecoration(
                                                           color: isSelected
-                                                              ? LoggitColors
-                                                                    .teal
-                                                                    .withOpacity(
-                                                                      0.15,
-                                                                    )
+                                                              ? (category ==
+                                                                        'All'
+                                                                    ? LoggitColors
+                                                                          .teal
+                                                                          .withOpacity(
+                                                                            0.15,
+                                                                          )
+                                                                    : _categoryColors[category]?.withOpacity(
+                                                                            0.15,
+                                                                          ) ??
+                                                                          Colors
+                                                                              .grey[100])
                                                               : Colors
                                                                     .grey[100],
                                                           borderRadius:
@@ -487,8 +628,12 @@ class _NotesScreenState extends State<NotesScreen>
                                                               ),
                                                           border: Border.all(
                                                             color: isSelected
-                                                                ? LoggitColors
-                                                                      .teal
+                                                                ? (category ==
+                                                                          'All'
+                                                                      ? LoggitColors
+                                                                            .teal
+                                                                      : _categoryColors[category] ??
+                                                                            Colors.grey[300]!)
                                                                 : Colors
                                                                       .grey[300]!,
                                                             width: isSelected
@@ -501,8 +646,15 @@ class _NotesScreenState extends State<NotesScreen>
                                                             category,
                                                             style: TextStyle(
                                                               color: isSelected
-                                                                  ? LoggitColors
-                                                                        .teal
+                                                                  ? (category ==
+                                                                            'All'
+                                                                        ? LoggitColors
+                                                                              .teal
+                                                                        : (category ==
+                                                                                  'Quick'
+                                                                              ? Colors.black
+                                                                              : _categoryColors[category] ??
+                                                                                    Colors.black87))
                                                                   : Colors
                                                                         .black87,
                                                               fontWeight:
@@ -588,10 +740,18 @@ class _NotesScreenState extends State<NotesScreen>
                                                     height: 36,
                                                     decoration: BoxDecoration(
                                                       color: isSelected
-                                                          ? LoggitColors.teal
-                                                                .withOpacity(
-                                                                  0.15,
-                                                                )
+                                                          ? (category == 'All'
+                                                                ? LoggitColors
+                                                                      .teal
+                                                                      .withOpacity(
+                                                                        0.15,
+                                                                      )
+                                                                : _categoryColors[category]
+                                                                          ?.withOpacity(
+                                                                            0.15,
+                                                                          ) ??
+                                                                      Colors
+                                                                          .grey[100])
                                                           : Colors.grey[100],
                                                       borderRadius:
                                                           BorderRadius.circular(
@@ -599,7 +759,12 @@ class _NotesScreenState extends State<NotesScreen>
                                                           ),
                                                       border: Border.all(
                                                         color: isSelected
-                                                            ? LoggitColors.teal
+                                                            ? (category == 'All'
+                                                                  ? LoggitColors
+                                                                        .teal
+                                                                  : _categoryColors[category] ??
+                                                                        Colors
+                                                                            .grey[300]!)
                                                             : Colors.grey[300]!,
                                                         width: isSelected
                                                             ? 2
@@ -611,8 +776,15 @@ class _NotesScreenState extends State<NotesScreen>
                                                         category,
                                                         style: TextStyle(
                                                           color: isSelected
-                                                              ? LoggitColors
-                                                                    .teal
+                                                              ? (category ==
+                                                                        'All'
+                                                                    ? LoggitColors
+                                                                          .teal
+                                                                    : (category ==
+                                                                              'Quick'
+                                                                          ? Colors.black
+                                                                          : _categoryColors[category] ??
+                                                                                Colors.black87))
                                                               : Colors.black87,
                                                           fontWeight:
                                                               FontWeight.w600,
@@ -770,220 +942,704 @@ class _NotesScreenState extends State<NotesScreen>
 
   Widget _buildNoteCard(Note note) {
     final isDark = widget.currentThemeMode == ThemeMode.dark;
-    return Card(
+    return Container(
       margin: EdgeInsets.only(bottom: LoggitSpacing.sm),
-      color: isDark ? LoggitColors.darkCard : Colors.white,
-      elevation: 0,
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey[300]!, width: 1),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: InkWell(
-          onTap: () => _editNote(note),
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: EdgeInsets.all(LoggitSpacing.md),
-            child: Stack(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header with type icon and title
-                    Row(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: Card(
+        color: isDark ? LoggitColors.darkCard : Colors.white,
+        elevation: 0,
+        child: Container(
+          constraints: BoxConstraints(minHeight: 80), // Extend card vertically
+          decoration: BoxDecoration(
+            border: Border.all(color: note.color, width: 1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: InkWell(
+            onTap: () => _editNote(note),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: EdgeInsets.all(LoggitSpacing.md),
+              child: Stack(
+                children: [
+                  SingleChildScrollView(
+                    physics: NeverScrollableScrollPhysics(),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildNoteTypeIcon(note),
-                        SizedBox(width: LoggitSpacing.sm),
-                        Expanded(
-                          child: Text(
-                            note.title.isNotEmpty
-                                ? note.title[0].toUpperCase() +
-                                      note.title.substring(1)
-                                : '',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                              color: isDark
-                                  ? Colors.white
-                                  : LoggitColors.darkGrayText,
-                            ),
-                          ),
-                        ),
-                        PopupMenuButton<String>(
-                          onSelected: (value) {
-                            if (value == 'edit') {
-                              _editNote(note);
-                            } else if (value == 'delete') {
-                              _deleteNote(note);
-                            }
-                          },
-                          itemBuilder: (context) => [
-                            const PopupMenuItem(
-                              value: 'edit',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.edit, size: 18),
-                                  SizedBox(width: 8),
-                                  Text('Edit'),
-                                ],
+                        // Header with title only
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                note.title.isNotEmpty
+                                    ? note.title[0].toUpperCase() +
+                                          note.title.substring(1)
+                                    : '',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                  color: isDark
+                                      ? Colors.white
+                                      : LoggitColors.darkGrayText,
+                                ),
                               ),
                             ),
-                            const PopupMenuItem(
-                              value: 'delete',
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.delete,
-                                    size: 18,
-                                    color: Colors.red,
+                            PopupMenuButton<String>(
+                              onSelected: (value) {
+                                if (value == 'edit') {
+                                  _editNote(note);
+                                } else if (value == 'delete') {
+                                  _deleteNote(note);
+                                }
+                              },
+                              itemBuilder: (context) => [
+                                const PopupMenuItem(
+                                  value: 'edit',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.edit, size: 18),
+                                      SizedBox(width: 8),
+                                      Text('Edit'),
+                                    ],
                                   ),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    'Delete',
-                                    style: TextStyle(color: Colors.red),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'delete',
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.delete,
+                                        size: 18,
+                                        color: Colors.red,
+                                      ),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Delete',
+                                        style: TextStyle(color: Colors.red),
+                                      ),
+                                    ],
                                   ),
-                                ],
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        if (note.content.isNotEmpty) ...[
+                          Text(
+                            _convertDeltaToPlainText(note.content),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: isDark
+                                  ? LoggitColors.lightGrayDarkMode
+                                  : LoggitColors.lighterGraySubtext,
+                            ),
+                          ),
+                          SizedBox(height: LoggitSpacing.sm),
+                        ],
+                        if (note.isChecklist &&
+                            note.checklistItems != null) ...[
+                          ...note.checklistItems!
+                              .take(3)
+                              .map(
+                                (item) => Padding(
+                                  padding: EdgeInsets.only(
+                                    bottom: LoggitSpacing.xs,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Checkbox(
+                                        value: item.isCompleted,
+                                        onChanged: (_) =>
+                                            _toggleChecklistItem(note, item),
+                                        materialTapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          item.text,
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            decoration: item.isCompleted
+                                                ? TextDecoration.lineThrough
+                                                : null,
+                                            color: item.isCompleted
+                                                ? (isDark
+                                                      ? LoggitColors
+                                                            .lightGrayDarkMode
+                                                      : LoggitColors
+                                                            .lighterGraySubtext)
+                                                : (isDark
+                                                      ? Colors.white
+                                                      : LoggitColors
+                                                            .darkGrayText),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                        ],
+                        if (note.checklistItems != null &&
+                            note.checklistItems!.length > 3) ...[
+                          Text(
+                            '... and ${note.checklistItems!.length - 3} more items',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: isDark
+                                  ? LoggitColors.lightGrayDarkMode
+                                  : LoggitColors.lighterGraySubtext,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                          SizedBox(height: LoggitSpacing.sm),
+                        ],
+                      ],
+                    ),
+                  ),
+                  // Footer pinned to bottom
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Column(
+                      children: [
+                        // Category and date row
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // Category on the left
+                            Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: LoggitSpacing.xs,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: note.color.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: note.color, width: 1),
+                              ),
+                              child: Text(
+                                note.noteCategory,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.black,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            // Tags in the middle - show only one tag in grid view
+                            if (note.tags.isNotEmpty) ...[
+                              Container(
+                                margin: EdgeInsets.only(
+                                  right: LoggitSpacing.xs,
+                                ),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: LoggitSpacing.xs,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: LoggitColors.teal.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: LoggitColors.teal,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  note.tags.first.isNotEmpty
+                                      ? note.tags.first[0].toUpperCase()
+                                      : '', // Show only the first letter
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            // Date on the right
+                            Text(
+                              note.formattedCreatedDate,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: isDark
+                                    ? LoggitColors.lightGrayDarkMode
+                                    : LoggitColors.lighterGraySubtext,
                               ),
                             ),
                           ],
                         ),
                       ],
                     ),
-                    if (note.content.isNotEmpty) ...[
-                      Text(
-                        note.content,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: isDark
-                              ? LoggitColors.lightGrayDarkMode
-                              : LoggitColors.lighterGraySubtext,
-                        ),
-                      ),
-                      SizedBox(height: LoggitSpacing.sm),
-                    ],
-                    if (note.isChecklist && note.checklistItems != null) ...[
-                      ...note.checklistItems!
-                          .take(3)
-                          .map(
-                            (item) => Padding(
-                              padding: EdgeInsets.only(
-                                bottom: LoggitSpacing.xs,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMainNoteCard(Note note) {
+    final isDark = widget.currentThemeMode == ThemeMode.dark;
+    return Container(
+      margin: EdgeInsets.only(bottom: LoggitSpacing.sm),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: Card(
+        color: isDark ? LoggitColors.darkCard : Colors.white,
+        elevation: 0,
+        child: Container(
+          constraints: BoxConstraints(
+            minHeight: 150,
+          ), // Extend main card vertically
+          decoration: BoxDecoration(
+            border: Border.all(color: note.color, width: 1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: InkWell(
+            onTap: () => _editNote(note),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: EdgeInsets.all(LoggitSpacing.md),
+              child: Stack(
+                children: [
+                  SingleChildScrollView(
+                    physics: NeverScrollableScrollPhysics(),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header with title only
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                note.title.isNotEmpty
+                                    ? note.title[0].toUpperCase() +
+                                          note.title.substring(1)
+                                    : '',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                  color: isDark
+                                      ? Colors.white
+                                      : LoggitColors.darkGrayText,
+                                ),
                               ),
-                              child: Row(
-                                children: [
-                                  Checkbox(
-                                    value: item.isCompleted,
-                                    onChanged: (_) =>
-                                        _toggleChecklistItem(note, item),
-                                    materialTapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            PopupMenuButton<String>(
+                              onSelected: (value) {
+                                if (value == 'edit') {
+                                  _editNote(note);
+                                } else if (value == 'delete') {
+                                  _deleteNote(note);
+                                }
+                              },
+                              itemBuilder: (context) => [
+                                const PopupMenuItem(
+                                  value: 'edit',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.edit, size: 18),
+                                      SizedBox(width: 8),
+                                      Text('Edit'),
+                                    ],
                                   ),
-                                  Expanded(
+                                ),
+                                const PopupMenuItem(
+                                  value: 'delete',
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.delete,
+                                        size: 18,
+                                        color: Colors.red,
+                                      ),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Delete',
+                                        style: TextStyle(color: Colors.red),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        if (note.content.isNotEmpty) ...[
+                          Text(
+                            _convertDeltaToPlainText(note.content),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: isDark
+                                  ? LoggitColors.lightGrayDarkMode
+                                  : LoggitColors.lighterGraySubtext,
+                            ),
+                          ),
+                          SizedBox(height: LoggitSpacing.sm),
+                        ],
+                        if (note.isChecklist &&
+                            note.checklistItems != null) ...[
+                          ...note.checklistItems!
+                              .take(3)
+                              .map(
+                                (item) => Padding(
+                                  padding: EdgeInsets.only(
+                                    bottom: LoggitSpacing.xs,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Checkbox(
+                                        value: item.isCompleted,
+                                        onChanged: (_) =>
+                                            _toggleChecklistItem(note, item),
+                                        materialTapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          item.text,
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            decoration: item.isCompleted
+                                                ? TextDecoration.lineThrough
+                                                : null,
+                                            color: item.isCompleted
+                                                ? (isDark
+                                                      ? LoggitColors
+                                                            .lightGrayDarkMode
+                                                      : LoggitColors
+                                                            .lighterGraySubtext)
+                                                : (isDark
+                                                      ? Colors.white
+                                                      : LoggitColors
+                                                            .darkGrayText),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                        ],
+                        if (note.checklistItems != null &&
+                            note.checklistItems!.length > 3) ...[
+                          Text(
+                            '... and ${note.checklistItems!.length - 3} more items',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: isDark
+                                  ? LoggitColors.lightGrayDarkMode
+                                  : LoggitColors.lighterGraySubtext,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                          SizedBox(height: 50), // Extra space for main card
+                        ],
+                      ],
+                    ),
+                  ),
+                  // Footer pinned to bottom
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Column(
+                      children: [
+                        // Add spacing between content and footer
+                        SizedBox(height: LoggitSpacing.sm),
+                        // Category and date row
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // Category and tags grouped on the left
+                            Expanded(
+                              child: Wrap(
+                                spacing: LoggitSpacing.xs,
+                                runSpacing: LoggitSpacing.xs,
+                                children: [
+                                  // Category chip
+                                  Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: LoggitSpacing.xs,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: note.color.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: note.color,
+                                        width: 1,
+                                      ),
+                                    ),
                                     child: Text(
-                                      item.text,
+                                      note.noteCategory,
                                       style: TextStyle(
-                                        fontSize: 16,
-                                        decoration: item.isCompleted
-                                            ? TextDecoration.lineThrough
-                                            : null,
-                                        color: item.isCompleted
-                                            ? (isDark
-                                                  ? LoggitColors
-                                                        .lightGrayDarkMode
-                                                  : LoggitColors
-                                                        .lighterGraySubtext)
-                                            : (isDark
-                                                  ? Colors.white
-                                                  : LoggitColors.darkGrayText),
+                                        fontSize: 12,
+                                        color: Colors.black,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                  // Tag chips
+                                  ...note.tags.map(
+                                    (tag) => Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: LoggitSpacing.xs,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: LoggitColors.teal.withOpacity(
+                                          0.1,
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: LoggitColors.teal,
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        tag,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.black,
+                                          fontWeight: FontWeight.w500,
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                          )
-                          .toList(),
-                    ],
-                    if (note.checklistItems != null &&
-                        note.checklistItems!.length > 3) ...[
-                      Text(
-                        '... and ${note.checklistItems!.length - 3} more items',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: isDark
-                              ? LoggitColors.lightGrayDarkMode
-                              : LoggitColors.lighterGraySubtext,
-                          fontStyle: FontStyle.italic,
+                            // Date on the right
+                            Text(
+                              note.formattedCreatedDate,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: isDark
+                                    ? LoggitColors.lightGrayDarkMode
+                                    : LoggitColors.lighterGraySubtext,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactNoteCard(Note note) {
+    final isDark = widget.currentThemeMode == ThemeMode.dark;
+    return Container(
+      margin: EdgeInsets.only(bottom: LoggitSpacing.xs),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 4,
+            offset: Offset(0, 1),
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: Card(
+        color: isDark ? LoggitColors.darkCard : Colors.white,
+        elevation: 0,
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: note.color, width: 1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: InkWell(
+            onTap: () => _editNote(note),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: EdgeInsets.all(LoggitSpacing.sm),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Top row: Title, Category, Date, Menu
+                  Row(
+                    children: [
+                      // Title - truncated to make space for tag
+                      Expanded(
+                        flex: 2, // Give more space to title
+                        child: Text(
+                          note.title.isNotEmpty
+                              ? note.title[0].toUpperCase() +
+                                    note.title.substring(1)
+                              : 'Untitled',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                            color: isDark
+                                ? Colors.white
+                                : LoggitColors.darkGrayText,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      SizedBox(height: LoggitSpacing.sm),
-                    ],
-                    if (note.tags.isNotEmpty) ...[
-                      SizedBox(height: LoggitSpacing.sm),
-                      Wrap(
-                        spacing: LoggitSpacing.xs,
-                        runSpacing: LoggitSpacing.xs,
-                        children: note.tags
-                            .map(
-                              (tag) => Chip(
-                                label: Text(
-                                  tag,
-                                  style: TextStyle(fontSize: 12),
-                                ),
-                                backgroundColor: LoggitColors.lighterGraySubtext
-                                    .withOpacity(0.1),
-                                materialTapTargetSize:
-                                    MaterialTapTargetSize.shrinkWrap,
-                              ),
-                            )
-                            .toList(),
-                      ),
-                    ],
-                    SizedBox(height: 32), // leave space for footer
-                  ],
-                ),
-                // Footer pinned to bottom left
-                Positioned(
-                  left: 0,
-                  bottom: 0,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
+                      SizedBox(width: LoggitSpacing.xs),
+                      // Tag - show only one tag
+                      if (note.tags.isNotEmpty) ...[
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: LoggitSpacing.xs,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: LoggitColors.teal.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: LoggitColors.teal,
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            note.tags.first, // Show only the first tag
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.black,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: LoggitSpacing.xs),
+                      ],
+                      // Category
                       Container(
                         padding: EdgeInsets.symmetric(
-                          horizontal: LoggitSpacing.sm,
-                          vertical: LoggitSpacing.xs,
+                          horizontal: LoggitSpacing.xs,
+                          vertical: 2,
                         ),
                         decoration: BoxDecoration(
                           color: note.color.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: note.color, width: 1),
                         ),
                         child: Text(
                           note.noteCategory,
                           style: TextStyle(
-                            fontSize: 14,
-                            color: note.color,
+                            fontSize: 12,
+                            color: note.noteCategory == 'Quick'
+                                ? Colors.black
+                                : note.color,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),
-                      SizedBox(width: 8),
+                      SizedBox(width: LoggitSpacing.sm),
+                      // Date
                       Text(
                         note.formattedCreatedDate,
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 12,
                           color: isDark
                               ? LoggitColors.lightGrayDarkMode
                               : LoggitColors.lighterGraySubtext,
                         ),
                       ),
+                      SizedBox(width: LoggitSpacing.xs),
+                      // Popup menu
+                      PopupMenuButton<String>(
+                        icon: Icon(
+                          Icons.more_vert,
+                          size: 18,
+                          color: isDark
+                              ? LoggitColors.lightGrayDarkMode
+                              : LoggitColors.lighterGraySubtext,
+                        ),
+                        onSelected: (value) {
+                          if (value == 'edit') {
+                            _editNote(note);
+                          } else if (value == 'delete') {
+                            _deleteNote(note);
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit, size: 18),
+                                SizedBox(width: 8),
+                                Text('Edit'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete, size: 18, color: Colors.red),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Delete',
+                                  style: TextStyle(color: Colors.red),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
-                ),
-              ],
+                  // Description row (if content exists)
+                  if (note.content.isNotEmpty) ...[
+                    SizedBox(height: LoggitSpacing.xs),
+                    Text(
+                      _convertDeltaToPlainText(note.content),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isDark
+                            ? LoggitColors.lightGrayDarkMode
+                            : LoggitColors.lighterGraySubtext,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
         ),
