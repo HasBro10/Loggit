@@ -17,6 +17,7 @@ import 'package:flutter/foundation.dart';
 import 'features/reminders/reminders_screen.dart';
 import 'features/notes/notes_screen.dart';
 import 'services/reminders_service.dart';
+import 'features/gym/gym_screen.dart';
 
 void main() {
   runApp(
@@ -438,6 +439,21 @@ class _LoggitHomeState extends State<LoggitHome> {
               });
             }
           },
+          onShowGym: () {
+            final gymIndex = _favorites.indexWhere(
+              (f) => f.type == FeatureType.gymLogs,
+            );
+            if (gymIndex != -1) {
+              setState(() {
+                _currentTabIndex = gymIndex;
+              });
+            } else {
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const GymScreen()));
+            }
+            Navigator.of(context).maybePop();
+          },
           onThemeToggle: widget.onThemeToggle,
           currentThemeMode: widget.currentThemeMode,
         );
@@ -516,7 +532,7 @@ class _LoggitHomeState extends State<LoggitHome> {
           },
         );
       case FeatureType.gymLogs:
-        return _buildGymLogsTab();
+        return const GymScreen();
     }
   }
 

@@ -39,6 +39,7 @@ class ChatScreenNew extends StatefulWidget {
   final void Function()? onShowTasks;
   final void Function()? onShowReminders;
   final void Function()? onShowNotes;
+  final VoidCallback? onShowGym;
   final VoidCallback? onThemeToggle;
   final ThemeMode currentThemeMode;
 
@@ -53,6 +54,7 @@ class ChatScreenNew extends StatefulWidget {
     this.onShowTasks,
     this.onShowReminders,
     this.onShowNotes,
+    this.onShowGym,
     this.onThemeToggle,
     required this.currentThemeMode,
   });
@@ -4788,11 +4790,9 @@ class _ChatScreenNewState extends State<ChatScreenNew>
         final logOptions = [
           _LogOption(
             icon: Icons.fitness_center,
-            label: 'Gym Log',
+            label: 'Gym',
             color: isDark ? LoggitColors.darkAccent : Colors.indigo,
-            onTap: () {
-              /* TODO */
-            },
+            onTap: widget.onShowGym,
           ),
           _LogOption(
             icon: Icons.list_alt,
@@ -6193,6 +6193,10 @@ class _ChatMessage {
     this.isConfirmation = false,
     this.onConfirmationResponse,
     this.pendingLogEntry,
+    this.isReminderList = false,
+    this.reminderList,
+    this.isDeleteMode = false,
+    this.originalSearchTerm,
     this.canConfirm = true,
     this.showEdit = false,
     this.customWidget,
