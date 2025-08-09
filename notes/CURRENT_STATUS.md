@@ -155,3 +155,15 @@
 **Last Updated**: December 2024
 **Status**: Active development with comprehensive feature set
 **Next Session**: Continue with AI enhancements or complete remaining features 
+
+---
+
+## Gym — Status Update (Aug 9, 2025)
+
+- **Workout detail**
+  - Finish action moved to header; live session is always visible (no collapse UI during a session)
+  - Set rows reworked to flexible columns; inline weight/reps editing with unit toggle
+  - Header labels align to input box edges; spacing adjusted to avoid crowding
+- **Known TODOs**
+  - FAB Quick Actions UI (unified list + filters + quick picks)
+  - Analytics view and Running mode scaffolds 

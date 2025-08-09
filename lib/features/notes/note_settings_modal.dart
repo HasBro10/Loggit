@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../features/notes/note_model.dart';
 import '../../shared/design/color_guide.dart';
 
 class NoteSettingsModal extends StatefulWidget {

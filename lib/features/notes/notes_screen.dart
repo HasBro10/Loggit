@@ -3,9 +3,7 @@ import '../../features/notes/note_model.dart';
 import '../../services/notes_service.dart';
 import '../../shared/design/color_guide.dart';
 import '../../shared/design/spacing.dart';
-import '../../shared/design/widgets/header.dart';
 import 'note_view_screen.dart';
-import '../../services/notes_service.dart' show PersistentCategory;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 

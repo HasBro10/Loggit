@@ -181,3 +181,16 @@ Phase 4 (Enhancements):
 - Chat parser already supports gym phrases in a basic form (see notes/CHAT_SESSION_NOTES.md). This scope expands on intents and UI/UX.
 - Keep UI consistent with app-wide spacing, shadows, and light theme.
 - All components must remain responsive on mobile/tablet per rules/FOLDER_STRUCTURE.md. 
+
+---
+
+## M. Changelog — Aug 9, 2025
+
+- **Workout detail UX**
+  - Finish action moved into `Today's session` header; collapse chevron and subtitle hidden during live session
+  - Removed interim summary row to reduce card height
+  - Set rows: flexible columns (Previous 3, Weight 2, Reps 1), inline editing with unit toggle
+  - Headers aligned to left edges of Weight/Reps inputs; no column borders; consistent spacing so checkmark doesn’t crowd inputs
+- **Next**
+  - FAB Quick Actions: unified list with filters and quick picks
+  - Analytics and Running placeholders to be scaffolded 

@@ -285,3 +285,18 @@ The chat interface acts as a bridge between natural language input and the struc
 
 **Summary:**
 If the Edit button in chat stops opening the Reminders Edit modal, check that the button’s callback in `_buildChatBubble` is correctly calling the Reminders Edit modal function, just like on the Reminders page. 
+
+---
+
+## Session Notes — Gym UI polish (Aug 9, 2025)
+
+- **Finish button placement**: Moved into the `Today's session` header; removed collapse chevron and subtitle for live sessions.
+- **Card height/declutter**: Removed the summary row to reduce vertical height and focus on the live session.
+- **Set row layout**: Converted to flexible columns (Previous flex 3, Weight flex 2, Reps flex 1) to prevent overflow and cramping.
+- **Inline editing**: Kept direct inline `TextField`s for Weight and Reps with unit toggle inside the weight field.
+- **Alignment rules**: Aligned “Weight” and “Reps” header labels to the left edges of their respective input boxes; removed column dividers for a cleaner look; ensured fixed gap so the check icon doesn’t crowd Reps.
+- **Overflow fix**: Eliminated the 62px `RenderFlex` overflow by removing rigid sizing and making the row responsive; then simplified the header and removed the old summary row.
+
+Pending
+- **FAB Quick Actions redesign**: Unified list with filters and quick picks (Build your own, Start empty session, Load last).
+- **Analytics & running tabs**: UI scaffolds still to come. 

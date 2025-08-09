@@ -683,7 +683,7 @@ class LogParserService {
             // If 'tomorrow' is present anywhere in the input, ensure dateTimeStr includes it
             if (input.toLowerCase().contains('tomorrow')) {
               dateTimeStr =
-                  'tomorrow${dateTimeStr != null && dateTimeStr.isNotEmpty ? ' ' + dateTimeStr : ''}';
+                  'tomorrow${dateTimeStr != null && dateTimeStr.isNotEmpty ? ' $dateTimeStr' : ''}';
               print(
                 'DEBUG: Overriding dateTimeStr to include "tomorrow": $dateTimeStr',
               );
@@ -1013,7 +1013,7 @@ class LogParserService {
             // If 'tomorrow' is present anywhere in the input, ensure dateTimeStr includes it
             if (input.toLowerCase().contains('tomorrow')) {
               dateTimeStr =
-                  'tomorrow${dateTimeStr != null && dateTimeStr.isNotEmpty ? ' ' + dateTimeStr : ''}';
+                  'tomorrow${dateTimeStr != null && dateTimeStr.isNotEmpty ? ' $dateTimeStr' : ''}';
               print(
                 'DEBUG: [TASK] Overriding dateTimeStr to include "tomorrow": $dateTimeStr',
               );

@@ -5948,8 +5948,7 @@ class _ChatScreenNewState extends State<ChatScreenNew>
 
     // Default helpful message
     return "🤔 I understand you're asking about something, but I'm specifically designed to help with:\n\n"
-            "📋 Tasks and reminders\n" +
-        "📝 Notes and organization\n" +
+            "📋 Tasks and reminders\n" "📝 Notes and organization\n" +
         "💰 Expense tracking\n" +
         "💪 Workout logging\n\n" +
         "Try asking me to help with one of these instead!";
@@ -6193,10 +6192,6 @@ class _ChatMessage {
     this.isConfirmation = false,
     this.onConfirmationResponse,
     this.pendingLogEntry,
-    this.isReminderList = false,
-    this.reminderList,
-    this.isDeleteMode = false,
-    this.originalSearchTerm,
     this.canConfirm = true,
     this.showEdit = false,
     this.customWidget,

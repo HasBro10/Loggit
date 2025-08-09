@@ -8,9 +8,7 @@ import '../../features/notes/note_insert_modal.dart';
 import '../../services/notes_service.dart';
 import '../../shared/design/color_guide.dart';
 import '../../shared/design/spacing.dart';
-import '../../shared/utils/responsive.dart';
 import '../../features/notes/note_settings_modal.dart';
-import '../../services/notes_service.dart' show PersistentCategory;
 import 'dart:convert';
 
 // Category model (move to top level)

@@ -18,8 +18,6 @@ class _GymScreenState extends State<GymScreen> {
   Widget build(BuildContext context) {
     final pages = <Widget>[
       const _WorkoutsTab(),
-      const _TemplatesTab(),
-      const _HistoryTab(),
       const _AnalyticsTab(),
       const _RunningTab(),
     ];
@@ -36,16 +34,6 @@ class _GymScreenState extends State<GymScreen> {
             icon: Icon(Icons.fitness_center_outlined),
             selectedIcon: Icon(Icons.fitness_center),
             label: 'Workouts',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.view_list_outlined),
-            selectedIcon: Icon(Icons.view_list),
-            label: 'Templates',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.history_outlined),
-            selectedIcon: Icon(Icons.history),
-            label: 'History',
           ),
           NavigationDestination(
             icon: Icon(Icons.query_stats_outlined),
@@ -187,8 +175,166 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
   };
   String _timeframe = 'Recent';
   bool _onlyPRs = false;
-  bool _hasActiveSession = true; // UI-only demo
+  final bool _hasActiveSession = true; // UI-only demo
   bool _sessionExpanded = true;
+  final ScrollController _scrollController = ScrollController();
+  String? _activeTemplateName;
+  final List<String> _upNextQueue = <String>[
+    'Incline DB Press',
+    'Cable Fly',
+    'Triceps Pushdown',
+  ];
+  String _currentExercise = '';
+  final Set<String> _completed = <String>{};
+  final List<_SetItem> _currentSets = <_SetItem>[
+    _SetItem(
+      number: 1,
+      prevWeight: '40kg',
+      prevReps: '8',
+      weight: '40kg',
+      reps: '8',
+      completed: true,
+    ),
+    _SetItem(
+      number: 2,
+      prevWeight: '60kg',
+      prevReps: '6',
+      weight: '60kg',
+      reps: '6',
+    ),
+    _SetItem(
+      number: 3,
+      prevWeight: '80kg',
+      prevReps: '6',
+      weight: '80kg',
+      reps: '6',
+    ),
+    _SetItem(
+      number: 4,
+      prevWeight: '80kg',
+      prevReps: '6',
+      weight: '80kg',
+      reps: '6',
+    ),
+  ];
+  final Map<int, TextEditingController> _weightControllers = {};
+  final Map<int, TextEditingController> _repsControllers = {};
+  // Column widths for sets table
+  static const double _numColW = 24;
+  static const double _weightColW = 96;
+  static const double _repsColW = 48;
+  String _unit = 'kg'; // 'kg' or 'lb'
+
+  void _toggleUnit() {
+    setState(() {
+      final bool toLb = _unit == 'kg';
+      _unit = toLb ? 'lb' : 'kg';
+      for (int i = 0; i < _currentSets.length; i++) {
+        final controller = _weightControllers[i];
+        if (controller == null) continue;
+        final numVal = double.tryParse(controller.text.trim()) ?? 0;
+        final converted = toLb ? (numVal * 2.20462) : (numVal / 2.20462);
+        controller.text = _formatNumber(converted);
+      }
+    });
+  }
+
+  String _formatNumber(double v) {
+    return (v >= 10 ? v.round().toString() : v.toStringAsFixed(1)).replaceAll(
+      RegExp(r"\.0$"),
+      '',
+    );
+  }
+
+  double _parseKg(String weightStr) {
+    final match = RegExp(r"([0-9]+(?:\.[0-9]+)?)").firstMatch(weightStr);
+    final numString = match?.group(1) ?? '0';
+    return double.tryParse(numString) ?? 0;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _activeTemplateName = '${widget.workoutName} – Heavy';
+    _currentExercise = '${widget.workoutName} Exercise 1';
+  }
+
+  void _onTemplateSelected(String name) {
+    // Add selection to Up next without changing the header
+    setState(() {
+      _upNextQueue.insert(0, name);
+    });
+    Navigator.of(context).maybePop();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  void _promoteNext() {
+    if (_upNextQueue.isEmpty) return;
+    setState(() {
+      if (_currentExercise.isNotEmpty) {
+        _completed.add(_currentExercise);
+      }
+      _currentExercise = _upNextQueue.removeAt(0);
+      // Reset sets to placeholder for new exercise
+      _currentSets.clear();
+      _currentSets.addAll(<_SetItem>[
+        _SetItem(
+          number: 1,
+          prevWeight: '40kg',
+          prevReps: '8',
+          weight: '40kg',
+          reps: '8',
+        ),
+        _SetItem(
+          number: 2,
+          prevWeight: '60kg',
+          prevReps: '6',
+          weight: '60kg',
+          reps: '6',
+        ),
+        _SetItem(
+          number: 3,
+          prevWeight: '80kg',
+          prevReps: '6',
+          weight: '80kg',
+          reps: '6',
+        ),
+      ]);
+      _weightControllers.clear();
+      _repsControllers.clear();
+    });
+  }
+
+  void _toggleSetCompleted(int index) {
+    setState(() {
+      _currentSets[index] = _currentSets[index].copyWith(
+        completed: !_currentSets[index].completed,
+      );
+    });
+  }
+
+  void _addSet() {
+    setState(() {
+      final next = _currentSets.length + 1;
+      _currentSets.add(
+        _SetItem(
+          number: next,
+          prevWeight: '—',
+          prevReps: '—',
+          weight: '60kg',
+          reps: '6',
+        ),
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -196,6 +342,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
       backgroundColor: LoggitColors.lightGray,
       appBar: LoggitHeader(title: widget.workoutName, showBack: true),
       body: CustomScrollView(
+        controller: _scrollController,
         slivers: [
           SliverToBoxAdapter(child: _buildSummaryBar()),
           SliverToBoxAdapter(child: _buildFilters()),
@@ -229,8 +376,242 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
     );
   }
 
+  Widget _summaryStat(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: LoggitColors.lightGray,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: LoggitColors.divider),
+      ),
+      child: Row(
+        children: [
+          Text(
+            '$label: ',
+            style: const TextStyle(color: LoggitColors.lighterGraySubtext),
+          ),
+          Text(value, style: const TextStyle(color: LoggitColors.darkGrayText)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSetRow(_SetItem set, int index) {
+    final bool done = set.completed;
+    _weightControllers.putIfAbsent(
+      index,
+      () => TextEditingController(text: set.weight),
+    );
+    _repsControllers.putIfAbsent(
+      index,
+      () => TextEditingController(text: set.reps),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bool isNarrow = constraints.maxWidth < 360;
+        final double gap = isNarrow ? 4 : 6;
+        final double numW = isNarrow ? 20 : _numColW;
+        final double weightW = isNarrow ? (_weightColW - 12) : _weightColW;
+        final double repsW = isNarrow ? (_repsColW - 8) : _repsColW;
+        final TextStyle prevStyle = const TextStyle(
+          color: LoggitColors.lighterGraySubtext,
+          fontSize: 13,
+          letterSpacing: 0.2,
+        );
+        return Container(
+          margin: const EdgeInsets.only(bottom: 6),
+          padding: EdgeInsets.symmetric(
+            horizontal: isNarrow ? 8 : 10,
+            vertical: isNarrow ? 4 : 6,
+          ),
+          decoration: BoxDecoration(
+            color: done
+                ? LoggitColors.teal.withOpacity(0.12)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: numW,
+                child: Text(
+                  '${set.number}',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              SizedBox(width: gap),
+              // Previous (takes remaining space)
+              Expanded(
+                flex: 3,
+                child: Text(
+                  '${_formatNumber(_unit == 'kg' ? _parseKg(set.prevWeight) : _parseKg(set.prevWeight) * 2.20462)} ${_unit} x ${set.prevReps}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: prevStyle,
+                ),
+              ),
+              SizedBox(width: gap),
+              // Weight input
+              Expanded(
+                flex: 2,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 84),
+                  child: TextField(
+                    controller: _weightControllers[index],
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    onChanged: (val) => setState(() {
+                      final numVal = double.tryParse(val.trim()) ?? 0;
+                      final kg = _unit == 'kg' ? numVal : (numVal / 2.20462);
+                      _currentSets[index] = set.copyWith(
+                        weight: '${_formatNumber(kg)}kg',
+                      );
+                    }),
+                    textAlign: TextAlign.center,
+                    decoration: InputDecoration(
+                      hintText: 'kg',
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(
+                        vertical: isNarrow ? 3 : 4,
+                        horizontal: 6,
+                      ),
+                      suffix: InkWell(
+                        onTap: _toggleUnit,
+                        borderRadius: BorderRadius.circular(6),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 1,
+                          ),
+                          child: Text(
+                            _unit.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: isNarrow ? 10 : 11,
+                              color: LoggitColors.lighterGraySubtext,
+                            ),
+                          ),
+                        ),
+                      ),
+                      border: const OutlineInputBorder(gapPadding: 0),
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(width: gap),
+              // Reps input
+              Expanded(
+                flex: 1,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 56),
+                  child: TextField(
+                    controller: _repsControllers[index],
+                    onChanged: (val) => setState(() {
+                      _currentSets[index] = set.copyWith(reps: val.trim());
+                    }),
+                    textAlign: TextAlign.center,
+                    decoration: const InputDecoration(
+                      hintText: 'reps',
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(
+                        vertical: 3,
+                        horizontal: 6,
+                      ),
+                      border: OutlineInputBorder(gapPadding: 0),
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(width: gap),
+              IconButton(
+                visualDensity: const VisualDensity(
+                  horizontal: -2,
+                  vertical: -2,
+                ),
+                constraints: const BoxConstraints.tightFor(
+                  width: 28,
+                  height: 28,
+                ),
+                iconSize: 20,
+                onPressed: () => _toggleSetCompleted(index),
+                icon: Icon(
+                  done ? Icons.check_circle : Icons.radio_button_unchecked,
+                  color: done
+                      ? LoggitColors.tealDark
+                      : LoggitColors.lighterGraySubtext,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSetHeaderRow() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        children: [
+          SizedBox(
+            width: _numColW,
+            child: const Text(
+              'SET',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: LoggitColors.lighterGraySubtext,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            flex: 2,
+            child: Text(
+              'PREVIOUS',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: LoggitColors.lighterGraySubtext,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          SizedBox(
+            width: _weightColW,
+            child: const Text(
+              'WEIGHT',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: LoggitColors.lighterGraySubtext,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          SizedBox(
+            width: _repsColW,
+            child: const Text(
+              'REPS',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: LoggitColors.lighterGraySubtext,
+              ),
+            ),
+          ),
+          const SizedBox(width: 36),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTodaySessionCard() {
-    final templateName = '${widget.workoutName} – Heavy';
+    final templateName = _activeTemplateName ?? '${widget.workoutName} – Heavy';
     return Padding(
       padding: EdgeInsets.fromLTRB(
         LoggitSpacing.lg,
@@ -268,147 +649,195 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: LoggitColors.lightGray,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: LoggitColors.divider),
+                      ),
+                      child: Text(
+                        widget.workoutName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: LoggitColors.lighterGraySubtext,
+                        ),
+                      ),
                     ),
-                    decoration: BoxDecoration(
-                      color: LoggitColors.lightGray,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: LoggitColors.divider),
-                    ),
-                    child: Text(
-                      templateName,
-                      style: const TextStyle(
-                        color: LoggitColors.lighterGraySubtext,
+                  ),
+                  const SizedBox(width: 8),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: LoggitColors.tealDark,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        minimumSize: const Size(0, 0),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      onPressed: () {},
+                      child: const Text(
+                        'Finish',
+                        style: TextStyle(fontSize: 13),
                       ),
                     ),
                   ),
                 ],
               ),
-              subtitle: const Text(
-                'Started 18:10',
-                style: TextStyle(color: LoggitColors.lighterGraySubtext),
-              ),
-              trailing: IconButton(
-                icon: Icon(
-                  _sessionExpanded ? Icons.expand_less : Icons.expand_more,
-                ),
-                onPressed: () =>
-                    setState(() => _sessionExpanded = !_sessionExpanded),
+            ),
+            const Divider(height: 1, color: LoggitColors.divider),
+            Padding(
+              padding: EdgeInsets.all(LoggitSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Current exercise',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: LoggitColors.darkGrayText,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: EdgeInsets.all(LoggitSpacing.md),
+                    decoration: BoxDecoration(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.fromBorderSide(BorderSide.none),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _currentExercise,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: LoggitColors.darkGrayText,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            if (_currentExercise.isNotEmpty)
+                              TextButton(
+                                onPressed: _promoteNext,
+                                child: const Text('Complete'),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        // Header row for sets
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final bool isNarrow = constraints.maxWidth < 360;
+                            final double gap = isNarrow ? 4 : 6;
+                            final double numW = isNarrow ? 20 : _numColW;
+                            return Row(
+                              children: [
+                                SizedBox(
+                                  width: numW,
+                                  child: const Text(
+                                    '#',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: gap),
+                                const Expanded(
+                                  flex: 3,
+                                  child: Text(
+                                    'Previous',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: gap),
+                                const Expanded(
+                                  flex: 2,
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      'Weight',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: gap),
+                                const Expanded(
+                                  flex: 1,
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      'Reps',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: gap),
+                                const SizedBox(width: 28),
+                              ],
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 6),
+                        // Set rows
+                        Column(
+                          children: List.generate(
+                            _currentSets.length,
+                            (i) => _buildSetRow(_currentSets[i], i),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-            if (_sessionExpanded)
-              const Divider(height: 1, color: LoggitColors.divider),
-            if (_sessionExpanded)
-              Padding(
-                padding: EdgeInsets.all(LoggitSpacing.md),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Current exercise (compact row, no large media)
-                    const Text(
-                      'Current exercise',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: LoggitColors.darkGrayText,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: EdgeInsets.all(LoggitSpacing.md),
-                      decoration: BoxDecoration(
-                        color: LoggitColors.lightGray,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: LoggitColors.divider),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 56,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              color: LoggitColors.pureWhite,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: LoggitColors.divider),
-                            ),
-                            child: const Icon(
-                              Icons.image_outlined,
-                              color: LoggitColors.lighterGraySubtext,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '${widget.workoutName} Exercise 1',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    color: LoggitColors.darkGrayText,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                const Text(
-                                  '3 sets • 8-10 reps',
-                                  style: TextStyle(
-                                    color: LoggitColors.lighterGraySubtext,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: () => _openPreview(
-                              context,
-                              '${widget.workoutName} Exercise 1',
-                            ),
-                            child: const Text('Preview'),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    // Queue
-                    const Text(
-                      'Up next',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: LoggitColors.darkGrayText,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: const [
-                        _QueueChip(label: 'Incline DB Press'),
-                        _QueueChip(label: 'Cable Fly'),
-                        _QueueChip(label: 'Triceps Pushdown'),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    // Controls
-                    Row(
-                      children: [
-                        const _RestTimerChip(),
-                        const SizedBox(width: 8),
-                        OutlinedButton(
-                          onPressed: () {},
-                          child: const Text('Add exercise'),
-                        ),
-                        const SizedBox(width: 8),
-                        TextButton(
-                          onPressed: () {},
-                          child: const Text('End/Save'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+            const SizedBox(height: 12),
+            // Queue
+            const Text(
+              'Up next',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: LoggitColors.darkGrayText,
               ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final e in _upNextQueue)
+                  _QueueChip(
+                    label: e,
+                    isCompleted: _completed.contains(e),
+                    onTap: () {
+                      setState(() {
+                        _currentExercise = e;
+                        _upNextQueue.remove(e);
+                      });
+                    },
+                  ),
+              ],
+            ),
           ],
         ),
       ),
@@ -796,6 +1225,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                             _TemplatePickerList(
                               workoutName: widget.workoutName,
                               suggestedOnly: true,
+                              onSelect: _onTemplateSelected,
                             ),
                             const SizedBox(height: 12),
                             const Text(
@@ -806,9 +1236,10 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            const _TemplatePickerList(
+                            _TemplatePickerList(
                               workoutName: null,
                               suggestedOnly: false,
+                              onSelect: _onTemplateSelected,
                             ),
                           ],
                         ),
@@ -1034,9 +1465,11 @@ class _SetRowReadOnly extends StatelessWidget {
 class _TemplatePickerList extends StatelessWidget {
   final String? workoutName;
   final bool suggestedOnly;
+  final void Function(String name) onSelect;
   const _TemplatePickerList({
     required this.workoutName,
     required this.suggestedOnly,
+    required this.onSelect,
   });
 
   void _openPreview(BuildContext context, String name) {
@@ -1107,9 +1540,7 @@ class _TemplatePickerList extends StatelessWidget {
                     ),
                     onPressed: () {
                       Navigator.of(ctx).maybePop();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Selected template: $name')),
-                      );
+                      onSelect(name);
                     },
                     child: const Text('Use template'),
                   ),
@@ -1176,11 +1607,7 @@ class _TemplatePickerList extends StatelessWidget {
                       backgroundColor: LoggitColors.tealDark,
                       foregroundColor: Colors.white,
                     ),
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Selected template: $name')),
-                      );
-                    },
+                    onPressed: () => onSelect(name),
                     child: const Text('Select'),
                   ),
                 ],
@@ -1389,146 +1816,77 @@ class _RestTimerChip extends StatelessWidget {
 
 class _QueueChip extends StatelessWidget {
   final String label;
-  const _QueueChip({required this.label});
+  final bool isCompleted;
+  final VoidCallback? onTap;
+  const _QueueChip({required this.label, this.isCompleted = false, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: LoggitColors.lightGray,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: LoggitColors.divider),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(color: LoggitColors.darkGrayText),
+    final Color textColor = isCompleted
+        ? LoggitColors.tealDark
+        : LoggitColors.darkGrayText;
+    final Color bgColor = isCompleted
+        ? LoggitColors.teal.withOpacity(0.15)
+        : LoggitColors.lightGray;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: LoggitColors.divider),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isCompleted) ...[
+              const Icon(
+                Icons.check_circle,
+                size: 16,
+                color: LoggitColors.tealDark,
+              ),
+              const SizedBox(width: 6),
+            ],
+            Text(label, style: TextStyle(color: textColor)),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _TemplatesTab extends StatelessWidget {
-  const _TemplatesTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: EdgeInsets.all(LoggitSpacing.lg),
-      children: [
-        _templateCard('Push'),
-        _templateCard('Pull'),
-        _templateCard('Legs'),
-        _templateCard('Upper Body'),
-        _templateCard('Lower Body'),
-      ],
-    );
-  }
-
-  Widget _templateCard(String name) {
-    return Container(
-      margin: EdgeInsets.only(bottom: LoggitSpacing.md),
-      padding: EdgeInsets.all(LoggitSpacing.md),
-      decoration: BoxDecoration(
-        color: LoggitColors.pureWhite,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: LoggitColors.divider),
-        boxShadow: const [
-          BoxShadow(
-            color: LoggitColors.softShadow,
-            blurRadius: 12,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: LoggitColors.lightGray,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: LoggitColors.divider),
-            ),
-            child: const Icon(
-              Icons.image_outlined,
-              color: LoggitColors.lighterGraySubtext,
-            ),
-          ),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Text(
-              'Template',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: LoggitColors.darkGrayText,
-              ),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: LoggitColors.tealDark,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () {},
-            child: const Text('Use'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HistoryTab extends StatelessWidget {
-  const _HistoryTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: EdgeInsets.all(LoggitSpacing.lg),
-      children: [
-        _historyCard('Legs Day', 'Today'),
-        _historyCard('Push Day', '2d ago'),
-        _historyCard('Pull Day', '1w ago'),
-      ],
-    );
-  }
-
-  Widget _historyCard(String title, String when) {
-    return Container(
-      margin: EdgeInsets.only(bottom: LoggitSpacing.md),
-      padding: EdgeInsets.all(LoggitSpacing.md),
-      decoration: BoxDecoration(
-        color: LoggitColors.pureWhite,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: LoggitColors.divider),
-        boxShadow: const [
-          BoxShadow(
-            color: LoggitColors.softShadow,
-            blurRadius: 12,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: const [
-          Icon(Icons.event_note_outlined, color: LoggitColors.indigo),
-          SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Workout title',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: LoggitColors.darkGrayText,
-              ),
-            ),
-          ),
-          Icon(Icons.chevron_right, color: LoggitColors.lighterGraySubtext),
-        ],
-      ),
+class _SetItem {
+  final int number;
+  final String prevWeight;
+  final String prevReps;
+  final String weight;
+  final String reps;
+  final bool completed;
+  const _SetItem({
+    required this.number,
+    required this.prevWeight,
+    required this.prevReps,
+    required this.weight,
+    required this.reps,
+    this.completed = false,
+  });
+  _SetItem copyWith({
+    int? number,
+    String? prevWeight,
+    String? prevReps,
+    String? weight,
+    String? reps,
+    bool? completed,
+  }) {
+    return _SetItem(
+      number: number ?? this.number,
+      prevWeight: prevWeight ?? this.prevWeight,
+      prevReps: prevReps ?? this.prevReps,
+      weight: weight ?? this.weight,
+      reps: reps ?? this.reps,
+      completed: completed ?? this.completed,
     );
   }
 }

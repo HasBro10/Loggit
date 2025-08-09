@@ -5,7 +5,6 @@ import '../../shared/utils/responsive.dart';
 import '../../services/reminders_service.dart';
 import 'reminder_model.dart';
 import 'reminder_edit_modal.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class RemindersScreen extends StatefulWidget {
